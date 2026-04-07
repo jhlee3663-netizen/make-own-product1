@@ -1,0 +1,20 @@
+name: Sync to Org
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  sync_to_org:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout local repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Push to Organization Repository
+        run: |
+          git remote add org-repo https://${{ secrets.ORG_TOKEN }}@github.com/BF-D-challenge/make-own-product1.git
+          git push org-repo main:main --force
