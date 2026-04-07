@@ -14,7 +14,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Push to Organization Repository
+      - name: Push to Organization
         run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          git checkout -b temp-sync-branch
+          git rm -rf .github
+          git commit -m "Auto-sync to organization (bypass token limit)"
           git remote add org-repo https://${{ secrets.ORG_TOKEN }}@github.com/BF-D-challenge/make-own-product1.git
-          git push org-repo main:main --force
+          git push org-repo temp-sync-branch:main --force
+
