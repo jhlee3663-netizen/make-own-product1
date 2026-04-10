@@ -9,18 +9,16 @@ jobs:
   sync_to_org:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout local repository
-        uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Push to Organization
+        env:
+          TOKEN: ${{ secrets.ORG_TOKEN }}
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
-          git checkout -b temp-sync-branch
-          git rm -rf .github
-          git commit -m "Auto-sync to organization (bypass token limit)"
-          git remote add org-repo https://${{ secrets.ORG_TOKEN }}@github.com/BF-D-challenge/make-own-product1.git
-          git push org-repo temp-sync-branch:main --force
-
+          git remote add org-repo https://x-access-token:${TOKEN}@github.com/BF-D-challenge/make-own-product1.git
+          git push org-repo HEAD:main --force
