@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GitHub 조직 레포 Push 트러블슈팅 가이드</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface2: #1c2230;
+      --border: #30363d;
+      --accent: #238636;
+      --accent-light: #2ea043;
+      --blue: #1f6feb;
+      --blue-light: #388bfd;
+      --red: #da3633;
+      --red-bg: #1c1c1c;
+      --yellow: #e3b341;
+      --yellow-bg: #1c1a10;
+      --green: #3fb950;
+      --green-bg: #0d1117;
+      --purple: #8957e5;
+      --text: #e6edf3;
+      --text-muted: #8b949e;
+      --text-dim: #6e7681;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Pretendard', -apple-system, sans-serif;
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    /* Hero */
+    .hero {
+      background: linear-gradient(135deg, #0d1117 0%, #161b22 40%, #1a1f2e 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 60px 24px 50px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, rgba(35, 134, 54, 0.12) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(46, 160, 67, 0.15);
+      border: 1px solid rgba(46, 160, 67, 0.3);
+      color: var(--green);
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 20px;
+      letter-spacing: 0.5px;
+    }
+
+    .hero h1 {
+      font-size: clamp(26px, 4vw, 42px);
+      font-weight: 800;
+      background: linear-gradient(135deg, #e6edf3 30%, #8b949e 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 14px;
+      line-height: 1.25;
+    }
+
+    .hero p {
+      font-size: 16px;
+      color: var(--text-muted);
+      max-width: 540px;
+      margin: 0 auto 28px;
+    }
+
+    .hero-meta {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .hero-meta-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--text-dim);
+    }
+
+    .hero-meta-item .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .dot-red {
+      background: var(--red);
+    }
+
+    .dot-yellow {
+      background: var(--yellow);
+    }
+
+    .dot-green {
+      background: var(--green);
+    }
+
+    /* Container */
+    .container {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 40px 24px 80px;
+    }
+
+    /* Timeline */
+    .timeline {
+      position: relative;
+      padding-left: 32px;
+    }
+
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 11px;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: linear-gradient(to bottom, var(--red) 0%, var(--yellow) 50%, var(--green) 100%);
+      opacity: 0.4;
+    }
+
+    /* Card */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px 28px;
+      margin-bottom: 20px;
+      position: relative;
+      transition: border-color 0.2s;
+    }
+
+    .card:hover {
+      border-color: #444d58;
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      left: -31px;
+      top: 24px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: 2px solid var(--bg);
+      z-index: 1;
+    }
+
+    /* Card variants */
+    .card-fail {
+      border-left: 3px solid var(--red);
+    }
+
+    .card-fail::before {
+      background: var(--red);
+    }
+
+    .card-warn {
+      border-left: 3px solid var(--yellow);
+    }
+
+    .card-warn::before {
+      background: var(--yellow);
+    }
+
+    .card-success {
+      border-left: 3px solid var(--green);
+    }
+
+    .card-success::before {
+      background: var(--green);
+    }
+
+    .card-info {
+      border-left: 3px solid var(--blue-light);
+    }
+
+    .card-info::before {
+      background: var(--blue-light);
+    }
+
+    /* Card header */
+    .card-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .card-icon {
+      font-size: 22px;
+      line-height: 1;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .card-title-wrap {}
+
+    .card-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .label-fail {
+      color: var(--red);
+    }
+
+    .label-warn {
+      color: var(--yellow);
+    }
+
+    .label-success {
+      color: var(--green);
+    }
+
+    .label-info {
+      color: var(--blue-light);
+    }
+
+    .card-title {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.35;
+    }
+
+    /* Content */
+    .card p {
+      color: var(--text-muted);
+      font-size: 14.5px;
+      margin-bottom: 10px;
+    }
+
+    .card p:last-child {
+      margin-bottom: 0;
+    }
+
+    /* Error block */
+    .error-block {
+      background: #160d0d;
+      border: 1px solid rgba(218, 54, 51, 0.3);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin: 14px 0;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: #f85149;
+      line-height: 1.6;
+      overflow-x: auto;
+    }
+
+    /* Code block */
+    .code-block {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin: 14px 0;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      color: #e6edf3;
+      line-height: 1.75;
+      overflow-x: auto;
+      position: relative;
+    }
+
+    .code-block .comment {
+      color: #6e7681;
+    }
+
+    .code-block .cmd {
+      color: #79c0ff;
+    }
+
+    .code-block .str {
+      color: #a5d6ff;
+    }
+
+    .code-block .flag {
+      color: #d2a8ff;
+    }
+
+    /* Cause block */
+    .cause-block {
+      background: rgba(227, 179, 65, 0.07);
+      border: 1px solid rgba(227, 179, 65, 0.25);
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin: 12px 0;
+      font-size: 14px;
+      color: #e3b341;
+    }
+
+    .cause-block strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      opacity: 0.7;
+    }
+
+    /* List */
+    .check-list {
+      list-style: none;
+      margin: 12px 0;
+    }
+
+    .check-list li {
+      font-size: 14.5px;
+      color: var(--text-muted);
+      padding: 5px 0;
+      padding-left: 24px;
+      position: relative;
+    }
+
+    .check-list li::before {
+      position: absolute;
+      left: 0;
+    }
+
+    .check-list.success li::before {
+      content: '✅';
+    }
+
+    .check-list.fail li::before {
+      content: '❌';
+    }
+
+    .check-list.tip li::before {
+      content: '💡';
+    }
+
+    .check-list.warn li::before {
+      content: '⚠️';
+      font-size: 12px;
+      top: 6px;
+    }
+
+    /* Section title */
+    .section-title {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin: 32px 0 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .section-title::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* Step number */
+    .step-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted);
+      flex-shrink: 0;
+      margin-right: 8px;
+    }
+
+    /* Final success box */
+    .success-banner {
+      background: linear-gradient(135deg, rgba(63, 185, 80, 0.1), rgba(35, 134, 54, 0.05));
+      border: 1px solid rgba(63, 185, 80, 0.4);
+      border-radius: 16px;
+      padding: 32px;
+      margin: 40px 0 20px;
+      text-align: center;
+    }
+
+    .success-banner .big-icon {
+      font-size: 48px;
+      margin-bottom: 12px;
+    }
+
+    .success-banner h2 {
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--green);
+      margin-bottom: 8px;
+    }
+
+    .success-banner p {
+      color: var(--text-muted);
+      font-size: 15px;
+    }
+
+    /* Tips section */
+    .tips-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 14px;
+      margin-top: 14px;
+    }
+
+    .tip-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px 20px;
+    }
+
+    .tip-card .tip-icon {
+      font-size: 24px;
+      margin-bottom: 10px;
+    }
+
+    .tip-card h4 {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+
+    .tip-card p {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      padding: 24px;
+      border-top: 1px solid var(--border);
+      font-size: 13px;
+      color: var(--text-dim);
+    }
+
+    footer span {
+      color: var(--green);
+    }
+
+    /* Divider */
+    hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 12px 0;
+    }
+
+    /* Inline code */
+    code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12.5px;
+      background: rgba(110, 118, 129, 0.15);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 2px 6px;
+      color: #79c0ff;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="hero-badge">🛠 실전 트러블슈팅 가이드</div>
+    <h1>GitHub 조직 레포<br />Push 삽질 기록 & 해결법</h1>
+    <p>개인 레포에서 팀 레포(Organization)로 코드를 올리다가 발생한<br />모든 에러와 최종 해결 방법을 정리했습니다.</p>
+    <div class="hero-meta">
+      <div class="hero-meta-item"><span class="dot dot-red"></span> 3가지 실패 원인</div>
+      <div class="hero-meta-item"><span class="dot dot-yellow"></span> 4번의 시도</div>
+      <div class="hero-meta-item"><span class="dot dot-green"></span> 최종 1회 성공</div>
+    </div>
+  </div>
+
+  <div class="container">
+
+    <!-- Context -->
+    <div class="section-title">📌 상황 설명</div>
+    <div class="card card-info">
+      <div class="card-header">
+        <div class="card-icon">🏗️</div>
+        <div class="card-title-wrap">
+          <div class="card-label label-info">Background</div>
+          <div class="card-title">무엇을 하려고 했나?</div>
+        </div>
+      </div>
+      <p>개인 GitHub 계정(<code>jhlee3663-netizen</code>)에서 작업한 React 앱을 팀 조직
+        레포지토리(<code>BF-D-challenge/make-own-product1</code>)에 업로드하려 했습니다.</p>
+      <ul class="check-list success">
+        <li>개인 레포(<code>jhlee3663-netizen/make-own-product1</code>) 생성 & 코드 Push: 성공</li>
+        <li>팀 레포 Write 권한 획득 (팀장에게 요청): 성공</li>
+        <li>GitHub Actions 워크플로우 설정: 시도 (→ 실패)</li>
+        <li>터미널에서 직접 Push: 최종 성공 🎉</li>
+      </ul>
+    </div>
+
+    <!-- Timeline -->
+    <div class="section-title">⏱ 삽질 타임라인</div>
+    <div class="timeline">
+
+      <!-- Problem 1 -->
+      <div class="card card-fail">
+        <div class="card-header">
+          <div class="card-icon">❌</div>
+          <div class="card-title-wrap">
+            <div class="card-label label-fail">시도 1 — 실패</div>
+            <div class="card-title">GitHub Actions 자동 동기화 (최초 시도)</div>
+          </div>
+        </div>
+        <p>개인 레포에서 팀 레포로 자동으로 코드를 동기화하는 GitHub Actions 워크플로우(<code>.github/workflows/main.yml</code>)를 만들었습니다.</p>
+        <div class="error-block">Process completed with exit code 128.
+          remote: Permission to BF-D-challenge/make-own-product1.git denied to github-actions[bot].
+          fatal: unable to access '...': The requested URL returned error: 403</div>
+        <div class="cause-block">
+          <strong>🔍 실패 원인</strong>
+          GitHub Actions 봇(<code>github-actions[bot]</code>)이 팀 레포에 접근하려면 별도의 토큰이 필요한데, <code>ORG_TOKEN</code> Secret이
+          올바르게 설정되지 않아 기본 봇 계정으로 접근을 시도한 것. 당연히 권한 없음으로 차단됨.
+        </div>
+      </div>
+
+      <!-- Problem 2 -->
+      <div class="card card-fail">
+        <div class="card-header">
+          <div class="card-icon">🔑</div>
+          <div class="card-title-wrap">
+            <div class="card-label label-fail">시도 2 — 실패</div>
+            <div class="card-title">ORG_TOKEN Secret 설정 후 재시도</div>
+          </div>
+        </div>
+        <p>GitHub Personal Access Token(PAT)을 발급하고 개인 레포의 <code>Settings → Secrets → ORG_TOKEN</code>에 등록 후 Actions를
+          재실행했습니다.</p>
+        <div class="error-block">remote: Permission to BF-D-challenge/make-own-product1.git denied to
+          github-actions[bot].</div>
+        <div class="cause-block">
+          <strong>🔍 실패 원인</strong>
+          같은 에러 반복. 워크플로우 yml 파일에서 토큰을 URL에 올바르게 삽입하지 못해 여전히 github-actions[bot] 계정으로 인증 시도. 토큰이 있어도 yml 코드가 잘못되면 의미가
+          없음.
+        </div>
+      </div>
+
+      <!-- Problem 3 -->
+      <div class="card card-warn">
+        <div class="card-header">
+          <div class="card-icon">🔐</div>
+          <div class="card-title-wrap">
+            <div class="card-label label-warn">시도 3 — 부분 성공 후 실패</div>
+            <div class="card-title">Write 권한 획득 후 재시도</div>
+          </div>
+        </div>
+        <p>팀장에게 <code>BF-D-challenge/make-own-product1</code>에 대한 <strong>Write 권한</strong>을 요청하여 받았습니다. 권한을 받았으니 당연히 될
+          것이라 생각했지만…</p>
+        <div class="error-block">Process completed with exit code 128. (여전히 동일한 에러)</div>
+        <div class="cause-block">
+          <strong>🔍 실패 원인</strong>
+          팀 레포의 <code>main</code> 브랜치에 <strong>Branch Protection Rule(브랜치 보호 규칙)</strong>이 설정되어 있었음. Write 권한이 있어도
+          봇(Actions)이 직접 <code>main</code>을 수정하는 건 막혀있는 구조. 또한 워크플로우의 토큰 인식 자체도 여전히 불안정한 상태.
+        </div>
+      </div>
+
+      <!-- Problem 4 -->
+      <div class="card card-fail">
+        <div class="card-header">
+          <div class="card-icon">🔄</div>
+          <div class="card-title-wrap">
+            <div class="card-label label-fail">시도 4 — 실패</div>
+            <div class="card-title">토큰 재발급 + 워크플로우 코드 수정</div>
+          </div>
+        </div>
+        <p>PAT를 새로 발급(<code>repo</code> + <code>workflow</code> 권한)하고, 워크플로우 yml 파일을 <code>x-access-token</code> 방식으로 수정
+          후 재시도했습니다.</p>
+        <div class="code-block">
+          <span class="comment"># 수정한 워크플로우 핵심 부분</span>
+          <span class="cmd">env:</span>
+          <span class="str">TOKEN: ${{ secrets.ORG_TOKEN }}</span>
+          <span class="cmd">run:</span> |
+          git remote add org-repo https://x-access-token:${TOKEN}@github.com/BF-D-challenge/make-own-product1.git
+          git push org-repo HEAD:main --force
+        </div>
+        <div class="error-block">remote: Permission to BF-D-challenge/make-own-product1.git denied to
+          github-actions[bot].</div>
+        <div class="cause-block">
+          <strong>🔍 최종 진단</strong>
+          GitHub Actions 환경에서 조직 레포로 PAT를 이용해 Push하는 방식은 조직의 보안 정책 및 브랜치 보호 규칙에 의해 막힐 가능성이 높음. <strong>GitHub Actions 방식
+            자체를 포기하고 터미널 직접 Push로 전환 결정.</strong>
+        </div>
+      </div>
+
+      <!-- Success -->
+      <div class="card card-success">
+        <div class="card-header">
+          <div class="card-icon">🚀</div>
+          <div class="card-title-wrap">
+            <div class="card-label label-success">시도 5 — 최종 성공! 🎉</div>
+            <div class="card-title">터미널에서 직접 Push (토큰 인증)</div>
+          </div>
+        </div>
+        <p>GitHub Actions를 완전히 포기하고, <strong>로컬 터미널에서 토큰을 URL에 직접 포함시켜 팀 레포를 remote로 추가</strong>한 뒤 직접 push 했습니다.</p>
+        <div class="code-block">
+          <span class="comment"># 1. 팀 레포를 'org' 이름으로 remote 등록 (토큰 포함)</span>
+          git remote add org https://<span class="str">내계정명</span>:<span class="str">ghp_토큰값</span>@github.com/<span
+            class="str">BF-D-challenge</span>/make-own-product1.git
+
+          <span class="comment"># 2. 팀 레포에 Push!</span>
+          git push org main <span class="flag">--force</span>
+        </div>
+        <div
+          style="background: rgba(63,185,80,0.08); border: 1px solid rgba(63,185,80,0.3); border-radius: 8px; padding: 14px 16px; margin-top: 14px; font-size: 14px; color: #3fb950;">
+          ✅ 결과: <strong>To https://github.com/BF-D-challenge/make-own-product1.git<br />+ 31b40e3...e95baf9 main → main
+            (forced update)</strong><br />팀 레포에 코드가 완벽히 올라갔습니다!
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Why it worked -->
+    <div class="section-title">🧠 왜 이 방법만 됐나?</div>
+    <div class="card card-info">
+      <p>GitHub Actions 봇과 직접 터미널 Push의 <strong>핵심 차이점</strong>:</p>
+      <br />
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+        <div
+          style="background: rgba(218,54,51,0.08); border: 1px solid rgba(218,54,51,0.25); border-radius: 8px; padding: 16px;">
+          <div style="font-size: 13px; font-weight: 700; color: var(--red); margin-bottom: 8px;">❌ GitHub Actions (실패)
+          </div>
+          <p style="font-size: 13px; color: var(--text-muted); margin: 0;">깃허브 서버가 대신 실행. 조직의 보안 규칙(branch protection,
+            PAT 제한)에 영향을 많이 받음. 토큰 인식도 불안정할 수 있음.</p>
+        </div>
+        <div
+          style="background: rgba(63,185,80,0.08); border: 1px solid rgba(63,185,80,0.25); border-radius: 8px; padding: 16px;">
+          <div style="font-size: 13px; font-weight: 700; color: var(--green); margin-bottom: 8px;">✅ 터미널 직접 Push (성공)
+          </div>
+          <p style="font-size: 13px; color: var(--text-muted); margin: 0;">내 컴퓨터에서 직접 실행. 팀장이 부여한 Write 권한 + 내 계정 토큰으로
+            인증하므로 조직이 명확히 "내가 한 것"으로 인식함.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Final Usage -->
+    <div class="section-title">📋 이후 사용법 (복붙 가능)</div>
+    <div class="card card-success">
+      <div class="card-header">
+        <div class="card-icon">💻</div>
+        <div class="card-title-wrap">
+          <div class="card-label label-success">앞으로 팀 레포에 Push할 때</div>
+          <div class="card-title">딱 이 순서대로!</div>
+        </div>
+      </div>
+      <p><code>org</code> remote는 한 번만 등록하면 됩니다. 이미 됐다면 1번은 건너뛰세요.</p>
+      <div class="code-block">
+        <span class="comment"># ① 처음 한 번만: 팀 레포 remote 등록</span>
+        git remote add org https://<span class="str">내계정명:ghp_토큰</span>@github.com/<span
+          class="str">BF-D-challenge</span>/make-own-product1.git
+
+        <span class="comment"># ② 코드 수정 후 staging & commit</span>
+        git add .
+        git commit -m <span class="str">"수정 내용 설명"</span>
+
+        <span class="comment"># ③ 내 개인 레포에 Push</span>
+        git push origin main
+
+        <span class="comment"># ④ 팀 레포에 Push</span>
+        git push org main
+      </div>
+    </div>
+
+    <!-- Tips -->
+    <div class="section-title">💡 꿀팁 & 주의사항</div>
+    <div class="tips-grid">
+      <div class="tip-card">
+        <div class="tip-icon">🔑</div>
+        <h4>토큰은 한 번만 보여줌</h4>
+        <p>PAT(Personal Access Token)는 생성 직후에만 볼 수 있습니다. 반드시 메모장이나 안전한 곳에 저장해두세요!</p>
+      </div>
+      <div class="tip-card">
+        <div class="tip-icon">⏰</div>
+        <h4>토큰 만료 주의</h4>
+        <p>토큰에 만료일을 설정했다면, 만료 후 <code>git push org main</code>이 안 됩니다. 이때는 토큰 새로 발급 후 remote URL을 업데이트하세요.</p>
+      </div>
+      <div class="tip-card">
+        <div class="tip-icon">🛡️</div>
+        <h4>토큰을 코드에 절대 넣지 말 것</h4>
+        <p>토큰은 remote URL에만 사용하고, 소스 코드 파일에 직접 넣으면 보안 사고의 원인이 됩니다. GitHub에 올라가는 순간 탈취 위험!</p>
+      </div>
+      <div class="tip-card">
+        <div class="tip-icon">👮</div>
+        <h4>Write 권한은 팀장에게 요청</h4>
+        <p>조직 레포에 Push하려면 관리자에게 <strong>Collaborator Write 권한</strong>을 받아야 합니다. 권한 없이는 아무리 해도 403 에러!</p>
+      </div>
+      <div class="tip-card">
+        <div class="tip-icon">⚡</div>
+        <h4>--force 사용 시 주의</h4>
+        <p><code>--force</code>는 기존 팀 레포 내용을 덮어씁니다. 팀원이 올린 코드가 있다면 날아갈 수 있으니, 팀과 먼저 소통 후 사용하세요!</p>
+      </div>
+      <div class="tip-card">
+        <div class="tip-icon">🌿</div>
+        <h4>브랜치 보호 규칙 확인</h4>
+        <p>팀 레포의 <code>main</code>이 보호되어 있다면, 직접 Push 대신 별도 브랜치로 Push 후 <strong>Pull Request</strong>를 여는 걸 추천합니다.</p>
+      </div>
+    </div>
+
+    <!-- Success banner -->
+    <div class="success-banner">
+      <div class="big-icon">🏆</div>
+      <h2>결국 해냈습니다!</h2>
+      <p>4번의 실패, 수십 번의 에러 메세지를 뚫고<br />로컬 터미널 직접 Push 방식으로 최종 성공.<br /><br />팀 레포 주소:
+        <code>github.com/BF-D-challenge/make-own-product1</code></p>
+    </div>
+
+  </div>
+
+  <footer>
+    작성일: 2026년 4월 10일 &nbsp;|&nbsp; 이 문서가 팀원들에게 도움이 되길 바랍니다 <span>♥</span>
+  </footer>
+
+</body>
+
+</html>

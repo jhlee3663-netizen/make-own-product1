@@ -40,6 +40,18 @@
       }
     }
 
+    @keyframes toastIn {
+      from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(20px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+    }
+
     .card-enter {
       animation: slideUp .3s ease-out forwards
     }
@@ -113,6 +125,45 @@
     textarea:focus {
       outline: none
     }
+
+    @keyframes cardExit {
+      0%   { opacity: 1; transform: translateX(0) scale(1); max-height: 500px; }
+      40%  { opacity: 0; transform: translateX(36px) scale(0.97); max-height: 500px; }
+      100% { opacity: 0; transform: translateX(36px) scale(0.97); max-height: 0; }
+    }
+
+    .card-exit-wrapper {
+      animation: cardExit 400ms cubic-bezier(.4, 0, .2, 1) forwards;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    @keyframes dropdownEnter {
+      0% {
+        opacity: 0;
+        transform: translateY(-8px) scale(0.96);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    @keyframes bottomSheetUp {
+      0% { transform: translateY(100%); }
+      100% { transform: translateY(0); }
+    }
+
+    @keyframes bsFadeIn {
+      0% { opacity: 0; }
+      100% { opacity: 1; }
+    }
+
+    @keyframes bsGradientMove {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
   </style>
 </head>
 
@@ -123,7 +174,7 @@
     var firebaseConfig = { apiKey: "AIzaSyCPgfn9ORYSvjXAZYAyEimVA-y26_2VXME", authDomain: "context-health-3eb84.firebaseapp.com", projectId: "context-health-3eb84", storageBucket: "context-health-3eb84.firebasestorage.app", messagingSenderId: "419860500152", appId: "1:419860500152:web:991f45159e19aa90492e4d" };
     if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
     var db = firebase.firestore();
-    var GEMINI_KEY = "AIzaSyCyJ8oPYAxmBBbzBeC3miNX39QtCfgm80A";
+    var GEMINI_KEY = "AIzaSyDVfBEiOu9HDqGq3HXy1HMRJ9YE0xodHhc";
   </script>
 
   <script type="text/babel">
@@ -192,29 +243,52 @@
         </svg>
       );
     }
-    function IcAI() {
+    function IcAI({ active = false }) {
+      const fill = active ? "white" : "url(#tbAiG)";
       return (
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-          <defs>
-            <linearGradient id="aiG" x1="4" y1="2" x2="20" y2="18" gradientUnits="userSpaceOnUse">
-              <stop stopColor="#6366F1" /><stop offset="1" stopColor="#A855F7" />
-            </linearGradient>
-          </defs>
-          <path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2Z" fill="url(#aiG)" />
-          <path d="m19 15 .8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z" fill="#A855F7" />
-        </svg>
+        <div style={{
+          width: 24, height: 24, borderRadius: active ? 8 : 0, flexShrink: 0,
+          background: active ? "linear-gradient(90deg, #228bed, #c509d6)" : "transparent",
+          display: "flex", alignItems: "center", justifyContent: "center"
+        }}>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            {!active && (
+              <defs>
+                <linearGradient id="tbAiG" x1="0" y1="8" x2="16" y2="8" gradientUnits="userSpaceOnUse">
+                  <stop stopColor="#228BED"/><stop offset="1" stopColor="#C509D6"/>
+                </linearGradient>
+              </defs>
+            )}
+            <path d="M3.636 16C3.235 16 2.909 15.674 2.909 15.273C2.909 14.871 3.235 14.545 3.636 14.545C4.038 14.545 4.364 14.871 4.364 15.273C4.364 15.674 4.038 16 3.636 16Z" fill={fill}/>
+            <path d="M12.364 1.455C11.962 1.455 11.636 1.129 11.636 0.727C11.636 0.326 11.962 0 12.364 0C12.765 0 13.091 0.326 13.091 0.727C13.091 1.129 12.765 1.455 12.364 1.455Z" fill={fill}/>
+            <path d="M15.273 4.364C14.871 4.364 14.545 4.038 14.545 3.636C14.545 3.235 14.871 2.909 15.273 2.909C15.674 2.909 16 3.235 16 3.636C16 4.038 15.674 4.364 15.273 4.364Z" fill={fill}/>
+            <path d="M7.051 2.928C7.292 1.933 8.708 1.933 8.949 2.928L9.613 5.667C9.700 6.023 9.977 6.300 10.333 6.387L13.072 7.051C14.067 7.292 14.067 8.708 13.072 8.949L10.333 9.613C9.977 9.700 9.700 9.977 9.613 10.333L8.949 13.072C8.708 14.067 7.292 14.067 7.051 13.072L6.387 10.333C6.300 9.977 6.023 9.700 5.667 9.613L2.928 8.949C1.933 8.708 1.933 7.292 2.928 7.051L5.667 6.387C6.023 6.300 6.300 6.023 6.387 5.667L7.051 2.928Z" fill={fill}/>
+            <path fillRule="evenodd" clipRule="evenodd" d="M15.502 10.178C15.840 10.305 16.012 10.682 15.886 11.021C15.067 13.214 13.367 14.977 11.217 15.877C10.883 16.016 10.500 15.859 10.360 15.525C10.221 15.192 10.378 14.809 10.711 14.669C12.529 13.908 13.967 12.417 14.660 10.563C14.786 10.224 15.163 10.052 15.502 10.178Z" fill={fill}/>
+            <path fillRule="evenodd" clipRule="evenodd" d="M5.833 0.498C5.960 0.836 5.788 1.214 5.450 1.340C3.585 2.038 2.088 3.493 1.333 5.331C1.195 5.666 0.813 5.826 0.479 5.688C0.144 5.551 -0.016 5.168 0.122 4.834C1.015 2.660 2.784 0.940 4.991 0.114C5.329 -0.012 5.707 0.159 5.833 0.498Z" fill={fill}/>
+            <path d="M0.727 13.091C0.326 13.091 0 12.765 0 12.364C0 11.962 0.326 11.636 0.727 11.636C1.129 11.636 1.455 11.962 1.455 12.364C1.455 12.765 1.129 13.091 0.727 13.091Z" fill={fill}/>
+          </svg>
+        </div>
       );
     }
     function IcSpark() {
+      const fill = "url(#spAiG)";
       return (
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-          <defs>
-            <linearGradient id="spG" x1="2" y1="1" x2="14" y2="13" gradientUnits="userSpaceOnUse">
-              <stop stopColor="#6366F1" /><stop offset="1" stopColor="#A855F7" />
-            </linearGradient>
-          </defs>
-          <path d="M8 1l1.2 4.8L14 7l-4.8 1.2L8 13l-1.2-4.8L2 7l4.8-1.2L8 1Z" fill="url(#spG)" />
-        </svg>
+        <div style={{ width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <defs>
+              <linearGradient id="spAiG" x1="0" y1="8" x2="16" y2="8" gradientUnits="userSpaceOnUse">
+                <stop stopColor="#228BED"/><stop offset="1" stopColor="#C509D6"/>
+              </linearGradient>
+            </defs>
+            <path d="M3.956 2.061C4.152 1.252 5.302 1.252 5.499 2.061L6.038 4.287C6.108 4.575 6.334 4.801 6.622 4.871L8.848 5.411C9.657 5.607 9.657 6.757 8.848 6.953L6.622 7.493C6.334 7.563 6.108 7.788 6.038 8.077L5.499 10.302C5.302 11.111 4.152 11.111 3.956 10.302L3.416 8.077C3.346 7.788 3.121 7.563 2.832 7.493L0.607 6.953C-0.202 6.757 -0.202 5.607 0.607 5.411L2.832 4.871C3.121 4.801 3.346 4.575 3.416 4.287L3.956 2.061Z" fill={fill}/>
+            <path d="M10.434 9.828C10.555 9.33 11.263 9.33 11.384 9.828L11.716 11.197C11.759 11.375 11.898 11.514 12.075 11.557L13.445 11.889C13.943 12.01 13.943 12.718 13.445 12.838L12.075 13.17C11.898 13.213 11.759 13.352 11.716 13.53L11.384 14.899C11.263 15.397 10.555 15.397 10.434 14.899L10.102 13.53C10.059 13.352 9.921 13.213 9.743 13.17L8.373 12.838C7.876 12.718 7.876 12.01 8.373 11.889L9.743 11.557C9.921 11.514 10.059 11.375 10.102 11.197L10.434 9.828Z" fill={fill}/>
+            <path d="M12.779 1.972C12.859 1.646 13.323 1.646 13.402 1.972L13.62 2.871C13.649 2.988 13.74 3.079 13.856 3.107L14.755 3.325C15.082 3.404 15.082 3.869 14.755 3.948L13.856 4.166C13.74 4.194 13.649 4.285 13.62 4.402L13.402 5.3C13.323 5.627 12.859 5.627 12.779 5.3L12.561 4.402C12.533 4.285 12.442 4.194 12.326 4.166L11.427 3.948C11.1 3.869 11.1 3.404 11.427 3.325L12.326 3.107C12.442 3.079 12.533 2.988 12.561 2.871L12.779 1.972Z" fill={fill}/>
+            <circle cx="4.364" cy="15.273" r="0.727" fill={fill}/>
+            <circle cx="0.727" cy="12.364" r="0.727" fill={fill}/>
+            <circle cx="8.727" cy="0.727" r="0.727" fill={fill}/>
+            <circle cx="15.273" cy="8.727" r="0.727" fill={fill}/>
+          </svg>
+        </div>
       );
     }
     function IcUndo() {
@@ -237,6 +311,18 @@
       return (
         <svg width="16" height="16" viewBox="0 0 16 16" fill="white">
           <path fillRule="evenodd" clipRule="evenodd" d="M12.259.495a1.5 1.5 0 0 0-2.122.002L8.105 2.261l5.044 5.044 1.754-1.8A1.5 1.5 0 0 0 14.89 3.126L12.259.495ZM12.263 8.214 7.208 3.16.865 9.512A1.5 1.5 0 0 0 .124 11.2l-.123 2.922A1.268 1.268 0 0 0 1.268 15.445l2.877.001a2.5 2.5 0 0 0 1.818-.767l6.3-6.465Z" />
+        </svg>
+      );
+    }
+    function IcSave() {
+      return (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"
+            stroke="#171719" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M17 21v-8H7v8"
+            stroke="#171719" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M7 3v5h8"
+            stroke="#171719" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       );
     }
@@ -295,19 +381,97 @@
     }
 
     /* =========================================================
+       Toast
+       ========================================================= */
+    function Toast({ show, message }) {
+      if (!show) return null;
+      return (
+        <div style={{
+          position: "fixed",
+          bottom: 84,
+          left: "50%",
+          transform: "translateX(-50%)",
+          background: "#1a1a1a",
+          color: "#fff",
+          padding: "12px 22px",
+          borderRadius: 999,
+          fontSize: 14,
+          fontWeight: 500,
+          fontFamily: "Pretendard, sans-serif",
+          letterSpacing: "-.35px",
+          zIndex: 200,
+          whiteSpace: "nowrap",
+          boxShadow: "0 4px 20px rgba(0,0,0,0.28)",
+          animation: "toastIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards",
+          display: "flex",
+          alignItems: "center",
+          gap: 8
+        }}>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <circle cx="8" cy="8" r="7" fill="#3fb950" />
+            <path d="M5 8l2 2 4-4" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          {message}
+        </div>
+      );
+    }
+
+    /* =========================================================
        WorkoutMemoScreen
        ========================================================= */
-    function WorkoutMemoScreen({ onBack }) {
-      const [sections, setSections] = useState([
-        {
-          id: 1,
-          part: "하체",
-          items: [
-            { id: 1, title: "스쿼트", body: "60kg  10회  3세트" },
-            { id: 2, title: "레그프레스", body: "100kg 12회  3세트" },
-          ]
+    function WorkoutMemoScreen({ onBack, onSave, initialData }) {
+      const [sections, setSections] = useState(() => {
+        if (initialData && initialData.sections && initialData.sections.length > 0) {
+          return initialData.sections.map((s, i) => ({
+            id: i + 1,
+            part: s.part || "",
+            items: (s.items || []).map((it, j) => ({ id: j + 1, title: it.title || "", body: it.body || "" }))
+          }));
         }
-      ]);
+        return [{ id: 1, part: "하체", items: [
+          { id: 1, title: "스쿼트", body: "60kg  10회  3세트" },
+          { id: 2, title: "레그프레스", body: "100kg 12회  3세트" },
+        ]}];
+      });
+      const [aiMenuOpen, setAiMenuOpen] = useState(false);
+      const [bsOpen, setBsOpen] = useState(false);
+      const [isBsLoading, setIsBsLoading] = useState(false);
+      const [parsedSections, setParsedSections] = useState([]);
+
+      async function handleSummarize() {
+        setAiMenuOpen(false);
+        setBsOpen(true);
+        setIsBsLoading(true);
+        try {
+          const rawText = sections.map(s => `부위: ${s.part}\n${s.items.map(i => `- 종목: ${i.title}\n  기록: ${i.body}`).join('\n')}`).join('\n\n');
+          const prompt = `다음 사용자의 거친 운동 메모 데이터를 보기 좋게 정리해서 JSON 배열로 반환해줘.
+응답 형식: [{ "part": "운동부위", "items": [{ "title": "운동종목", "body": "무게, 세트, 횟수 등 깔끔하게 정리된 기록" }] }]
+JSON 이외의 다른 텍스트(마크다운 등)는 절대 포함하지 마. 원본을 잘 파악해서 깔끔하게 정리해.
+
+사용자 입력:
+${rawText}`;
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`;
+          const res = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+          });
+          const json = await res.json();
+          const text = json.candidates[0].content.parts[0].text;
+          const cleanText = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+          const parsed = JSON.parse(cleanText);
+          
+          setParsedSections(parsed.map(s => ({
+            id: Date.now() + Math.random(),
+            part: s.part || "운동 부위",
+            items: (s.items || []).map(it => ({ id: Date.now() + Math.random(), title: it.title, body: it.body }))
+          })));
+        } catch (e) {
+          console.error("AI 글 정리 에러:", e);
+        } finally {
+          setIsBsLoading(false);
+        }
+      }
 
       function updatePart(secId, val) {
         setSections(prev => prev.map(s => s.id === secId ? { ...s, part: val } : s));
@@ -336,6 +500,64 @@
 
       const lastSecId = sections[sections.length - 1]?.id;
 
+      async function handleSave() {
+        try {
+          const title = sections.map(s => s.part).filter(Boolean).join(", ") || "운동 기록";
+          const exercises = sections
+            .flatMap(s => s.items.map(it => ({ name: it.title })))
+            .filter(ex => ex.name);
+          const originalText = sections
+            .flatMap(s => s.items.map(it => it.body))
+            .filter(Boolean)
+            .join("\n");
+          const sectionsData = sections.map(s => ({
+            part: s.part,
+            items: s.items.map(it => ({ title: it.title, body: it.body }))
+          }));
+
+          // 1단계: Firestore에 먼저 저장 (편집/신규 분기)
+          let docRef;
+          if (initialData && initialData.docId) {
+            docRef = db.collection("logs").doc(initialData.docId);
+            await docRef.update({ title, exercises, originalText, sections: sectionsData, aiComment: null });
+          } else {
+            docRef = await db.collection("logs").add({
+              type: "workout",
+              timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+              title, exercises, originalText, sections: sectionsData, aiComment: null
+            });
+          }
+
+          if (onSave) onSave();
+
+          // 2단계: Gemini로 한줄평 생성 후 업데이트 (실패해도 데이터는 보존)
+          try {
+            const workoutSummary = `운동부위: ${title}, 운동종목: ${exercises.map(e => e.name).join(", ")}`;
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`;
+            const prompt = `아래 운동 기록에 대해 동기부여가 되는 짧은 한줄 코멘트를 한국어로 작성해라. 30자 이내, 순수 텍스트만 반환. 운동 정보: ${workoutSummary}`;
+            console.log("Gemini 호출 시도:", workoutSummary);
+            const res = await fetch(url, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+            });
+            const json = await res.json();
+            console.log("Gemini 응답:", res.status, JSON.stringify(json).slice(0, 200));
+            if (!res.ok) {
+              console.error("Gemini API 에러:", res.status, json.error?.message);
+            } else if (json.candidates && json.candidates[0]) {
+              const aiComment = json.candidates[0].content.parts[0].text.trim();
+              console.log("AI 한줄평 생성:", aiComment);
+              await docRef.update({ aiComment });
+            }
+          } catch (aiErr) {
+            console.error("AI 한줄평 실패:", aiErr);
+          }
+        } catch (e) {
+          alert("저장 중 오류가 발생했습니다: " + e.message);
+        }
+      }
+
       return (
         <div style={{ display: "flex", flexDirection: "column", background: "#f8f9fa", width: "100%", height: "100%", overflow: "hidden" }}>
 
@@ -356,8 +578,8 @@
                 쇠질 메모
               </h1>
               <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                <button onClick={() => addItem(lastSecId)} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: "50%" }}>
-                  <IcPlus />
+                <button onClick={handleSave} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: "50%" }}>
+                  <IcSave />
                 </button>
                 <button style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: "50%" }}>
                   <IcMore />
@@ -373,7 +595,42 @@
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#fff", padding: "12px 24px", borderBottom: "1px solid #f1f3f5" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
                 <button style={{ width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center" }}><IcKeyboard /></button>
-                <button style={{ width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center" }}><IcAI /></button>
+                <div style={{ position: "relative" }}>
+                  <button onClick={() => setAiMenuOpen(!aiMenuOpen)} style={{ width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <IcAI active={aiMenuOpen} />
+                  </button>
+                  {aiMenuOpen && (
+                    <>
+                      <div onClick={() => setAiMenuOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 98 }} />
+                      <div style={{
+                        position: "absolute",
+                        top: "calc(100% + 12px)",
+                        left: 0,
+                        width: 279,
+                        padding: "8px 0",
+                        background: "linear-gradient(115.236deg, #DFDDFF 1.69%, #E6DBFD 30.89%, #ECEFFB 64.68%, #EFFBED 100%)",
+                        border: "1px solid #dee2e6",
+                        borderRadius: 24,
+                        boxShadow: "0px 0px 8px 0px rgba(141,192,255,0.5), 0px 0px 32px 0px rgba(215,231,255,0.5)",
+                        zIndex: 99,
+                        display: "flex",
+                        flexDirection: "column",
+                        textAlign: "left",
+                        transformOrigin: "top left",
+                        animation: "dropdownEnter 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards"
+                      }}>
+                        <button onClick={handleSummarize} style={{ padding: "8px 16px", display: "flex", flexDirection: "column", gap: 4, width: "100%", background: "transparent", border: "none", outline: "none", textAlign: "left", fontFamily: "Pretendard,sans-serif", cursor: "pointer" }}>
+                          <span style={{ fontSize: 16, fontWeight: 400, color: "#495057", letterSpacing: "-0.4px", lineHeight: "24px" }}>글 정리</span>
+                          <span style={{ fontSize: 14, fontWeight: 400, color: "#646d76", letterSpacing: "-0.35px", lineHeight: "20px" }}>글을 자동으로 정리해줘요</span>
+                        </button>
+                        <button style={{ padding: "8px 16px", display: "flex", flexDirection: "column", gap: 4, width: "100%", background: "transparent", border: "none", outline: "none", textAlign: "left", fontFamily: "Pretendard,sans-serif", cursor: "pointer" }}>
+                          <span style={{ fontSize: 16, fontWeight: 400, color: "#495057", letterSpacing: "-0.4px", lineHeight: "24px" }}>피드백</span>
+                          <span style={{ fontSize: 14, fontWeight: 400, color: "#646d76", letterSpacing: "-0.35px", lineHeight: "20px" }}>기록에 기반해 자세한 피드백을 알려드려요</span>
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
                 <button style={{ width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center" }}><IcUndo /></button>
@@ -463,6 +720,120 @@
             </div>
           </nav>
 
+          {/* AI 글 정리 바텀시트 */}
+          {bsOpen && (
+            <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
+              {/* 백드롭 */}
+              <div
+                onClick={() => setBsOpen(false)}
+                style={{
+                  position: "absolute", inset: 0, background: "rgba(23, 23, 25, 0.52)",
+                  animation: "bsFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards"
+                }}
+              />
+
+              {/* 바텀시트 컨텐츠 */}
+              <div style={{
+                position: "relative",
+                background: "#f1f3f5",
+                borderTopLeftRadius: 24, borderTopRightRadius: 24,
+                padding: "0 16px 32px 16px",
+                display: "flex", flexDirection: "column", alignItems: "center",
+                animation: "bottomSheetUp 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards",
+                boxShadow: "0px -4px 16px rgba(0,0,0,0.1)",
+                maxHeight: "90vh"
+              }}>
+                {/* 둥근 드래그 핸들 */}
+                <div style={{ padding: "12px 0", width: "100%", display: "flex", justifyContent: "center" }}>
+                  <div style={{ width: 40, height: 5, borderRadius: 1000, background: "rgba(112, 115, 124, 0.16)" }} />
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", marginBottom: 16 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                    <IcSpark />
+                    <span style={{ fontSize: 18, fontWeight: 600, color: "#495057", letterSpacing: "-0.45px", lineHeight: "28px", fontFamily: "Pretendard, sans-serif" }}>글 정리</span>
+                  </div>
+                  <button onClick={() => setBsOpen(false)} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, background: "transparent", border: "none", outline: "none", cursor: "pointer" }}>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                       <path d="M18 6L6 18M6 6l12 12" stroke="#495057" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </button>
+                </div>
+
+                {/* 그라디언트 카드 부분 */}
+                <div style={{
+                  width: "100%",
+                  borderRadius: 16,
+                  padding: 16,
+                  display: "flex", flexDirection: "column", gap: 24,
+                  backgroundImage: "linear-gradient(105.71deg, rgb(237, 236, 255) 0%, rgb(230, 219, 253) 30%, rgb(236, 239, 251) 60%, rgb(239, 251, 237) 100%)",
+                  backgroundSize: "200% 200%",
+                  animation: isBsLoading ? "bsGradientMove 2.5s ease infinite" : "none"
+                }}>
+                  {isBsLoading ? (
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 250, gap: 16 }}>
+                      <div style={{ width: 40, height: 40, border: "3px solid rgba(132, 94, 240, 0.2)", borderTopColor: "#845ef0", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+                      <span style={{ fontSize: 15, fontWeight: 500, color: "#646d76", fontFamily: "Pretendard, sans-serif" }}>AI가 메모를 예쁘게 정리하고 있어요...</span>
+                      <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+                    </div>
+                  ) : parsedSections.length === 0 ? (
+                    <div style={{ minHeight: 250, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <span style={{ color: "#adb5bd" }}>로딩 결과가 없습니다.</span>
+                    </div>
+                  ) : (
+                    parsedSections.map((sSec, sIndex) => (
+                      <React.Fragment key={sSec.id}>
+                        {/* Title, Date */}
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+                          <span style={{ fontSize: 20, fontWeight: 600, color: "#171A1D", letterSpacing: "-0.5px", lineHeight: "36px", fontFamily: "Pretendard, sans-serif" }}>{sSec.part}</span>
+                          {sIndex === 0 && <span style={{ fontSize: 14, fontWeight: 400, color: "#646d76", letterSpacing: "-0.35px", lineHeight: "20px", fontFamily: "Pretendard, sans-serif" }}>{new Date().toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit' }).replace(/\.$/, '')}</span>}
+                        </div>
+
+                        {/* Contents area */}
+                        <div style={{ position: "relative", width: "100%", marginTop: -8 }}>
+                          <div style={{
+                            fontSize: 14, fontFamily: "Pretendard, sans-serif", color: "#495057", letterSpacing: "-0.35px", lineHeight: "20px",
+                            whiteSpace: "pre-wrap", paddingRight: 16
+                          }}>
+                            {sSec.items.map((sIt, iIndex) => (
+                              <React.Fragment key={sIt.id}>
+                                <span style={{fontWeight:600}}>{sIt.title}</span><br/><br/>
+                                {sIt.body}
+                                {iIndex < sSec.items.length - 1 && <><br/><br/></>}
+                              </React.Fragment>
+                            ))}
+                          </div>
+                        </div>
+                      </React.Fragment>
+                    ))
+                  )}
+
+                  {!isBsLoading && parsedSections.length > 0 && (
+                    <div style={{ display: "flex", justifyContent: "flex-end", marginTop: parsedSections.length > 0 ? 0 : 24 }}>
+                      <button onClick={() => {
+                        setSections(parsedSections);
+                        setBsOpen(false);
+                      }} style={{ background: "transparent", border: "none", outline: "none", cursor: "pointer", fontSize: 14, fontWeight: 500, color: "#06f", fontFamily: "Pretendard, sans-serif", letterSpacing: "-0.35px" }}>
+                        붙여넣기
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Pagination dots below card */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 16 }}>
+                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#495057" }} />
+                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#dee2e6" }} />
+                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#dee2e6" }} />
+                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#dee2e6" }} />
+                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#dee2e6" }} />
+                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#dee2e6" }} />
+                </div>
+
+              </div>
+            </div>
+          )}
+
         </div>
       );
     }
@@ -486,17 +857,49 @@
       );
     }
 
-    function WorkoutCard({ data }) {
+    function WorkoutCard({ data, onCardClick, onDelete, isDeleting }) {
+      const [menuOpen, setMenuOpen] = useState(false);
       const dt = data.timestamp ? new Date(data.timestamp.seconds * 1000) : null;
       const ds = dt ? `${String(dt.getFullYear()).slice(2)}. ${dt.getMonth() + 1}. ${dt.getDate()}` : "";
+      const gid = "qG_" + (data.docId || "x");
       return (
+        <div className={isDeleting ? "card-exit-wrapper" : ""}>
         <div style={{ padding: "8px 16px" }}>
-          <div className="card-enter" style={{ background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 0 25px rgba(3,27,38,.08)" }}>
+          <div className="card-enter" style={{ background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 0 25px rgba(3,27,38,.08)", cursor: "pointer" }}
+            onClick={() => { if (!menuOpen && onCardClick) onCardClick(data); }}
+          >
             <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <div style={{ display: "inline-flex", background: "rgba(0,84,209,.1)", padding: "4px 6px 4px 8px", borderRadius: 8, width: "fit-content" }}>
-                  <span style={{ fontSize: 13, color: "#0054d1", lineHeight: "18px", letterSpacing: "-.13px" }}>성공 🔥</span>
+                {/* 상단: chip + 더보기 버튼 */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div style={{ display: "inline-flex", background: "rgba(0,84,209,.1)", padding: "4px 6px 4px 8px", borderRadius: 8 }}>
+                    <span style={{ fontSize: 13, color: "#0054d1", lineHeight: "18px", letterSpacing: "-.13px" }}>성공 🔥</span>
+                  </div>
+                  <div style={{ position: "relative" }}>
+                    <button
+                      onClick={e => { e.stopPropagation(); setMenuOpen(m => !m); }}
+                      style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, borderRadius: "50%", background: menuOpen ? "#f1f3f5" : "transparent" }}
+                    >
+                      <svg width="16" height="4" viewBox="0 0 16 4" fill="none">
+                        <circle cx="2" cy="2" r="2" fill="#ADB5BD"/>
+                        <circle cx="8" cy="2" r="2" fill="#ADB5BD"/>
+                        <circle cx="14" cy="2" r="2" fill="#ADB5BD"/>
+                      </svg>
+                    </button>
+                    {menuOpen && (
+                      <>
+                        <div onClick={e => { e.stopPropagation(); setMenuOpen(false); }} style={{ position: "fixed", inset: 0, zIndex: 98 }} />
+                        <div style={{ position: "absolute", top: 32, right: 0, background: "#fff", borderRadius: 12, boxShadow: "0 4px 20px rgba(0,0,0,.15)", padding: "4px 0", zIndex: 99, minWidth: 120 }}>
+                          <button
+                            onClick={e => { e.stopPropagation(); if (onDelete) onDelete(data.docId); setMenuOpen(false); }}
+                            style={{ display: "flex", width: "100%", padding: "10px 16px", fontSize: 14, fontWeight: 500, color: "#e03131", letterSpacing: "-.35px", whiteSpace: "nowrap", fontFamily: "Pretendard,sans-serif" }}
+                          >🗑️ 삭제하기</button>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
+                {/* 제목 + 날짜 */}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                   <h3 style={{ fontSize: 18, fontWeight: 600, color: "#171a1d", lineHeight: "28px", letterSpacing: "-.45px", margin: 0, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{data.title || "기록"}</h3>
                   <span style={{ fontSize: 14, color: "#646d76", flexShrink: 0 }}>{ds}</span>
@@ -518,11 +921,12 @@
             </div>
             {data.aiComment && (
               <div style={{ borderTop: "1px solid #f1f3f5", padding: 16, display: "flex", gap: 8, alignItems: "flex-start" }}>
-                <QuoteIcon gid="qG1" />
+                <QuoteIcon gid={gid} />
                 <p className="ai-text" style={{ fontSize: 14, fontWeight: 500, lineHeight: "20px", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{data.aiComment}</p>
               </div>
             )}
           </div>
+        </div>
         </div>
       );
     }
@@ -566,18 +970,19 @@
     /* =========================================================
        HomeScreen
        ========================================================= */
-    function HomeScreen({ onNavigateToMemo }) {
+    function HomeScreen({ onNavigateToMemo, onCardClick }) {
       const [mainTab, setMainTab] = useState("workout");
       const [fabOpen, setFabOpen] = useState(false);
       const [sheetOpen, setSheetOpen] = useState(false);
       const [inputVal, setInputVal] = useState("");
+      const [deletingId, setDeletingId] = useState(null);
       const [saving, setSaving] = useState(false);
       const [workoutLogs, setWorkoutLogs] = useState([]);
 
       useEffect(() => {
         const unsub = db.collection("logs").orderBy("timestamp", "desc").onSnapshot(snap => {
           const docs = [];
-          snap.forEach(d => { const data = d.data(); if (!data.type || data.type === "workout") docs.push(data); });
+          snap.forEach(d => { const data = d.data(); if (!data.type || data.type === "workout") docs.push({ ...data, docId: d.id }); });
           setWorkoutLogs(docs);
         });
         return () => unsub();
@@ -587,6 +992,14 @@
         setFabOpen(false);
         if (type === "workout") onNavigateToMemo();
         else setSheetOpen(true);
+      }
+
+      function handleDelete(docId) {
+        setDeletingId(docId);
+        setTimeout(() => {
+          db.collection("logs").doc(docId).delete();
+          setDeletingId(null);
+        }, 400);
       }
 
       async function handleSave() {
@@ -636,7 +1049,7 @@
             {mainTab === "workout"
               ? workoutLogs.length === 0
                 ? <div style={{ textAlign: "center", color: "#9e9e9e", fontSize: 14, marginTop: 40 }}>기록된 쇠질이 없습니다.</div>
-                : workoutLogs.map((d, i) => <WorkoutCard key={i} data={d} />)
+                : workoutLogs.map((d) => <WorkoutCard key={d.docId} data={d} onCardClick={onCardClick} onDelete={handleDelete} isDeleting={d.docId === deletingId} />)
               : MOCK_DIET.map((d, i) => <DietCard key={i} data={d} />)
             }
           </main>
@@ -686,14 +1099,33 @@
        ========================================================= */
     function App() {
       const [screen, setScreen] = useState("home");
+      const [showToast, setShowToast] = useState(false);
+      const [memoKey, setMemoKey] = useState(0);
+      const [editingLog, setEditingLog] = useState(null);
+
+      function handleSaveMemo() {
+        setScreen("home");
+        setEditingLog(null);
+        setShowToast(true);
+        setMemoKey(k => k + 1);
+        setTimeout(() => setShowToast(false), 3000);
+      }
+
+      function handleCardClick(data) {
+        setEditingLog(data);
+        setMemoKey(k => k + 1);
+        setScreen("memo");
+      }
+
       return (
         <div style={{ position: "fixed", inset: 0, overflow: "hidden" }}>
           <div className={`screen screen-home${screen !== "home" ? " pushed" : ""}`}>
-            <HomeScreen onNavigateToMemo={() => setScreen("memo")} />
+            <HomeScreen onNavigateToMemo={() => { setEditingLog(null); setMemoKey(k => k + 1); setScreen("memo"); }} onCardClick={handleCardClick} />
           </div>
           <div className={`screen screen-memo${screen === "memo" ? " active" : ""}`}>
-            <WorkoutMemoScreen onBack={() => setScreen("home")} />
+            <WorkoutMemoScreen key={memoKey} onBack={() => setScreen("home")} onSave={handleSaveMemo} initialData={editingLog} />
           </div>
+          <Toast show={showToast} message="메모가 저장되었습니다" />
         </div>
       );
     }
