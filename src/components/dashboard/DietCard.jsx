@@ -1,82 +1,54 @@
-import React, { useState } from 'react';
+import React from 'react';
 import DonutChart from './DonutChart';
 import { QuoteIcon } from '../icons/Icons';
 
-export default function DietCard({ data, onDelete, isDeleting }) {
-  const [menuOpen, setMenuOpen] = useState(false);
+export default function DietCard({ data, isDeleting }) {
   const dt = data.timestamp ? new Date(data.timestamp.seconds * 1000) : null;
-  const ds = dt ? `${String(dt.getFullYear()).slice(2)}. ${dt.getMonth() + 1}. ${dt.getDate()}` : "";
-  const gid = "qG_" + (data.docId || "x");
+  const ds = dt ? `${String(dt.getFullYear()).slice(2)}. ${dt.getMonth() + 1}. ${dt.getDate()}` : (data.date || "");
+  const gid = "qG_" + (data.docId || Math.random().toString(36).substr(2, 9));
 
   return (
-    <div className={isDeleting ? "card-exit-wrapper" : ""}>
-      <div style={{ padding: "8px 16px" }}>
-        <div className="card-enter" style={{ background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 0 25px rgba(3,27,38,.08)" }}>
-          <div style={{ padding: "16px 16px 4px 16px" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-              <div style={{ display: "inline-flex", background: "rgba(0,183,189,.1)", padding: "4px 8px", borderRadius: 8 }}>
-                <span style={{ fontSize: 13, fontWeight: 500, color: "#00b7bd" }}>식단 기록 🥗</span>
-              </div>
-              <div style={{ position: "relative" }}>
-                <button onClick={() => setMenuOpen(!menuOpen)} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, borderRadius: "50%", background: menuOpen ? "#f1f3f5" : "transparent" }}>
-                  <svg width="16" height="4" viewBox="0 0 16 4" fill="none">
-                    <circle cx="2" cy="2" r="2" fill="#ADB5BD" />
-                    <circle cx="8" cy="2" r="2" fill="#ADB5BD" />
-                    <circle cx="14" cy="2" r="2" fill="#ADB5BD" />
-                  </svg>
-                </button>
-                {menuOpen && (
-                  <>
-                    <div onClick={() => setMenuOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 98 }} />
-                    <div style={{ position: "absolute", top: 32, right: 0, background: "#fff", borderRadius: 12, boxShadow: "0 4px 20px rgba(0,0,0,.15)", padding: "4px 0", zIndex: 99, minWidth: 120 }}>
-                      <button onClick={() => { if (onDelete) onDelete(data.docId); setMenuOpen(false); }}
-                        style={{ display: "flex", width: "100%", padding: "10px 16px", fontSize: 14, color: "#e03131", fontWeight: 500, background: "none", border: "none", textAlign: "left" }}>
-                        🗑️ 삭제하기
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
+    <div className={`px-4 py-2 transition-all duration-300 ${isDeleting ? 'card-exit-wrapper' : 'card-enter'}`}>
+      <div className="bg-white rounded-[16px] overflow-hidden shadow-[0_0_25px_rgba(3,27,38,0.08)] cursor-pointer border border-transparent hover:border-ui-3 transition-transform duration-200 active:scale-[0.98]">
+        <div className="p-4 flex flex-col gap-4">
+          <div className="flex flex-col gap-2 pb-4 border-b border-[#f1f3f5]">
+            <div className="inline-flex bg-[#0054d1]/10 px-2 py-1 rounded-[8px] w-fit">
+              <span className="text-[13px] text-[#0054d1] font-pretendard tracking-[-0.325px] whitespace-nowrap">성공 🔥</span>
             </div>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 16 }}>
-              <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>{data.title || "오늘의 식사"}</h3>
-              <span style={{ fontSize: 14, color: "#868e96" }}>{ds}</span>
+            <div className="flex items-center justify-between">
+              <p className="text-[24px] font-semibold text-[#171a1d] leading-[32px] tracking-[-0.6px] m-0 font-pretendard">
+                {(data.kcal || 0).toLocaleString()} kcal
+              </p>
+              <span className="text-[14px] text-[#646d76] tracking-[-0.35px] font-pretendard m-0">{ds}</span>
             </div>
-
-            <div style={{ display: "flex", alignItems: "center", gap: 20, marginBottom: 16 }}>
-              <DonutChart carb={data.carb || 0} protein={data.protein || 0} fat={data.fat || 0} />
-              <div style={{ display: "flex", flexDirection: "column", gap: 12, flex: 1 }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#3385ff" }} />
-                    <span style={{ fontSize: 14, color: "#495057", fontWeight: 500 }}>탄수화물</span>
-                  </div>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: "#212529" }}>{data.carbGram || 0}g</span>
+            <p className="text-[14px] text-[#868e96] tracking-[-0.35px] m-0 font-pretendard">목표 {(data.goal || 0).toLocaleString()}</p>
+          </div>
+          <div className="flex items-center gap-4">
+            <DonutChart carb={data.carb || 0} protein={data.protein || 0} fat={data.fat || 0} />
+            <div className="flex flex-col gap-2">
+              {[
+                { c: "#3385ff", l: "탄수화물" },
+                { c: "#e05a2b", l: "단백질" },
+                { c: "#e8a126", l: "지방" }
+              ].map((item) => (
+                <div key={item.l} className="flex gap-1.5 items-center">
+                  <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: item.c }} />
+                  <span className="text-[12px] font-medium text-[#adb5bd] whitespace-nowrap font-pretendard tracking-[-0.3px]">{item.l}</span>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#e05a2b" }} />
-                    <span style={{ fontSize: 14, color: "#495057", fontWeight: 500 }}>단백질</span>
-                  </div>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: "#212529" }}>{data.proteinGram || 0}g</span>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#e8a126" }} />
-                    <span style={{ fontSize: 14, color: "#495057", fontWeight: 500 }}>지방</span>
-                  </div>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: "#212529" }}>{data.fatGram || 0}g</span>
-                </div>
-              </div>
+              ))}
             </div>
           </div>
-          {data.aiComment && (
-            <div style={{ borderTop: "1px solid #f8f9fa", background: "#fcfcfc", padding: 16, display: "flex", gap: 8, alignItems: "flex-start" }}>
-              <QuoteIcon gid={gid} />
-              <p className="ai-text" style={{ fontSize: 14, fontWeight: 500, lineHeight: 1.6, flex: 1, margin: 0 }}>{data.aiComment}</p>
-            </div>
-          )}
         </div>
+        {data.aiComment && (
+          <div className="border-t border-[#f1f3f5] p-4 flex gap-2 items-start bg-white">
+            <QuoteIcon gid={gid} />
+            <div className="flex-1 mt-0.5 min-w-0">
+              <p className="font-pretendard font-medium text-[14px] text-transparent bg-clip-text bg-gradient-to-r from-[#228bed] to-[#c509d6] tracking-[-0.35px] leading-[20px] m-0 truncate">
+                {data.aiComment}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

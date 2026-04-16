@@ -1,13 +1,13 @@
 import React from 'react';
 
-export const IcHome = ({ active }) => (
-  <svg width="18" height="18" viewBox="0 0 18 18" fill={active ? "#0054d1" : "#adb5bd"}>
+export const IcHome = ({ active, size = 18 }) => (
+  <svg width={size} height={size} viewBox="0 0 18 18" fill={active ? "#0054d1" : "#adb5bd"}>
     <path fillRule="evenodd" clipRule="evenodd" d="M8.45.187C8.774-.062 9.226-.062 9.55.187l8.1 6.253C17.87 6.61 18 6.874 18 7.152v9.048C18 17.194 17.193 18 16.199 18H10.8v-4.31a.9.9 0 0 0-.9-.9H8.1a.9.9 0 0 0-.9.9V18H1.8C.806 18 0 17.194 0 16.2V7.152c0-.279.13-.541.35-.712L8.45.187Z" />
   </svg>
 );
 
-export const IcGrid = () => (
-  <svg width="18" height="18" viewBox="0 0 18 18" fill="#adb5bd">
+export const IcGrid = ({ size = 18 }) => (
+  <svg width={size} height={size} viewBox="0 0 18 18" fill="#adb5bd">
     <rect x="2" y="2" width="6" height="6" rx="1" />
     <rect x="2" y="10" width="6" height="6" rx="1" />
     <rect x="10" y="2" width="6" height="6" rx="1" />
@@ -15,15 +15,15 @@ export const IcGrid = () => (
   </svg>
 );
 
-export const IcUser = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="#adb5bd">
+export const IcUser = ({ size = 18 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="#adb5bd">
     <path d="M7.09 7.91C7.09 5.2 9.29 3 12 3s4.91 2.2 4.91 4.91-2.2 4.91-4.91 4.91S7.09 10.62 7.09 7.91Z" />
     <path d="M3 21c0-3.615 4.03-6.546 9-6.546S21 17.385 21 21H3Z" />
   </svg>
 );
 
-export const IcBack = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+export const IcBack = ({ size = 24 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
     <path d="M15 18L9 12l6-6" stroke="#171719" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
@@ -34,16 +34,16 @@ export const IcPlus = ({ color = "#171719", size = 24 }) => (
   </svg>
 );
 
-export const IcMore = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+export const IcMore = ({ size = 24 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
     <circle cx="12" cy="5" r="1.5" fill="#171719" />
     <circle cx="12" cy="12" r="1.5" fill="#171719" />
     <circle cx="12" cy="19" r="1.5" fill="#171719" />
   </svg>
 );
 
-export const IcKeyboard = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+export const IcKeyboard = ({ size = 24 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
     <rect x="2" y="6" width="20" height="13" rx="2" stroke="#171719" strokeWidth="1.5" />
     <rect x="5" y="10" width="2" height="2" rx=".5" fill="#171719" />
     <rect x="9" y="10" width="2" height="2" rx=".5" fill="#171719" />
@@ -56,11 +56,7 @@ export const IcKeyboard = () => (
 export const IcAI = ({ active = false }) => {
   const fill = active ? "white" : "url(#tbAiG)";
   return (
-    <div style={{
-      width: 24, height: 24, borderRadius: active ? 8 : 0, flexShrink: 0,
-      background: active ? "linear-gradient(90deg, #228bed, #c509d6)" : "transparent",
-      display: "flex", alignItems: "center", justifyContent: "center"
-    }}>
+    <div className={`w-6 h-6 flex-shrink-0 flex items-center justify-center ${active ? 'rounded-[8px] bg-gradient-to-r from-[#228bed] to-[#c509d6]' : 'bg-transparent'}`}>
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
         {!active && (
           <defs>
@@ -84,7 +80,7 @@ export const IcAI = ({ active = false }) => {
 export const IcSpark = () => {
   const fill = "url(#spAiG)";
   return (
-    <div style={{ width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+    <div className="w-6 h-6 flex items-center justify-center flex-shrink-0">
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
         <defs>
           <linearGradient id="spAiG" x1="0" y1="8" x2="16" y2="8" gradientUnits="userSpaceOnUse">
@@ -103,36 +99,36 @@ export const IcSpark = () => {
   );
 };
 
-export const IcUndo = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+export const IcUndo = ({ size = 24 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
     <path d="M4 10h10c3.314 0 6 2.686 6 6s-2.686 6-6 6H8" stroke="#ADB5BD" strokeWidth="1.5" strokeLinecap="round" />
     <path d="M8 6 4 10l4 4" stroke="#ADB5BD" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
 
-export const IcRedo = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+export const IcRedo = ({ size = 24 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
     <path d="M20 10H10C6.686 10 4 12.686 4 16s2.686 6 6 6h6" stroke="#ADB5BD" strokeWidth="1.5" strokeLinecap="round" />
     <path d="m16 6 4 4-4 4" stroke="#ADB5BD" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
 
-export const IcPencil = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="white">
+export const IcPencil = ({ size = 16, color = "white" }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill={color}>
     <path fillRule="evenodd" clipRule="evenodd" d="M12.259.495a1.5 1.5 0 0 0-2.122.002L8.105 2.261l5.044 5.044 1.754-1.8A1.5 1.5 0 0 0 14.89 3.126L12.259.495ZM12.263 8.214 7.208 3.16.865 9.512A1.5 1.5 0 0 0 .124 11.2l-.123 2.922A1.268 1.268 0 0 0 1.268 15.445l2.877.001a2.5 2.5 0 0 0 1.818-.767l6.3-6.465Z" />
   </svg>
 );
 
-export const IcSave = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" stroke="#171719" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="M17 21v-8H7v8" stroke="#171719" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="M7 3v5h8" stroke="#171719" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+export const IcSave = ({ size = 24, color = "#171719" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M17 21v-8H7v8" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M7 3v5h8" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
 
 export const QuoteIcon = ({ gid }) => (
-  <svg width="17" height="12" viewBox="0 0 17 12" style={{ flexShrink: 0, marginTop: 2 }}>
+  <svg width="17" height="12" viewBox="0 0 17 12" className="flex-shrink-0 mt-0.5">
     <defs>
       <linearGradient id={gid} x1="0" y1="0" x2="17" y2="0" gradientUnits="userSpaceOnUse">
         <stop stopColor="#228bed" />

@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { IcBack, IcSave, IcMore, IcKeyboard, IcAI, IcUndo, IcRedo, IcSpark, IcPlus, IcHome, IcGrid, IcUser } from '../icons/Icons';
 import { AutoTextarea } from '../common/AutoTextarea';
+import WorkoutTaskItem from '../common/WorkoutTaskItem';
+import Button from '../common/Button';
 import { db } from '../../lib/firebase';
 import { 
   collection, 
@@ -204,29 +206,29 @@ ${rawText}`;
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", background: "#f8f9fa", width: "100%", height: "100%", overflow: "hidden" }}>
+    <div className="flex flex-col bg-ui-1 w-full h-full overflow-hidden">
 
       {/* 상단 네비게이션 */}
-      <header style={{ flexShrink: 0, background: "rgba(255,255,255,0.9)", backdropFilter: "blur(32px)", borderBottom: "1px solid rgba(112,115,124,0.16)" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", height: 36, padding: "0 16px" }}>
-          <span style={{ fontFamily: "Pretendard,sans-serif", fontSize: 14, fontWeight: 500, color: "rgba(0,0,0,.6)" }}>9:41</span>
-          <svg width="60" height="12" viewBox="0 0 60 12" fill="none" style={{ marginTop: 8 }}>
+      <header className="flex-none bg-white/90 backdrop-blur-[32px] border-b border-ui-3/50">
+        <div className="flex items-center justify-between h-9 px-4">
+          <span className="font-pretendard text-body-s font-medium text-black/60">9:41</span>
+          <svg width="60" height="12" viewBox="0 0 60 12" fill="none" className="mt-2">
             <rect x=".5" y=".5" width="21" height="11" rx="3.5" stroke="black" strokeOpacity=".35" />
             <rect x="2" y="2" width="16" height="8" rx="2" fill="black" />
           </svg>
         </div>
-        <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px", height: 56 }}>
-          <button onClick={onBack} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: "50%", background: "transparent" }}>
+        <div className="relative flex items-center justify-between px-4 h-14">
+          <button onClick={onBack} className="flex items-center justify-center w-8 h-8 rounded-full bg-transparent">
             <IcBack />
           </button>
-          <h1 style={{ position: "absolute", left: "50%", transform: "translateX(-50%)", fontFamily: "Pretendard,sans-serif", fontSize: 20, fontWeight: 600, color: "#000", letterSpacing: "-0.5px", whiteSpace: "nowrap", margin: 0 }}>
+          <h1 className="absolute left-1/2 -translate-x-1/2 font-pretendard text-title-s font-semibold text-black tracking-[-0.5px] whitespace-nowrap m-0">
             쇠질 메모
           </h1>
-          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <button onClick={handleSave} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: "50%" }}>
+          <div className="flex items-center gap-4">
+            <button onClick={handleSave} className="flex items-center justify-center w-8 h-8 rounded-full">
               <IcSave />
             </button>
-            <button style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: "50%" }}>
+            <button className="flex items-center justify-center w-8 h-8 rounded-full">
               <IcMore />
             </button>
           </div>
@@ -234,52 +236,36 @@ ${rawText}`;
       </header>
 
       {/* 중앙 스크롤 영역 */}
-      <main style={{ flex: 1, overflowY: "auto" }}>
+      <main className="flex-1 overflow-y-auto">
 
         {/* 툴바 */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#fff", padding: "12px 24px", borderBottom: "1px solid #f1f3f5" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <button style={{ width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center" }}><IcKeyboard /></button>
-            <div style={{ position: "relative" }}>
-              <button onClick={() => setAiMenuOpen(!aiMenuOpen)} style={{ width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div className="flex items-center justify-between bg-white px-6 py-3 border-b border-ui-2">
+          <div className="flex items-center gap-4">
+            <button className="w-6 h-6 flex items-center justify-center"><IcKeyboard /></button>
+            <div className="relative">
+              <button onClick={() => setAiMenuOpen(!aiMenuOpen)} className="w-6 h-6 flex items-center justify-center">
                 <IcAI active={aiMenuOpen} />
               </button>
               {aiMenuOpen && (
                 <>
-                  <div onClick={() => setAiMenuOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 98 }} />
-                  <div style={{
-                    position: "absolute",
-                    top: "calc(100% + 12px)",
-                    left: 0,
-                    width: 279,
-                    padding: "8px 0",
-                    background: "linear-gradient(115.236deg, #DFDDFF 1.69%, #E6DBFD 30.89%, #ECEFFB 64.68%, #EFFBED 100%)",
-                    border: "1px solid #dee2e6",
-                    borderRadius: 24,
-                    boxShadow: "0px 0px 8px 0px rgba(141,192,255,0.5), 0px 0px 32px 0px rgba(215,231,255,0.5)",
-                    zIndex: 99,
-                    display: "flex",
-                    flexDirection: "column",
-                    textAlign: "left",
-                    transformOrigin: "top left",
-                    animation: "dropdownEnter 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards"
-                  }}>
-                    <button onClick={handleSummarize} style={{ padding: "8px 16px", display: "flex", flexDirection: "column", gap: 4, width: "100%", background: "transparent", border: "none", outline: "none", textAlign: "left", fontFamily: "Pretendard,sans-serif", cursor: "pointer" }}>
-                      <span style={{ fontSize: 16, fontWeight: 400, color: "#495057", letterSpacing: "-0.4px", lineHeight: "24px" }}>글 정리</span>
-                      <span style={{ fontSize: 14, fontWeight: 400, color: "#646d76", letterSpacing: "-0.35px", lineHeight: "20px" }}>글을 자동으로 정리해줘요</span>
+                  <div onClick={() => setAiMenuOpen(false)} className="fixed inset-0 z-[98]" />
+                  <div className="absolute top-[calc(100%+12px)] left-0 w-[279px] py-2 bg-gradient-to-br from-[#DFDDFF] via-[#ECEFFB] to-[#EFFBED] border border-ui-4 rounded-[24px] shadow-lg z-[99] flex flex-col text-left origin-top-left animate-[dropdownEnter_0.25s_cubic-bezier(0.16,1,0.3,1)_forwards]">
+                    <button onClick={handleSummarize} className="px-4 py-2 flex flex-col gap-1 w-full bg-transparent border-none outline-none text-left font-pretendard cursor-pointer">
+                      <span className="text-body-m font-normal text-typo-normal tracking-[-0.4px] leading-lh-xs">글 정리</span>
+                      <span className="text-body-s font-normal text-typo-secondary tracking-[-0.35px] leading-lh-2xs">글을 자동으로 정리해줘요</span>
                     </button>
-                    <button style={{ padding: "8px 16px", display: "flex", flexDirection: "column", gap: 4, width: "100%", background: "transparent", border: "none", outline: "none", textAlign: "left", fontFamily: "Pretendard,sans-serif", cursor: "pointer" }}>
-                      <span style={{ fontSize: 16, fontWeight: 400, color: "#495057", letterSpacing: "-0.4px", lineHeight: "24px" }}>피드백</span>
-                      <span style={{ fontSize: 14, fontWeight: 400, color: "#646d76", letterSpacing: "-0.35px", lineHeight: "20px" }}>기록에 기반해 자세한 피드백을 알려드려요</span>
+                    <button className="px-4 py-2 flex flex-col gap-1 w-full bg-transparent border-none outline-none text-left font-pretendard cursor-pointer">
+                      <span className="text-body-m font-normal text-typo-normal tracking-[-0.4px] leading-lh-xs">피드백</span>
+                      <span className="text-body-s font-normal text-typo-secondary tracking-[-0.35px] leading-lh-2xs">기록에 기반해 자세한 피드백을 알려드려요</span>
                     </button>
                   </div>
                 </>
               )}
             </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <button style={{ width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center" }}><IcUndo /></button>
-            <button style={{ width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center" }}><IcRedo /></button>
+          <div className="flex items-center gap-4">
+            <button className="w-6 h-6 flex items-center justify-center"><IcUndo /></button>
+            <button className="w-6 h-6 flex items-center justify-center"><IcRedo /></button>
           </div>
         </div>
 
@@ -288,78 +274,67 @@ ${rawText}`;
           <div key={sec.id}>
 
             {/* 운동 부위 헤더 */}
-            <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#fff", padding: "32px 16px 16px", borderBottom: "1px solid #f1f3f5" }}>
+            <div className="flex items-center gap-2 bg-white px-4 pt-8 pb-4 border-b border-ui-2 mt-2 first:mt-0">
               <input
                 value={sec.part}
                 onChange={e => updatePart(sec.id, e.target.value)}
                 placeholder="운동 부위 (예: 하체)"
-                style={ST}
+                className="font-pretendard text-title-s font-bold text-typo-strong tracking-[-0.5px] leading-lh-sm bg-transparent border-none outline-none w-full p-0 placeholder:text-ui-4"
               />
-              <button style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, flexShrink: 0 }}>
-                <IcSpark />
+              <button className="flex items-center justify-center w-6 h-6 flex-none text-ui-3 hover:text-brand transition-colors">
+                <IcSpark size={20} />
               </button>
             </div>
 
             {/* 종목 항목들 */}
             {sec.items.map(item => (
-              <div key={item.id} style={{ background: "#fff", marginBottom: 1 }}>
-                {/* 종목명 */}
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "16px 16px 4px" }}>
-                  <input
-                    value={item.title}
-                    onChange={e => updateItem(sec.id, item.id, "title", e.target.value)}
-                    placeholder="오늘의 운동 종목을 적어주세요"
-                    style={{ ...TT, flex: 1 }}
-                  />
-                  <button style={{ width: 24, height: 24, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <IcSpark />
-                  </button>
-                </div>
-                {/* 운동 기록 */}
-                <div style={{ padding: "4px 16px 16px" }}>
-                  <AutoTextarea
-                    value={item.body}
-                    onChange={e => updateItem(sec.id, item.id, "body", e.target.value)}
-                    placeholder="운동의 무게와 세트수 등 편하게 적어주세요"
-                    style={{ ...BT }}
-                  />
-                </div>
-              </div>
+              <WorkoutTaskItem
+                key={item.id}
+                title={item.title}
+                body={item.body}
+                onTitleChange={(val) => updateItem(sec.id, item.id, "title", val)}
+                onBodyChange={(val) => updateItem(sec.id, item.id, "body", val)}
+              />
             ))}
 
             {/* [+] 항목 추가 */}
-            <div style={{ padding: "8px" }}>
-              <button
+            <div className="p-2">
+              <Button
+                variant="secondary"
+                size="l"
+                fullWidth
                 onClick={() => addItem(sec.id)}
-                style={{ display: "flex", width: "100%", alignItems: "center", justifyContent: "center", background: "#f1f3f5", borderRadius: 12, padding: "8px 0" }}
               >
                 <IcPlus color="#868e96" />
-              </button>
+              </Button>
             </div>
 
           </div>
         ))}
 
         {/* 새 운동 부위 추가 */}
-        <div style={{ padding: "8px 16px 32px" }}>
-          <button
+        <div className="px-4 pt-2 pb-8">
+          <Button
+            variant="dashed"
+            size="l"
+            fullWidth
             onClick={addSection}
-            style={{ display: "flex", width: "100%", alignItems: "center", justifyContent: "center", gap: 6, background: "#fff", border: "1.5px dashed #dee2e6", borderRadius: 12, padding: "12px 0", color: "#868e96", fontSize: 14, fontWeight: 500, fontFamily: "Pretendard,sans-serif" }}
+            className="gap-1.5"
           >
             <IcPlus color="#868e96" size={16} />
             새 운동 부위 추가
-          </button>
+          </Button>
         </div>
 
       </main>
 
       {/* 하단 탭 (메모 작성시에도 보임) */}
-      <nav style={{ flexShrink: 0, background: "#fff", borderTop: "1px solid #e9ecef", borderRadius: "16px 16px 0 0", boxShadow: "0 -6px 16px rgba(3,7,19,.10)" }}>
-        <div style={{ display: "flex", alignItems: "center" }}>
+      <nav className="flex-none bg-white border-t border-ui-3 rounded-t-[16px] shadow-[0_-6px_16px_rgba(3,7,19,0.1)]">
+        <div className="flex items-center">
           {[["홈", true], ["분석", false], ["마이", false]].map(([l, a], i) => (
-            <button key={i} style={{ display: "flex", flexDirection: "column", flex: 1, alignItems: "center", gap: 2, padding: "8px 0", color: a ? "#0054d1" : "#adb5bd" }}>
+            <button key={i} className={`flex flex-col flex-1 items-center gap-0.5 py-2 ${a ? 'text-brand' : 'text-ui-6'}`}>
               {i === 0 && <IcHome active={a} />}{i === 1 && <IcGrid />}{i === 2 && <IcUser />}
-              <span style={{ fontFamily: "Pretendard,sans-serif", fontSize: 12, fontWeight: 500 }}>{l}</span>
+              <span className="font-pretendard text-caption-l font-medium">{l}</span>
             </button>
           ))}
         </div>
@@ -367,82 +342,58 @@ ${rawText}`;
 
       {/* AI 글 정리 바텀시트 */}
       {bsOpen && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
+        <div className="fixed inset-0 z-[100] flex flex-col justify-end">
           {/* 백드롭 */}
           <div
             onClick={() => setBsOpen(false)}
-            style={{
-              position: "absolute", inset: 0, background: "rgba(23, 23, 25, 0.52)",
-              animation: "bsFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards"
-            }}
+            className="absolute inset-0 bg-[#171719]/50 animate-[bsFadeIn_0.3s_cubic-bezier(0.16,1,0.3,1)_forwards]"
           />
 
           {/* 바텀시트 컨텐츠 */}
-          <div style={{
-            position: "relative",
-            background: "#f1f3f5",
-            borderTopLeftRadius: 24, borderTopRightRadius: 24,
-            padding: "0 16px 32px 16px",
-            display: "flex", flexDirection: "column", alignItems: "center",
-            animation: "bottomSheetUp 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards",
-            boxShadow: "0px -4px 16px rgba(0,0,0,0.1)",
-            maxHeight: "90vh"
-          }}>
+          <div className="relative bg-ui-2 rounded-t-[24px] px-4 pb-8 flex flex-col items-center animate-[bottomSheetUp_0.4s_cubic-bezier(0.2,0.8,0.2,1)_forwards] shadow-lg max-h-[90vh]">
             {/* 둥근 드래그 핸들 */}
-            <div style={{ padding: "12px 0", width: "100%", display: "flex", justifyContent: "center" }}>
-              <div style={{ width: 40, height: 5, borderRadius: 1000, background: "rgba(112, 115, 124, 0.16)" }} />
+            <div className="py-3 w-full flex justify-center">
+              <div className="w-10 h-1 rounded-full bg-ui-3/60" />
             </div>
 
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", marginBottom: 16 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <div className="flex items-center justify-between w-full mb-4">
+              <div className="flex items-center gap-4">
                 <IcSpark />
-                <span style={{ fontSize: 18, fontWeight: 600, color: "#495057", letterSpacing: "-0.45px", lineHeight: "28px", fontFamily: "Pretendard, sans-serif" }}>글 정리</span>
+                <span className="text-body-l font-semibold text-typo-normal tracking-[-0.45px] leading-lh-sm font-pretendard">글 정리</span>
               </div>
-              <button onClick={() => setBsOpen(false)} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, background: "transparent", border: "none", outline: "none", cursor: "pointer" }}>
+              <button onClick={() => setBsOpen(false)} className="flex items-center justify-center w-6 h-6 bg-transparent border-none outline-none cursor-pointer">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                  <path d="M18 6L6 18M6 6l12 12" stroke="#495057" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M18 6L6 18M6 6l12 12" stroke="var(--typo-normal)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </button>
             </div>
 
             {/* 그라디언트 카드 부분 */}
-            <div style={{
-              width: "100%",
-              borderRadius: 16,
-              padding: 16,
-              display: "flex", flexDirection: "column", gap: 24,
-              backgroundImage: "linear-gradient(105.71deg, rgb(237, 236, 255) 0%, rgb(230, 219, 253) 30%, rgb(236, 239, 251) 60%, rgb(239, 251, 237) 100%)",
-              backgroundSize: "200% 200%",
-              animation: isBsLoading ? "bsGradientMove 2.5s ease infinite" : "none"
-            }}>
+            <div className={`w-full rounded-2xl p-4 flex flex-col gap-6 bg-gradient-to-br from-[#EDECFF] via-[#ECEFFB] to-[#EFFBED] bg-[length:200%_200%] ${isBsLoading ? 'animate-[bsGradientMove_2.5s_ease_infinite]' : ''}`}>
               {isBsLoading ? (
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 250, gap: 16 }}>
-                  <div style={{ width: 40, height: 40, border: "3px solid rgba(132, 94, 240, 0.2)", borderTopColor: "#845ef0", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
-                  <span style={{ fontSize: 15, fontWeight: 500, color: "#646d76", fontFamily: "Pretendard, sans-serif" }}>AI가 메모를 예쁘게 정리하고 있어요...</span>
-                  <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+                <div className="flex flex-col items-center justify-center min-h-[250px] gap-4">
+                  <div className="w-10 h-10 border-[3px] border-brand/20 border-t-brand rounded-full animate-spin" />
+                  <span className="text-[15px] font-medium text-typo-secondary font-pretendard">AI가 메모를 예쁘게 정리하고 있어요...</span>
                 </div>
               ) : parsedSections.length === 0 ? (
-                <div style={{ minHeight: 250, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <span style={{ color: "#adb5bd" }}>로딩 결과가 없습니다.</span>
+                <div className="min-h-[250px] flex items-center justify-center">
+                  <span className="text-ui-6">로딩 결과가 없습니다.</span>
                 </div>
               ) : (
                 parsedSections.map((sSec, sIndex) => (
                   <React.Fragment key={sSec.id}>
                     {/* Title, Date */}
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
-                      <span style={{ fontSize: 20, fontWeight: 600, color: "#171A1D", letterSpacing: "-0.5px", lineHeight: "36px", fontFamily: "Pretendard, sans-serif" }}>{sSec.part}</span>
-                      {sIndex === 0 && <span style={{ fontSize: 14, fontWeight: 400, color: "#646d76", letterSpacing: "-0.35px", lineHeight: "20px", fontFamily: "Pretendard, sans-serif" }}>{new Date().toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit' }).replace(/\.$/, '')}</span>}
+                    <div className="flex items-center justify-between w-full">
+                      <span className="text-title-s font-semibold text-typo-strong tracking-[-0.5px] leading-[36px] font-pretendard">{sSec.part}</span>
+                      {sIndex === 0 && <span className="text-body-s font-normal text-typo-secondary tracking-[-0.35px] leading-lh-2xs font-pretendard">{new Date().toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit' }).replace(/\.$/, '')}</span>}
                     </div>
 
                     {/* Contents area */}
-                    <div style={{ position: "relative", width: "100%", marginTop: -8 }}>
-                      <div style={{
-                        fontSize: 14, fontFamily: "Pretendard, sans-serif", color: "#495057", letterSpacing: "-0.35px", lineHeight: "20px",
-                        whiteSpace: "pre-wrap", paddingRight: 16
-                      }}>
+                    <div className="relative w-full -mt-2">
+                      <div className="text-body-s font-pretendard text-typo-normal tracking-[-0.35px] leading-lh-2xs white-space-pre-wrap pr-4">
                         {sSec.items.map((sIt, iIndex) => (
                           <React.Fragment key={sIt.id}>
-                            <span style={{ fontWeight: 600 }}>{sIt.title}</span><br /><br />
+                            <span className="font-semibold">{sIt.title}</span><br /><br />
                             {sIt.body}
                             {iIndex < sSec.items.length - 1 && <><br /><br /></>}
                           </React.Fragment>
@@ -454,11 +405,11 @@ ${rawText}`;
               )}
 
               {!isBsLoading && parsedSections.length > 0 && (
-                <div style={{ display: "flex", justifyContent: "flex-end", marginTop: parsedSections.length > 0 ? 0 : 24 }}>
+                <div className="flex justify-end mt-0">
                   <button onClick={() => {
                     setSections(parsedSections);
                     setBsOpen(false);
-                  }} style={{ background: "transparent", border: "none", outline: "none", cursor: "pointer", fontSize: 14, fontWeight: 500, color: "#06f", fontFamily: "Pretendard, sans-serif", letterSpacing: "-0.35px" }}>
+                  }} className="background-transparent border-none outline-none cursor-pointer text-body-s font-medium text-brand font-pretendard tracking-[-0.35px]">
                     붙여넣기
                   </button>
                 </div>
@@ -466,13 +417,13 @@ ${rawText}`;
             </div>
 
             {/* Pagination dots below card */}
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 16 }}>
-              <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#495057" }} />
-              <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#dee2e6" }} />
-              <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#dee2e6" }} />
-              <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#dee2e6" }} />
-              <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#dee2e6" }} />
-              <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#dee2e6" }} />
+            <div className="flex items-center gap-2 mt-4">
+              <div className="w-1.5 h-1.5 rounded-full bg-typo-normal" />
+              <div className="w-1.5 h-1.5 rounded-full bg-ui-4" />
+              <div className="w-1.5 h-1.5 rounded-full bg-ui-4" />
+              <div className="w-1.5 h-1.5 rounded-full bg-ui-4" />
+              <div className="w-1.5 h-1.5 rounded-full bg-ui-4" />
+              <div className="w-1.5 h-1.5 rounded-full bg-ui-4" />
             </div>
 
           </div>

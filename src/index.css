@@ -8,9 +8,10 @@
   box-sizing: border-box
 }
 
+
 body {
   font-family: 'Pretendard', sans-serif;
-  background: #f8f9fa;
+  @apply bg-ui-1 text-typo-normal;
   margin: 0;
   overflow: hidden
 }
@@ -48,34 +49,34 @@ body {
 }
 
 .screen {
-  position: fixed;
+  position: absolute;
   inset: 0;
-  background: #f8f9fa;
+  @apply bg-ui-1;
   transition: transform .35s cubic-bezier(.4, 0, .2, 1);
   will-change: transform
 }
 
 .screen-home {
-  transform: translateX(0)
+  transform: translateX(0);
 }
 
 .screen-home.pushed {
-  transform: translateX(-25%)
+  transform: translateX(-25%);
 }
 
-.screen-memo {
-  transform: translateX(100%)
+.screen-memo, .screen-diet {
+  transform: translateX(100%);
 }
 
-.screen-memo.active {
-  transform: translateX(0)
+.screen-memo.active, .screen-diet.active {
+  transform: translateX(0);
 }
 
 .fab-menu {
   transition: all .2s ease-out;
   opacity: 0;
   pointer-events: none;
-  transform: translateY(10px)
+  transform: translateY(10px);
 }
 
 .fab-menu.open {
@@ -109,7 +110,7 @@ body {
 
 input::placeholder,
 textarea::placeholder {
-  color: #adb5bd
+  @apply text-ui-6;
 }
 
 input:focus,
