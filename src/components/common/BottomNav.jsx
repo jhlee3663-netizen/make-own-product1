@@ -1,11 +1,11 @@
 import React from 'react';
-import { IcHome, IcGrid, IcUser } from '../icons/Icons';
+import { IcHome, IcChat, IcUser } from '../icons/Icons';
 
 export default function BottomNav({ activeId = 'home', onChange }) {
   const tabs = [
-    { id: 'home', label: '홈', Icon: IcHome },
-    { id: 'analytics', label: '분석', Icon: IcGrid },
-    { id: 'my', label: '마이', Icon: IcUser },
+    { id: 'home',  label: '홈',      Icon: IcHome },
+    { id: 'coach', label: 'AI 코치', Icon: IcChat },
+    { id: 'my',    label: '마이',    Icon: IcUser },
   ];
 
   return (

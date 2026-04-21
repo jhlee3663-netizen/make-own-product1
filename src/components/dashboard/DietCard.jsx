@@ -25,15 +25,16 @@ export default function DietCard({ data, isDeleting }) {
           </div>
           <div className="flex items-center gap-4">
             <DonutChart carb={data.carb || 0} protein={data.protein || 0} fat={data.fat || 0} />
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2 flex-1">
               {[
-                { c: "#3385ff", l: "탄수화물" },
-                { c: "#e05a2b", l: "단백질" },
-                { c: "#e8a126", l: "지방" }
+                { c: "#3385ff", l: "탄수화물", v: data.carb || 0 },
+                { c: "#e05a2b", l: "단백질", v: data.protein || 0 },
+                { c: "#e8a126", l: "지방", v: data.fat || 0 }
               ].map((item) => (
-                <div key={item.l} className="flex gap-1.5 items-center">
-                  <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: item.c }} />
-                  <span className="text-[12px] font-medium text-[#adb5bd] whitespace-nowrap font-pretendard tracking-[-0.3px]">{item.l}</span>
+                <div key={item.l} className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full shrink-0" style={{ background: item.c }} />
+                  <span className="text-[12px] font-medium text-[#adb5bd] font-pretendard tracking-[-0.3px] flex-1">{item.l}</span>
+                  <span className="text-[12px] font-semibold text-[#171a1d] font-pretendard">{item.v}g</span>
                 </div>
               ))}
             </div>

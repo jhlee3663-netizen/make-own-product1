@@ -24,7 +24,7 @@ const MOCK_DIET = [
   { date: "25. 3. 16", kcal: 1980, goal: 2700, carb: 48, protein: 38, fat: 14, aiComment: "섭취가 조금 부족해요. 건강한 간식을 챙겨봐요!" },
 ];
 
-function HomeScreen({ onNavigateToMemo, onCardClick, onDietCardClick }) {
+function HomeScreen({ onNavigateToMemo, onCardClick, onDietCardClick, onNavChange }) {
   const [mainTab, setMainTab] = useState("workout");
   const [fabOpen, setFabOpen] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
@@ -105,10 +105,7 @@ function HomeScreen({ onNavigateToMemo, onCardClick, onDietCardClick }) {
         )}
       </div>
 
-      {/* 하단 탭 */}
-      <BottomNav activeId="home" onChange={(id) => {
-        console.log("Navigated to: ", id);
-      }} />
+      <BottomNav activeId="home" onChange={onNavChange} />
     </div>
   );
 }

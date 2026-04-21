@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { IcBack, IcSave, IcMore, IcKeyboard, IcAI, IcUndo, IcRedo, IcSpark, IcPlus, IcHome, IcGrid, IcUser } from '../icons/Icons';
+import { IcBack, IcSave, IcMore, IcKeyboard, IcAI, IcUndo, IcRedo, IcSpark, IcPlus, IcHome, IcChat, IcUser } from '../icons/Icons';
 import { AutoTextarea } from '../common/AutoTextarea';
 import WorkoutTaskItem from '../common/WorkoutTaskItem';
 import Button from '../common/Button';
@@ -333,7 +333,7 @@ ${rawText}`;
         <div className="flex items-center">
           {[["홈", true], ["분석", false], ["마이", false]].map(([l, a], i) => (
             <button key={i} className={`flex flex-col flex-1 items-center gap-0.5 py-2 ${a ? 'text-brand' : 'text-ui-6'}`}>
-              {i === 0 && <IcHome active={a} />}{i === 1 && <IcGrid />}{i === 2 && <IcUser />}
+              {i === 0 && <IcHome active={a} />}{i === 1 && <IcChat />}{i === 2 && <IcUser />}
               <span className="font-pretendard text-caption-l font-medium">{l}</span>
             </button>
           ))}

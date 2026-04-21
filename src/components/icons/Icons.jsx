@@ -6,12 +6,30 @@ export const IcHome = ({ active, size = 18 }) => (
   </svg>
 );
 
-export const IcGrid = ({ size = 18 }) => (
-  <svg width={size} height={size} viewBox="0 0 18 18" fill="#adb5bd">
-    <rect x="2" y="2" width="6" height="6" rx="1" />
-    <rect x="2" y="10" width="6" height="6" rx="1" />
-    <rect x="10" y="2" width="6" height="6" rx="1" />
-    <rect x="10" y="10" width="6" height="6" rx="3" />
+export const IcChat = ({ active, size = 22 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <path
+      d="M21 15C21 15.5304 20.7893 16.0391 20.4142 16.4142C20.0391 16.7893 19.5304 17 19 17H7L3 21V5C3 4.46957 3.21071 3.96086 3.58579 3.58579C3.96086 3.21071 4.46957 3 5 3H19C19.5304 3 20.0391 3.21071 20.4142 3.58579C20.7893 3.96086 21 4.46957 21 5V15Z"
+      fill={active ? "#0054d1" : "none"}
+      stroke={active ? "#0054d1" : "#adb5bd"}
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    {active && (
+      <>
+        <circle cx="8" cy="10" r="1" fill="white" />
+        <circle cx="12" cy="10" r="1" fill="white" />
+        <circle cx="16" cy="10" r="1" fill="white" />
+      </>
+    )}
+    {!active && (
+      <>
+        <circle cx="8" cy="10" r="1" fill="#adb5bd" />
+        <circle cx="12" cy="10" r="1" fill="#adb5bd" />
+        <circle cx="16" cy="10" r="1" fill="#adb5bd" />
+      </>
+    )}
   </svg>
 );
 
@@ -119,11 +137,11 @@ export const IcPencil = ({ size = 16, color = "white" }) => (
   </svg>
 );
 
-export const IcSave = ({ size = 24, color = "#171719" }) => (
+export const IcSave = ({ size = 24, color = '#171a1d' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="M17 21v-8H7v8" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="M7 3v5h8" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M19 21H5C3.895 21 3 20.105 3 19V5C3 3.895 3.895 3 5 3H16L21 8V19C21 20.105 20.105 21 19 21Z" fill={color}/>
+    <path d="M17 21V13H7V21" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M7 3V8H15" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
   </svg>
 );
 

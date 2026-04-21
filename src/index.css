@@ -20,16 +20,9 @@ body {
   display: none
 }
 
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(10px)
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0)
-  }
+@keyframes cardUp {
+  from { opacity: 0; transform: translateY(10px) }
+  to   { opacity: 1; transform: translateY(0) }
 }
 
 @keyframes toastIn {
@@ -45,31 +38,49 @@ body {
 }
 
 .card-enter {
-  animation: slideUp .3s ease-out forwards
+  animation: cardUp .3s ease-out forwards
 }
 
-.screen {
+/* ── 홈: 항상 DOM 유지, 다른 탭 전환 시 왼쪽으로 퇴장 ── */
+.tab-home {
   position: absolute;
   inset: 0;
-  @apply bg-ui-1;
-  transition: transform .35s cubic-bezier(.4, 0, .2, 1);
-  will-change: transform
-}
-
-.screen-home {
   transform: translateX(0);
+  transition: transform .33s cubic-bezier(.4, 0, .2, 1);
+}
+.tab-home.inactive {
+  transform: translateX(-100%);
+  pointer-events: none;
 }
 
-.screen-home.pushed {
-  transform: translateX(-25%);
+/* ── 탭 오버레이 (coach / my): 방향에 따라 슬라이드 ── */
+.tab-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+}
+.tab-from-right {
+  animation: slideInFromRight .33s cubic-bezier(.4, 0, .2, 1) both;
+}
+.tab-from-left {
+  animation: slideInFromLeft .33s cubic-bezier(.4, 0, .2, 1) both;
 }
 
-.screen-memo, .screen-diet {
-  transform: translateX(100%);
+/* ── 디테일 화면 (메모 / 식단 상세): 오른쪽에서 슬라이드 ── */
+.detail-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  animation: slideInFromRight .33s cubic-bezier(.4, 0, .2, 1) both;
 }
 
-.screen-memo.active, .screen-diet.active {
-  transform: translateX(0);
+@keyframes slideInFromRight {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+@keyframes slideInFromLeft {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
 }
 
 .fab-menu {
