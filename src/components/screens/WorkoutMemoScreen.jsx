@@ -4,16 +4,16 @@ import { AutoTextarea } from '../common/AutoTextarea';
 import WorkoutTaskItem from '../common/WorkoutTaskItem';
 import Button from '../common/Button';
 import { db } from '../../lib/firebase';
-import { 
-  collection, 
-  addDoc, 
-  updateDoc, 
-  doc, 
-  serverTimestamp, 
-  query, 
-  orderBy, 
-  limit, 
-  getDocs 
+import {
+  collection,
+  addDoc,
+  updateDoc,
+  doc,
+  serverTimestamp,
+  query,
+  orderBy,
+  limit,
+  getDocs
 } from 'firebase/firestore';
 import { parseVolume } from '../../utils/utils';
 
@@ -42,6 +42,54 @@ export default function WorkoutMemoScreen({ onBack, onSave, initialData }) {
   const [bsOpen, setBsOpen] = useState(false);
   const [isBsLoading, setIsBsLoading] = useState(false);
   const [parsedSections, setParsedSections] = useState([]);
+  const [exerciseStats, setExerciseStats] = useState({});
+  const fetchTimers = useRef({});
+
+  function parseMaxWeight(text) {
+    if (!text) return null;
+    const matches = [...text.matchAll(/(\d+(?:\.\d+)?)\s*kg/gi)];
+    if (!matches.length) return null;
+    return Math.max(...matches.map(m => parseFloat(m[1])));
+  }
+
+  async function fetchPrevWeight(exerciseName) {
+    if (!exerciseName?.trim()) return;
+    const q = query(
+      collection(db, "logs"),
+      orderBy("timestamp", "desc"),
+      limit(50)
+    );
+    const snap = await getDocs(q);
+    for (const d of snap.docs) {
+      if (initialData && d.id === initialData.docId) continue;
+      for (const sec of (d.data().sections || [])) {
+        for (const item of (sec.items || [])) {
+          if (item.title === exerciseName && item.body) {
+            const w = parseMaxWeight(item.body);
+            if (w !== null) {
+              setExerciseStats(prev => ({ ...prev, [exerciseName]: w }));
+              return;
+            }
+          }
+        }
+      }
+    }
+    setExerciseStats(prev => ({ ...prev, [exerciseName]: null }));
+  }
+
+  function scheduleFetchPrevWeight(title) {
+    if (fetchTimers.current[title]) clearTimeout(fetchTimers.current[title]);
+    fetchTimers.current[title] = setTimeout(() => fetchPrevWeight(title), 800);
+  }
+
+  useEffect(() => {
+    sections.forEach(sec => {
+      sec.items.forEach(item => {
+        if (item.title?.trim()) fetchPrevWeight(item.title);
+      });
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleSummarize() {
     setAiMenuOpen(false);
@@ -94,6 +142,7 @@ ${rawText}`;
         items: s.items.map(it => it.id !== itemId ? it : { ...it, [field]: val })
       }
     ));
+    if (field === 'title') scheduleFetchPrevWeight(val);
   }
   function addItem(secId) {
     setSections(prev => prev.map(s =>
@@ -294,6 +343,7 @@ ${rawText}`;
                 body={item.body}
                 onTitleChange={(val) => updateItem(sec.id, item.id, "title", val)}
                 onBodyChange={(val) => updateItem(sec.id, item.id, "body", val)}
+                prevMaxWeight={exerciseStats[item.title]}
               />
             ))}
 
