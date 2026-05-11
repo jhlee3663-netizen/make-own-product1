@@ -25,7 +25,8 @@ function App() {
   const [profile, setProfile] = useState(loadProfile);
   const [tab, setTab]         = useState('home');
   const [prevTab, setPrevTab] = useState('home');
-  const [screen, setScreen]   = useState('home'); // home | memo | diet-detail
+  const [screen, setScreen]   = useState('home');
+  const [coachMessage, setCoachMessage] = useState('');
 
   const [showToast, setShowToast]       = useState(false);
   const [memoKey, setMemoKey]           = useState(0);
@@ -56,11 +57,16 @@ function App() {
   function handleOnboardingComplete(p) { saveProfile(p); setProfile(p); }
   function handleProfileSave(p)        { saveProfile(p); setProfile(p); }
 
-  function handleNavChange(id) {
+  function handleNavChange(id, message) {
     if (id === tab) return;
     setPrevTab(tab);
     setTab(id);
     setScreen('home');
+    setCoachMessage(id === 'coach' && message ? message : '');
+  }
+
+  function handleChatStart(text) {
+    handleNavChange('coach', text);
   }
 
   function handleSaveMemo() {
@@ -117,13 +123,14 @@ function App() {
                 onCardClick={handleCardClick}
                 onDietCardClick={handleDietCardClick}
                 onNavChange={handleNavChange}
+                onChatStart={handleChatStart}
               />
             </div>
 
             {/* AI 코치 탭 — 방향 기반 슬라이드 */}
             {tab === 'coach' && (
-              <div key="coach" className={`tab-overlay tab-from-${tabDir}`}>
-                <AICoachScreen user={user} profile={profile} onNavChange={handleNavChange} />
+              <div key={`coach-${coachMessage}`} className={`tab-overlay tab-from-${tabDir}`}>
+                <AICoachScreen user={user} profile={profile} onNavChange={handleNavChange} initialMessage={coachMessage} />
               </div>
             )}
 

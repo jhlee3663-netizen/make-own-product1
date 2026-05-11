@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Context Health - API Error Tracking</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+    <style>
+        body {
+            font-family: 'Pretendard', sans-serif;
+            background-color: #f8f9fa;
+            color: #171a1d;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        ::-webkit-scrollbar {
+            display: none;
+        }
+
+        .card-enter {
+            animation: slideUp 0.3s ease-out forwards;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .bottom-sheet {
+            transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+            transform: translateY(100%);
+        }
+
+        .bottom-sheet.active {
+            transform: translateY(0);
+        }
+
+        .fab-menu {
+            transition: all 0.2s ease-out;
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(10px);
+        }
+
+        .fab-menu.active {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translateY(0);
+        }
+
+        /* Figma: card effect - DROP_SHADOW #031B2614, offset(0,0), blur 25 */
+        .shadow-card {
+            box-shadow: 0px 0px 25px 0px rgba(3, 27, 38, 0.08);
+        }
+
+        /* Figma: FAB shadow */
+        .shadow-fab {
+            box-shadow: 0px 6px 16px 0px rgba(3, 7, 19, 0.10);
+        }
+
+        /* Figma: Elevation3 */
+        .shadow-elevation3 {
+            box-shadow: 0px 8px 16px 0px rgba(23, 26, 29, 0.10), 0px 4px 8px 0px rgba(23, 26, 29, 0.05);
+        }
+
+        /* AI comment gradient text */
+        .ai-gradient-text {
+            background: linear-gradient(90deg, #228bed, #c509d6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* Horizontal scroll for inner exercise cards */
+        .exercise-scroll {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+        }
+
+        .exercise-scroll::-webkit-scrollbar {
+            display: none;
+        }
+
+        /* Diet chip - light blue alpha bg */
+        .diet-chip {
+            display: inline-flex;
+            background: rgba(0, 84, 209, 0.1);
+            padding: 4px 6px 4px 8px;
+            border-radius: 8px;
+            width: fit-content;
+            align-items: center;
+        }
+
+        /* Legend dot */
+        .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+    </style>
+</head>
+
+<body class="flex flex-col h-screen overflow-hidden">
+
+    <!-- Figma: Top Navigation - height 60px, border-bottom #f1f3f5, px-16, py-8 -->
+    <header class="bg-white sticky top-0 z-20" style="border-bottom: 1px solid #f1f3f5;">
+        <div
+            style="height:60px; padding: 8px 16px; display:flex; justify-content:space-between; align-items:center; background:#fff;">
+            <!-- Figma: Main logo 40x40 rounded-8 -->
+            <img src="./logo.png" alt="Main Logo"
+                style="width:40px; height:40px; border-radius:8px; object-fit:cover; display:block;" />
+            <!-- Figma: 할 일 + Icon/Normal/Template, text #9e9e9e, 16px semibold -->
+            <button
+                style="display:flex; align-items:center; gap:4px; color:#9e9e9e; font-size:16px; font-weight:600; letter-spacing:-0.4px;">
+                할 일
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    style="color:#9e9e9e;">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                    <line x1="16" y1="2" x2="16" y2="6" />
+                    <line x1="8" y1="2" x2="8" y2="6" />
+                    <line x1="3" y1="10" x2="21" y2="10" />
+                </svg>
+            </button>
+        </div>
+
+        <!-- Figma: MainTap - active border-b #0054d1, text 16px/600, inactive #9e9e9e 16px/500, letter-spacing -0.4px -->
+        <div style="display:flex; background:#fff;">
+            <button onclick="switchMainTab('workout')" id="main-tab-workout"
+                style="flex:1; padding:8px 0; text-align:center; font-size:16px; font-weight:600; color:#0054d1; border-bottom:2px solid #0054d1; letter-spacing:-0.4px; transition:all 0.2s;">쇠질</button>
+            <button onclick="switchMainTab('diet')" id="main-tab-diet"
+                style="flex:1; padding:8px 0; text-align:center; font-size:16px; font-weight:500; color:#9e9e9e; border-bottom:2px solid transparent; letter-spacing:-0.4px; transition:all 0.2s;">식단</button>
+        </div>
+    </header>
+
+    <!-- Figma: Cards Container - py-8, px-16, gap between cards = py-8 each card wrapper -->
+    <main class="flex-1 overflow-y-auto" style="padding: 8px 0 120px 0;">
+        <!-- 쇠질 컨테이너 -->
+        <div id="workout-container">
+            <div style="text-align:center; color:#9e9e9e; font-size:14px; margin-top:40px;">데이터 로딩 중...</div>
+        </div>
+        <!-- 식단 컨테이너 (초기 hidden) -->
+        <div id="diet-container" style="display:none;"></div>
+    </main>
+
+    <!-- =====================================================
+         Figma 228-3183: FAB System
+         Layer 1: Dim overlay (node 228:3192) - rgba(0,0,0,0.4) fullscreen
+         Layer 2: Expanded menu (MainMemo property1=true) - rounded-8, px-16
+         Layer 3: FAB pill button (MainMemo property1=false) - 40px circle
+         ===================================================== -->
+
+    <!-- Dim overlay: fixed fullscreen, z-35, hidden by default, closes FAB on click -->
+    <div id="fabOverlay" class="fixed inset-0 z-[35] opacity-0 pointer-events-none transition-opacity duration-200"
+        style="background: rgba(0,0,0,0.4);" onclick="toggleFabMenu()"></div>
+
+    <!-- FAB wrapper: fixed position matching Figma bottom-[76px] right-[16px] -->
+    <div class="fixed z-40 flex flex-col items-end gap-[12px]" style="bottom: 84px; right: 16px;">
+
+        <!-- Figma: MainMemo property1=true — expanded state (세로 정렬)
+             bg #0054d1, rounded-8, shadow 0 0 12px rgba(0,0,0,0.04)
+             font: Pretendard Semibold 14px, white, line-height 20px, tracking -0.35px -->
+        <!-- Figma 126:425 — MainMemo property1=true (expanded)
+             container: bg #0054d1, rounded-8, px-16(좌우), shadow
+             each row: p-8, items-start, Semibold 14px / lh-20px / ls -0.35px -->
+        <div id="fabMenu" class="fab-menu flex flex-col rounded-[8px]"
+            style="background: #0054d1; box-shadow: 0px 0px 12px 0px rgba(0,0,0,0.04); padding: 0 16px;">
+            <button onclick="openInputSheet('workout')" class="flex items-center justify-start w-full"
+                style="padding: 8px; color: #fff; font-size: 14px; font-weight: 600; line-height: 20px; letter-spacing: -0.35px; white-space: nowrap;">
+                쇠질
+            </button>
+            <button onclick="openInputSheet('diet')" class="flex items-center justify-start w-full"
+                style="padding: 8px; color: #fff; font-size: 14px; font-weight: 600; line-height: 20px; letter-spacing: -0.35px; white-space: nowrap;">
+                식단
+            </button>
+        </div>
+
+        <!-- Figma: MainMemo property1=false — FAB pill button
+             size: 40×40px, bg #0054d1, rounded-full
+             active 시 숨겨짐 (id=fabBtn으로 toggleFabMenu에서 제어) -->
+        <button id="fabBtn" onclick="toggleFabMenu()"
+            class="flex items-center justify-center rounded-full transition-transform active:scale-95"
+            style="width:40px; height:40px; background:#0054d1; box-shadow:0px 0px 12px 0px rgba(0,0,0,0.04);">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="white">
+                <path fill-rule="evenodd" clip-rule="evenodd"
+                    d="M12.2586 0.495218C11.5981 -0.165324 10.5271 -0.164512 9.86657 0.497031L8.10541 2.26086L13.1495 7.3049L14.9036 5.50513C15.5505 4.84137 15.5441 3.78075 14.8892 3.12585L12.2586 0.495218ZM12.263 8.21446L7.20806 3.15957L0.86489 9.51235C0.415186 9.96273 0.150774 10.5656 0.124026 11.2015L0.00112837 14.1233C-0.0292014 14.8444 0.546413 15.4452 1.26756 15.4453L4.14514 15.4454C4.82937 15.4454 5.48482 15.1689 5.96275 14.6785L12.263 8.21446Z" />
+            </svg>
+        </button>
+    </div>
+
+    <!-- Figma: BottomNav - bg black(#fff light), border-top #e9ecef (Cool/UI_3), border-radius tl-16 tr-16, shadow FAB -->
+    <nav
+        style="position:fixed; bottom:0; width:100%; background:#fff; border-top:1px solid #e9ecef; border-radius:16px 16px 0 0; height:68px; display:flex; justify-content:space-around; align-items:center; z-index:20; box-shadow:0px -4px 16px 0px rgba(3,7,19,0.06);">
+        <!-- Figma: Home tab - active blue #0054d1, gap 2px, p-8px -->
+        <button
+            style="display:flex; flex-direction:column; align-items:center; gap:2px; flex:1; padding:8px; color:#0054d1;">
+            <!-- Figma GNB_home: 18×18px -->
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor">
+                <path fill-rule="evenodd" clip-rule="evenodd"
+                    d="M8.4502 0.187467C8.77415 -0.0624207 9.22592 -0.0625575 9.5498 0.187467L17.6494 6.4404C17.87 6.61076 17.999 6.87356 17.999 7.15231V16.2002C17.9988 17.1941 17.1932 18 16.1992 18H10.7998V13.6894C10.7998 13.1924 10.3965 12.789 9.89941 12.789H8.09961C7.60265 12.7891 7.2002 13.1924 7.2002 13.6894V18H1.7998C0.80591 17.9999 0.000188464 17.194 0 16.2002V7.15231C6.70703e-05 6.87369 0.129162 6.61077 0.349609 6.4404L8.4502 0.187467Z" />
+            </svg>
+            <span style="font-size:12px; font-weight:500; line-height:1.5; letter-spacing:-0.3px;">홈</span>
+        </button>
+        <!-- Figma: Inactive tabs - #adb5bd -->
+        <button
+            style="display:flex; flex-direction:column; align-items:center; gap:2px; flex:1; padding:8px; color:#adb5bd;">
+            <!-- Figma GNB_Analytics: 4 squares in 18×18 -->
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor">
+                <rect x="2" y="2" width="6" height="6" rx="1" />
+                <rect x="2" y="10" width="6" height="6" rx="1" />
+                <rect x="10" y="2" width="6" height="6" rx="1" />
+                <rect x="10" y="10" width="6" height="6" rx="3" />
+            </svg>
+            <span style="font-size:12px; font-weight:500; line-height:1.5; letter-spacing:-0.3px;">분석</span>
+        </button>
+        <button
+            style="display:flex; flex-direction:column; align-items:center; gap:2px; flex:1; padding:8px; color:#adb5bd;">
+            <!-- Figma GNB_MY: person icon 18×18 -->
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path
+                    d="M7.09094 7.90909C7.09094 5.19783 9.28877 3 12 3C14.7113 3 16.9091 5.19783 16.9091 7.90909C16.9091 10.6204 14.7113 12.8182 12 12.8182C9.28877 12.8182 7.09094 10.6204 7.09094 7.90909Z" />
+                <path d="M3 20.9996C3 17.3845 7.02932 14.4541 12 14.4541C16.9707 14.4541 21 17.3845 21 20.9996H3Z" />
+            </svg>
+            <span style="font-size:12px; font-weight:500; line-height:1.5; letter-spacing:-0.3px;">마이</span>
+        </button>
+    </nav>
+
+    <div id="sheetOverlay"
+        style="position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:40; display:none; opacity:0; transition:opacity 0.3s;"
+        onclick="closeInputSheet()"></div>
+    <!-- Figma: Bottom Sheet - bg #fff, border-radius-top 24px, px-16, pt-24, pb-32 -->
+    <div id="bottomSheet" class="bottom-sheet"
+        style="position:fixed; bottom:0; left:0; width:100%; background:#fff; border-radius:24px 24px 0 0; padding:24px 16px 32px; z-index:50; box-shadow:0px -4px 20px rgba(0,0,0,0.08);">
+        <!-- Handle bar -->
+        <div style="width:40px; height:4px; background:#e9ecef; border-radius:9999px; margin:0 auto 20px;"></div>
+        <!-- Figma: Sheet title - 18px/600, color #171a1d, letter-spacing -0.45px -->
+        <h3 id="sheetTitle"
+            style="font-size:18px; font-weight:600; color:#171a1d; letter-spacing:-0.45px; margin-bottom:16px; line-height:28px;">
+            기록하기</h3>
+        <!-- Textarea -->
+        <textarea id="userInput"
+            style="width:100%; height:120px; background:#f8f9fa; border:1.5px solid #e9ecef; border-radius:12px; padding:14px 16px; font-size:15px; font-family:'Pretendard',sans-serif; line-height:1.6; color:#171a1d; outline:none; resize:none; margin-bottom:16px;"
+            placeholder="예: 벤치프레스 60kg 10회 3세트" onfocus="this.style.borderColor='#0054d1'"
+            onblur="this.style.borderColor='#e9ecef'"></textarea>
+        <!-- Figma: Save button - bg #0054d1, height 52px, radius 12px, text 16px/600/white -->
+        <button id="saveBtn" onclick="processGeminiAndSave()"
+            style="width:100%; height:52px; background:#0054d1; color:#fff; font-size:16px; font-weight:600; letter-spacing:-0.4px; border-radius:12px; display:flex; align-items:center; justify-content:center; box-shadow:0px 4px 12px rgba(0,84,209,0.3); transition:transform 0.15s;"
+            onmousedown="this.style.transform='scale(0.97)'" onmouseup="this.style.transform='scale(1)'"
+            ontouchstart="this.style.transform='scale(0.97)'" ontouchend="this.style.transform='scale(1)'">
+            AI 자동 기록
+        </button>
+    </div>
+
+    <script>
+        // =========================================================================
+        // 🚨 다른 곳은 절대 건드리지 말고, 딱 아래 큰따옴표("") 안에만 진짜 키를 넣어라 🚨
+        const GEMINI_API_KEY = "AIzaSyCyJ8oPYAxmBBbzBeC3miNX39QtCfgm80A";
+        // =========================================================================
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCPgfn9ORYSvjXAZYAyEimVA-y26_2VXME",
+            authDomain: "context-health-3eb84.firebaseapp.com",
+            projectId: "context-health-3eb84",
+            storageBucket: "context-health-3eb84.firebasestorage.app",
+            messagingSenderId: "419860500152",
+            appId: "1:419860500152:web:991f45159e19aa90492e4d"
+        };
+
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        const db = firebase.firestore();
+
+        let currentMainTab = 'workout';
+        let currentWriteType = 'workout';
+
+        function switchMainTab(tab) {
+            currentMainTab = tab;
+            const btnW = document.getElementById('main-tab-workout');
+            const btnD = document.getElementById('main-tab-diet');
+            const wContainer = document.getElementById('workout-container');
+            const dContainer = document.getElementById('diet-container');
+
+            // Figma: active tab - 16px/600, color #0054d1, border-bottom #0054d1
+            // Figma: inactive tab - 16px/500, color #9e9e9e, no border
+            if (tab === 'workout') {
+                btnW.style.cssText = 'flex:1; padding:8px 0; text-align:center; font-size:16px; font-weight:600; color:#0054d1; border-bottom:2px solid #0054d1; letter-spacing:-0.4px; transition:all 0.2s;';
+                btnD.style.cssText = 'flex:1; padding:8px 0; text-align:center; font-size:16px; font-weight:500; color:#9e9e9e; border-bottom:2px solid transparent; letter-spacing:-0.4px; transition:all 0.2s;';
+                wContainer.style.display = '';
+                dContainer.style.display = 'none';
+                loadData();
+            } else {
+                btnW.style.cssText = 'flex:1; padding:8px 0; text-align:center; font-size:16px; font-weight:500; color:#9e9e9e; border-bottom:2px solid transparent; letter-spacing:-0.4px; transition:all 0.2s;';
+                btnD.style.cssText = 'flex:1; padding:8px 0; text-align:center; font-size:16px; font-weight:600; color:#0054d1; border-bottom:2px solid #0054d1; letter-spacing:-0.4px; transition:all 0.2s;';
+                wContainer.style.display = 'none';
+                dContainer.style.display = '';
+                renderDietCards();
+            }
+        }
+
+        function toggleFabMenu() {
+            const menu = document.getElementById('fabMenu');
+            const overlay = document.getElementById('fabOverlay');
+            const btn = document.getElementById('fabBtn');
+            const isActive = menu.classList.toggle('active');
+            // Figma 228-3192: Dim overlay rgba(0,0,0,0.4) — sync with FAB menu state
+            if (isActive) {
+                overlay.classList.remove('opacity-0', 'pointer-events-none');
+                overlay.classList.add('opacity-100', 'pointer-events-auto');
+                // 연필 버튼 숨기기 — 메뉴만 표시
+                btn.classList.add('hidden');
+            } else {
+                overlay.classList.add('opacity-0', 'pointer-events-none');
+                overlay.classList.remove('opacity-100', 'pointer-events-auto');
+                // 연필 버튼 복원
+                btn.classList.remove('hidden');
+            }
+        }
+
+        function openInputSheet(type) {
+            currentWriteType = type;
+            document.getElementById('fabMenu').classList.remove('active');
+            // Dim overlay도 함께 닫기
+            const fabOverlay = document.getElementById('fabOverlay');
+            fabOverlay.classList.add('opacity-0', 'pointer-events-none');
+            fabOverlay.classList.remove('opacity-100', 'pointer-events-auto');
+
+            const title = type === 'workout' ? '💪 쇠질 기록' : '🥗 식단 기록';
+            document.getElementById('sheetTitle').innerText = title;
+
+            const overlay = document.getElementById('sheetOverlay');
+            const sheet = document.getElementById('bottomSheet');
+
+            overlay.classList.remove('hidden');
+            setTimeout(() => {
+                overlay.classList.remove('opacity-0');
+                sheet.classList.add('active');
+                document.getElementById('userInput').focus();
+            }, 10);
+        }
+
+        function closeInputSheet() {
+            const overlay = document.getElementById('sheetOverlay');
+            const sheet = document.getElementById('bottomSheet');
+
+            sheet.classList.remove('active');
+            overlay.classList.add('opacity-0');
+
+            setTimeout(() => {
+                overlay.classList.add('hidden');
+            }, 300);
+        }
+
+        function loadData() {
+            // 쇠질 데이터만 Firebase에서 패치 — 식단은 별도 renderDietCards() 사용
+            const container = document.getElementById('workout-container');
+            db.collection("logs").orderBy("timestamp", "desc").onSnapshot((snapshot) => {
+                container.innerHTML = '';
+                snapshot.forEach((doc) => {
+                    const data = doc.data();
+                    if (!data.type || data.type === 'workout') {
+                        renderCardInCard(data, container);
+                    }
+                });
+                if (container.innerHTML === '') {
+                    container.innerHTML = '<div style="text-align:center; color:#9e9e9e; font-size:14px; margin-top:40px;">기록된 쇠질이 없습니다.</div>';
+                }
+            });
+        }
+
+        function renderCardInCard(data, container) {
+            // Figma: Card wrapper - px-16, py-8 (Card Container child padding)
+            const wrapper = document.createElement('div');
+            wrapper.style.cssText = 'padding: 8px 16px;';
+
+            const card = document.createElement('div');
+            // Figma: MainCard - bg #fff, rounded-16, shadow 0px 0px 25px rgba(3,27,38,0.08), overflow-hidden
+            card.style.cssText = 'background:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0px 0px 25px 0px rgba(3,27,38,0.08);';
+            card.className = 'card-enter';
+
+            let dateStr = "";
+            if (data.timestamp) {
+                const dateObj = new Date(Number(data.timestamp.seconds + "000"));
+                const year = String(dateObj.getFullYear()).slice(2);
+                const month = dateObj.getMonth() + 1;
+                const day = dateObj.getDate();
+                dateStr = year + ". " + month + ". " + day;
+            }
+
+            let innerCardsHtml = '';
+
+            if (data.exercises && Array.isArray(data.exercises)) {
+                innerCardsHtml = data.exercises.map(ex => {
+                    const setCount = ex.sets ? ex.sets.length : 1;
+                    return `
+                        <!-- Figma: 메인_카드 내 운동 종목 - bg #f1f3f5, rounded-16, p-8, gap-8, items-center -->
+                        <div style="background:#f1f3f5; border-radius:16px; padding:8px; display:flex; flex-direction:column; gap:8px; align-items:center; flex-shrink:0; width:96px;">
+                            <!-- Figma: Image area - bg #fff, height 48px, rounded-8 -->
+                            <div style="background:#ffffff; height:48px; border-radius:8px; width:100%;"></div>
+                            <!-- Figma: Exercise name - Pretendard Medium 14px, color #495057, center, w-80px, line-height 20px, letter-spacing -0.35px -->
+                            <p style="font-size:14px; font-weight:500; color:#495057; text-align:center; line-height:20px; letter-spacing:-0.35px; width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${ex.name}</p>
+                        </div>
+                    `;
+                }).join('');
+            } else {
+                innerCardsHtml = `
+                    <div style="background:#f1f3f5; border-radius:16px; padding:16px; display:flex; align-items:center; width:100%;">
+                        <span style="font-size:14px; color:#495057; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${data.originalText || '내용 없음'}</span>
+                    </div>
+                `;
+            }
+
+            card.innerHTML = `
+                <!-- Figma: Card top section - p-16, gap-16, rounded-tl-16 rounded-tr-16 -->
+                <div style="padding:16px; display:flex; flex-direction:column; gap:16px;">
+                    
+                    <!-- Header row: chip + title + date -->
+                    <div style="display:flex; flex-direction:column; gap:8px;">
+                        <!-- Figma: MainChip - bg rgba(0,84,209,0.1), pl-8 pr-6 py-4, rounded-8 -->
+                        <div style="display:inline-flex; background:rgba(0,84,209,0.1); padding:4px 6px 4px 8px; border-radius:8px; width:fit-content; align-items:center;">
+                            <!-- Figma: Chip text - Pretendard Regular 13px, color #0054d1, line-height 18px, letter-spacing -0.13px -->
+                            <span style="font-size:13px; font-weight:400; color:#0054d1; line-height:18px; letter-spacing:-0.13px; white-space:nowrap;">성공 🔥</span>
+                        </div>
+                        
+                        <!-- Figma 228:3882 Date Row - flex, items-center, justify-between, w-full, gap-8 -->
+                        <div style="display:flex; align-items:center; justify-content:space-between; width:100%; gap:8px;">
+                            <!-- Figma 228:3883 Title - SB/18px/#171a1d/lh-28px/ls-0.45 · flex-[1_0_0] min-w-0 (wrappable) -->
+                            <h3 style="font-size:18px; font-weight:600; color:#171a1d; line-height:28px; letter-spacing:-0.45px; margin:0; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${data.title || '기록'}</h3>
+                            <!-- Figma 228:3884 Date - R/14px/#646d76/lh-20px/ls-0.35 · shrink-0 w-60px text-right -->
+                            <span style="font-size:14px; font-weight:400; color:#646d76; line-height:20px; letter-spacing:-0.35px; flex-shrink:0; width:60px; text-align:right;">${dateStr}</span>
+                        </div>
+                    </div>
+
+                    <!-- Figma: Exercise cards horizontal scroll row -->
+                    <div class="exercise-scroll">
+                        ${innerCardsHtml}
+                    </div>
+                </div>
+                
+                ${data.aiComment ? `
+                <!-- Figma: AI comment section - border-top #f1f3f5, p-16, rounded-bl-16 rounded-br-16 -->
+                <div style="border-top:1px solid #f1f3f5; padding:16px; display:flex; gap:8px; align-items:flex-start;">
+                    <!-- Figma: Icon/Normal/Quote - double-quote SVG, h-20px -->
+                    <div style="flex-shrink:0; padding-top:2px;">
+                        <svg width="17" height="12" viewBox="0 0 17 12">
+                            <path d="M5.65531 0.219675C5.9482 0.512571 5.94819 0.987445 5.6553 1.28034C5.45574 1.47989 5.25972 1.67445 5.06801 1.86474C4.13619 2.78962 3.30605 3.61358 2.66521 4.41981C2.30355 4.87481 2.02497 5.29729 1.83102 5.69873C2.41518 5.13705 3.20892 4.79175 4.0833 4.79175C5.87822 4.79175 7.33329 6.24682 7.33329 8.04175C7.33329 9.83667 5.87822 11.2917 4.0833 11.2917L4.04662 11.2915C2.79411 11.2833 1.75682 10.8543 1.03841 10.0526C0.323686 9.25507 0 8.17331 0 7C0 5.70303 0.648204 4.54672 1.49098 3.48644C2.19215 2.60432 3.09982 1.70396 4.03196 0.779328C4.21903 0.593767 4.40709 0.407229 4.59465 0.219665C4.88755 -0.0732257 5.36242 -0.0732209 5.65531 0.219675Z" fill="url(#quoteGrad)"/>
+                            <path d="M14.4053 0.219675C14.6982 0.512571 14.6982 0.987445 14.4053 1.28034C14.2059 1.4797 14.01 1.67409 13.8185 1.86421C12.8867 2.78909 12.056 3.61358 11.4152 4.41981C11.0535 4.87481 10.7749 5.29729 10.581 5.69873C11.1651 5.13705 11.9589 4.79175 12.8333 4.79175C14.6282 4.79175 16.0833 6.24682 16.0833 8.04175C16.0833 9.83667 14.6282 11.2917 12.8333 11.2917L12.7966 11.2915C11.5441 11.2833 10.5068 10.8543 9.78838 10.0526C9.07365 9.25507 8.74997 8.17331 8.74997 7C8.74997 5.70303 9.39817 4.54672 10.2409 3.48644C10.9421 2.60433 11.8498 1.70396 12.7819 0.779339C12.969 0.593778 13.1571 0.407229 13.3446 0.219665C13.6375 -0.0732257 14.1124 -0.0732209 14.4053 0.219675Z" fill="url(#quoteGrad)"/>
+                            <defs>
+                                <linearGradient id="quoteGrad" x1="0" y1="0" x2="17" y2="0" gradientUnits="userSpaceOnUse">
+                                    <stop offset="0%" stop-color="#228bed"/>
+                                    <stop offset="100%" stop-color="#c509d6"/>
+                                </linearGradient>
+                            </defs>
+                        </svg>
+                    </div>
+                    <!-- Figma: AI comment text - Pretendard Medium 14px, gradient #228bed -> #c509d6, line-height 20px, letter-spacing -0.35px -->
+                    <p class="ai-gradient-text truncate" style="background: linear-gradient(90deg, #228bed, #c509d6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; color: #228bed; font-size:14px; font-weight:500; line-height:20px; letter-spacing:-0.35px; flex:1;">${data.aiComment}</p>
+                </div>` : ''}
+            `;
+            wrapper.appendChild(card);
+            container.appendChild(wrapper);
+        }
+
+        async function processGeminiAndSave() {
+            const inputVal = document.getElementById('userInput').value;
+            const btn = document.getElementById('saveBtn');
+
+            if (!inputVal.trim()) return;
+
+            if (GEMINI_API_KEY.length < 20 || GEMINI_API_KEY.includes("여기에_진짜_API_키를_넣으세요")) {
+                alert("코드 상단에 발급받은 진짜 GEMINI_API_KEY를 먼저 입력하세요.");
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerText = 'AI 분석 중...';
+
+            try {
+                const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + GEMINI_API_KEY;
+                const promptString = "사용자 텍스트를 분석해 오직 JSON 형식으로만 반환해라. 마크다운 기호 없이 순수 JSON만 출력해라. 요구사항 - title: 사용자의 텍스트를 분석해 가장 핵심이 되는 운동 부위만 추출하여 매우 짧고 직관적인 명사형으로만 작성. 설명, 조사, 미사여구 절대 금지. (출력 예시: 어깨+삼두, 등+가슴, 하체 중심, 전신 유산소). exercises: 배열 형태이며 내부에 name(종목명), sets(세트수, 정수 배열) 포함. aiComment: 운동 피드백 한줄평. 사용자 텍스트: " + inputVal;
+
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: promptString }] }] })
+                });
+
+                if (!response.ok) {
+                    const errorDetail = await response.text();
+                    throw new Error("구글 서버 거절 사유:\n" + errorDetail);
+                }
+
+                const responseData = await response.json();
+                let jsonText = responseData.candidates[0].content.parts[0].text;
+                jsonText = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
+
+                const parsedResult = JSON.parse(jsonText);
+
+                await db.collection("logs").add({
+                    type: currentWriteType,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                    originalText: inputVal,
+                    title: parsedResult.title || "새로운 기록",
+                    exercises: parsedResult.exercises || [],
+                    aiComment: parsedResult.aiComment || "완벽하게 기록되었습니다!"
+                });
+
+                document.getElementById('userInput').value = '';
+                closeInputSheet();
+
+                if (currentMainTab !== currentWriteType) {
+                    switchMainTab(currentWriteType);
+                }
+
+            } catch (e) {
+                alert("AI 파싱 에러 발생\n상세 내용: " + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'AI 자동 기록';
+            }
+        }
+
+        // =========================================================================
+        // 🥗 식단 Mock Data & Render
+        // =========================================================================
+        const MOCK_DIET_DATA = [
+            {
+                date: '25. 3. 18',
+                kcal: 2743,
+                goal: 2700,
+                carb: 55,
+                protein: 31,
+                fat: 14,
+                aiComment: '칼로리 최적! 단백질만 조금 더 보충해봐요.'
+            },
+            {
+                date: '25. 3. 17',
+                kcal: 2210,
+                goal: 2700,
+                carb: 50,
+                protein: 35,
+                fat: 15,
+                aiComment: '균형 잡힌 식단이에요! 오늘도 화이팅!'
+            },
+            {
+                date: '25. 3. 16',
+                kcal: 1980,
+                goal: 2700,
+                carb: 48,
+                protein: 38,
+                fat: 14,
+                aiComment: '섭취가 조금 부족해요. 건강한 간식을 챙겨봐요!'
+            }
+        ];
+
+        /**
+         * SVG 도넛 차트 생성 함수
+         * @param {number} carb   탄수화물 %
+         * @param {number} protein 단백질 %
+         * @param {number} fat    지방 %
+         */
+        function buildDonutSVG(carb, protein, fat) {
+            // ── 기하 상수 ──────────────────────────────────────────────
+            const cx = 60, cy = 60;   // 중심
+            const R  = 45;            // 호(Arc) 반지름
+            const SW = 22;            // stroke-width (밴드 두께)
+            const rHole = 27;         // 구멍 반지름 (R - SW/2 = 34 보다 작게 설정해 깔끔하게)
+            const C = 2 * Math.PI * R; // 전체 둘레 ≈ 282.74
+
+            // ── 각 세그먼트 弧長(arc length) ──────────────────────────
+            const lenC = carb    / 100 * C;   // 탄수화물
+            const lenP = protein / 100 * C;   // 단백질
+            const lenF = fat     / 100 * C;   // 지방
+
+            // ── 세그먼트 시작 각도 (도, 12시 방향 기준 시계방향) ──────
+            // 기본 SVG circle stroke는 3시(0°) 시작 → -90° offset 으로 12시 기준
+            const startC = 0;                  // 탄수화물: 12시에서 시작
+            const startP = carb * 3.6;         // 단백질: carb% × 3.6 = 탄수화물 끝
+            const startF = (carb + protein) * 3.6; // 지방: 단백질 끝
+
+            // ── 극좌표 → 직교좌표 변환 (컴파스 방위각 공식) ───────────
+            // θ: 12시 기준 시계방향 라디안
+            // x = cx + r·sin(θ)
+            // y = cy − r·cos(θ)
+            function polarToXY(startDeg, spanDeg, r) {
+                const midDeg = startDeg + spanDeg / 2;      // 호 중심각 (도)
+                const midRad = midDeg * Math.PI / 180;      // 라디안 변환
+                return {
+                    x: (cx + r * Math.sin(midRad)).toFixed(3),
+                    y: (cy - r * Math.cos(midRad)).toFixed(3)
+                };
+            }
+
+            const lblC = polarToXY(startC, carb    * 3.6, R); // 탄수화물 라벨
+            const lblP = polarToXY(startP, protein * 3.6, R); // 단백질 라벨
+            const lblF = polarToXY(startF, fat     * 3.6, R); // 지방 라벨
+
+            // ── SVG 생성 ────────────────────────────────────────────────
+            // 세그먼트: rotate(startDeg - 90, cx, cy) 로 12시 기준 시작점 설정
+            // 렌더링 순서: fat → protein → carb (앞 세그먼트가 위에 표시)
+            return `
+            <svg viewBox="0 0 120 120" width="120" height="120" style="display:block; overflow:visible;">
+
+                <!-- 지방 (황색) startDeg=${startF.toFixed(1)} -->
+                <circle cx="${cx}" cy="${cy}" r="${R}"
+                    fill="none" stroke="#e8a126" stroke-width="${SW}"
+                    stroke-dasharray="${lenF.toFixed(3)} ${(C - lenF).toFixed(3)}"
+                    transform="rotate(${(startF - 90).toFixed(3)}, ${cx}, ${cy})"
+                />
+                <!-- 단백질 (오렌지) startDeg=${startP.toFixed(1)} -->
+                <circle cx="${cx}" cy="${cy}" r="${R}"
+                    fill="none" stroke="#e05a2b" stroke-width="${SW}"
+                    stroke-dasharray="${lenP.toFixed(3)} ${(C - lenP).toFixed(3)}"
+                    transform="rotate(${(startP - 90).toFixed(3)}, ${cx}, ${cy})"
+                />
+                <!-- 탄수화물 (파란색) startDeg=${startC} -->
+                <circle cx="${cx}" cy="${cy}" r="${R}"
+                    fill="none" stroke="#3385ff" stroke-width="${SW}"
+                    stroke-dasharray="${lenC.toFixed(3)} ${(C - lenC).toFixed(3)}"
+                    transform="rotate(${(startC - 90).toFixed(3)}, ${cx}, ${cy})"
+                />
+
+                <!-- 도넛 구멍 -->
+                <circle cx="${cx}" cy="${cy}" r="${rHole}" fill="#ffffff" />
+
+                <!-- ─ 퍼센트 라벨 (극좌표 → 직교좌표 정확 배치) ─ -->
+                <text x="${lblC.x}" y="${lblC.y}"
+                    text-anchor="middle" dominant-baseline="central"
+                    font-family="Pretendard, sans-serif" font-size="10" font-weight="600"
+                    fill="#ffffff">${carb}%</text>
+
+                <text x="${lblP.x}" y="${lblP.y}"
+                    text-anchor="middle" dominant-baseline="central"
+                    font-family="Pretendard, sans-serif" font-size="10" font-weight="600"
+                    fill="#ffffff">${protein}%</text>
+
+                <text x="${lblF.x}" y="${lblF.y}"
+                    text-anchor="middle" dominant-baseline="central"
+                    font-family="Pretendard, sans-serif" font-size="10" font-weight="600"
+                    fill="#ffffff">${fat}%</text>
+
+            </svg>`;
+        }
+
+        function renderDietCard(data, container) {
+            const wrapper = document.createElement('div');
+            wrapper.style.cssText = 'padding: 8px 16px;';
+
+            const donutSVG = buildDonutSVG(data.carb, data.protein, data.fat);
+
+            wrapper.innerHTML = `
+                <div class="card-enter" style="background:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0px 0px 25px 0px rgba(3,27,38,0.08);">
+
+                    <!-- 상단 섹션: 성공 칩 + 칼로리 + 목표 + 도넛 -->
+                    <div style="padding:16px; display:flex; flex-direction:column; gap:16px;">
+
+                        <!-- 헤더: 칩 + 칼로리/날짜 행 + 목표 -->
+                        <div style="display:flex; flex-direction:column; gap:8px; padding-bottom:16px; border-bottom:1px solid #f1f3f5;">
+                            <!-- 성공 칩 (하드코딩) -->
+                            <div class="diet-chip">
+                                <span style="font-size:13px; font-weight:400; color:#0054d1; line-height:18px; letter-spacing:-0.13px; white-space:nowrap;">성공 🔥</span>
+                            </div>
+
+                            <!-- 칼로리 + 날짜 -->
+                            <div style="display:flex; align-items:center; justify-content:space-between; width:100%;">
+                                <p style="font-size:24px; font-weight:600; color:#171a1d; line-height:32px; letter-spacing:-0.6px; margin:0;">${data.kcal.toLocaleString()} kcal</p>
+                                <span style="font-size:14px; font-weight:400; color:#646d76; line-height:20px; letter-spacing:-0.35px; flex-shrink:0;">${data.date}</span>
+                            </div>
+
+                            <!-- 목표 텍스트 -->
+                            <p style="font-size:14px; font-weight:400; color:#868e96; line-height:20px; letter-spacing:-0.35px; margin:0;">목표 ${data.goal.toLocaleString()}</p>
+                        </div>
+
+                        <!-- 도넛 차트 + 범례 -->
+                        <div style="display:flex; align-items:center; gap:16px;">
+                            <!-- SVG 도넛 차트 -->
+                            <div style="flex-shrink:0;">
+                                ${donutSVG}
+                            </div>
+
+                            <!-- 범례 -->
+                            <div style="display:flex; flex-direction:column; gap:8px;">
+                                <div style="display:flex; gap:4px; align-items:center;">
+                                    <div class="legend-dot" style="background:#3385ff;"></div>
+                                    <span style="font-size:12px; font-weight:500; color:#adb5bd; line-height:18px; letter-spacing:-0.3px; white-space:nowrap;">탄수화물</span>
+                                </div>
+                                <div style="display:flex; gap:4px; align-items:center;">
+                                    <div class="legend-dot" style="background:#e05a2b;"></div>
+                                    <span style="font-size:12px; font-weight:500; color:#adb5bd; line-height:18px; letter-spacing:-0.3px; white-space:nowrap;">단백질</span>
+                                </div>
+                                <div style="display:flex; gap:4px; align-items:center;">
+                                    <div class="legend-dot" style="background:#e8a126;"></div>
+                                    <span style="font-size:12px; font-weight:500; color:#adb5bd; line-height:18px; letter-spacing:-0.3px; white-space:nowrap;">지방</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- AI 코멘트 섹션 -->
+                    <div style="border-top:1px solid #f1f3f5; padding:16px; display:flex; gap:8px; align-items:flex-start;">
+                        <!-- Figma: Icon/Normal/Quote -->
+                        <div style="flex-shrink:0; padding-top:2px;">
+                            <svg width="17" height="12" viewBox="0 0 17 12">
+                                <path d="M5.65531 0.219675C5.9482 0.512571 5.94819 0.987445 5.6553 1.28034C5.45574 1.47989 5.25972 1.67445 5.06801 1.86474C4.13619 2.78962 3.30605 3.61358 2.66521 4.41981C2.30355 4.87481 2.02497 5.29729 1.83102 5.69873C2.41518 5.13705 3.20892 4.79175 4.0833 4.79175C5.87822 4.79175 7.33329 6.24682 7.33329 8.04175C7.33329 9.83667 5.87822 11.2917 4.0833 11.2917L4.04662 11.2915C2.79411 11.2833 1.75682 10.8543 1.03841 10.0526C0.323686 9.25507 0 8.17331 0 7C0 5.70303 0.648204 4.54672 1.49098 3.48644C2.19215 2.60432 3.09982 1.70396 4.03196 0.779328C4.21903 0.593767 4.40709 0.407229 4.59465 0.219665C4.88755 -0.0732257 5.36242 -0.0732209 5.65531 0.219675Z" fill="url(#dietQuoteGrad)"/>
+                                <path d="M14.4053 0.219675C14.6982 0.512571 14.6982 0.987445 14.4053 1.28034C14.2059 1.4797 14.01 1.67409 13.8185 1.86421C12.8867 2.78909 12.056 3.61358 11.4152 4.41981C11.0535 4.87481 10.7749 5.29729 10.581 5.69873C11.1651 5.13705 11.9589 4.79175 12.8333 4.79175C14.6282 4.79175 16.0833 6.24682 16.0833 8.04175C16.0833 9.83667 14.6282 11.2917 12.8333 11.2917L12.7966 11.2915C11.5441 11.2833 10.5068 10.8543 9.78838 10.0526C9.07365 9.25507 8.74997 8.17331 8.74997 7C8.74997 5.70303 9.39817 4.54672 10.2409 3.48644C10.9421 2.60433 11.8498 1.70396 12.7819 0.779339C12.969 0.593778 13.1571 0.407229 13.3446 0.219665C13.6375 -0.0732257 14.1124 -0.0732209 14.4053 0.219675Z" fill="url(#dietQuoteGrad)"/>
+                                <defs>
+                                    <linearGradient id="dietQuoteGrad" x1="0" y1="0" x2="17" y2="0" gradientUnits="userSpaceOnUse">
+                                        <stop offset="0%" stop-color="#228bed"/>
+                                        <stop offset="100%" stop-color="#c509d6"/>
+                                    </linearGradient>
+                                </defs>
+                            </svg>
+                        </div>
+                        <!-- AI 코멘트 텍스트 -->
+                        <p class="ai-gradient-text truncate" style="background: linear-gradient(90deg, #228bed, #c509d6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; color: #228bed; font-size:14px; font-weight:500; line-height:20px; letter-spacing:-0.35px; flex:1;">${data.aiComment}</p>
+                    </div>
+                </div>
+            `;
+            container.appendChild(wrapper);
+        }
+
+        function renderDietCards() {
+            const container = document.getElementById('diet-container');
+            container.innerHTML = '';
+            MOCK_DIET_DATA.forEach(data => renderDietCard(data, container));
+        }
+
+        loadData();
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>쇠질 메모</title>
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- React + ReactDOM + Babel (JSX in browser) -->
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- Pretendard font -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #e9ecef;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      font-family: 'Pretendard', -apple-system, sans-serif;
+    }
+    /* Pretendard 폰트 Tailwind 적용 */
+    .font-pretendard { font-family: 'Pretendard', sans-serif; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState } = React;
+
+    /* ──────────────────────────────────────────
+       SVG 아이콘 컴포넌트
+       (레이어명 주석으로 Figma 에셋 위치 표기)
+    ────────────────────────────────────────── */
+
+    /** 레이어: GNB_home */
+    function IconHome({ active }) {
+      return (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <path
+            d="M3 9.5L12 3L21 9.5V20C21 20.552 20.552 21 20 21H15V15H9V21H4C3.448 21 3 20.552 3 20V9.5Z"
+            fill={active ? "#0066FF" : "#ADB5BD"}
+          />
+        </svg>
+      );
+    }
+
+    /** 레이어: GNB_Analytics */
+    function IconGrid() {
+      return (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <rect x="3" y="3" width="8" height="8" rx="1" fill="#ADB5BD" />
+          <rect x="13" y="3" width="8" height="8" rx="1" fill="#ADB5BD" />
+          <rect x="3" y="13" width="8" height="8" rx="1" fill="#ADB5BD" />
+          <rect x="13" y="13" width="8" height="8" rx="4" fill="#ADB5BD" />
+        </svg>
+      );
+    }
+
+    /** 레이어: GNB_MY */
+    function IconUser() {
+      return (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="8" r="4" stroke="#ADB5BD" strokeWidth="1.5" />
+          <path
+            d="M4 20C4 16.686 7.582 14 12 14C16.418 14 20 16.686 20 20"
+            stroke="#ADB5BD" strokeWidth="1.5" strokeLinecap="round"
+          />
+        </svg>
+      );
+    }
+
+    /** 레이어: Back (chevronLeft) */
+    function IconChevronLeft() {
+      return (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <path
+            d="M15 18L9 12L15 6"
+            stroke="#171719" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+          />
+        </svg>
+      );
+    }
+
+    /** 레이어: Icon 1 (plus) */
+    function IconPlus({ color = "#171719", size = 24 }) {
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+          <path
+            d="M12 5V19M5 12H19"
+            stroke={color} strokeWidth="1.5" strokeLinecap="round"
+          />
+        </svg>
+      );
+    }
+
+    /** 레이어: Icon 2 (moreVertical) */
+    function IconMoreVertical() {
+      return (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="5" r="1.5" fill="#171719" />
+          <circle cx="12" cy="12" r="1.5" fill="#171719" />
+          <circle cx="12" cy="19" r="1.5" fill="#171719" />
+        </svg>
+      );
+    }
+
+    /** 레이어: Button/Icon/Normal — 키보드 아이콘 */
+    function IconKeyboard() {
+      return (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <rect x="2" y="6" width="20" height="13" rx="2" stroke="#171719" strokeWidth="1.5" />
+          <rect x="5" y="10" width="2" height="2" rx="0.5" fill="#171719" />
+          <rect x="9" y="10" width="2" height="2" rx="0.5" fill="#171719" />
+          <rect x="13" y="10" width="2" height="2" rx="0.5" fill="#171719" />
+          <rect x="17" y="10" width="2" height="2" rx="0.5" fill="#171719" />
+          <rect x="7" y="14" width="10" height="2" rx="1" fill="#171719" />
+        </svg>
+      );
+    }
+
+    /** 레이어: icon/AI Generate A filled */
+    function IconAI({ size = 24 }) {
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+          <defs>
+            <linearGradient id="aiGrad" x1="4" y1="2" x2="20" y2="18" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#6366F1" />
+              <stop offset="1" stopColor="#A855F7" />
+            </linearGradient>
+          </defs>
+          <path
+            d="M12 2L13.8 8.2L20 10L13.8 11.8L12 18L10.2 11.8L4 10L10.2 8.2L12 2Z"
+            fill="url(#aiGrad)"
+          />
+          <path
+            d="M19 15L19.8 17.2L22 18L19.8 18.8L19 21L18.2 18.8L16 18L18.2 17.2L19 15Z"
+            fill="#A855F7"
+          />
+        </svg>
+      );
+    }
+
+    /** 레이어: Button/Icon/Normal — Flip Backward (Undo) */
+    function IconUndo() {
+      return (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <path
+            d="M4 10H14C17.314 10 20 12.686 20 16C20 19.314 17.314 22 14 22H8"
+            stroke="#ADB5BD" strokeWidth="1.5" strokeLinecap="round"
+          />
+          <path
+            d="M8 6L4 10L8 14"
+            stroke="#ADB5BD" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+          />
+        </svg>
+      );
+    }
+
+    /** 레이어: Button/Icon/Normal — Flip Backward mirrored (Redo) */
+    function IconRedo() {
+      return (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <path
+            d="M20 10H10C6.686 10 4 12.686 4 16C4 19.314 6.686 22 10 22H16"
+            stroke="#ADB5BD" strokeWidth="1.5" strokeLinecap="round"
+          />
+          <path
+            d="M16 6L20 10L16 14"
+            stroke="#ADB5BD" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+          />
+        </svg>
+      );
+    }
+
+    /** 레이어: Vector — AI 요약_하위 (작은 스파크) */
+    function IconAISpark() {
+      return (
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <defs>
+            <linearGradient id="sparkGrad" x1="2" y1="1" x2="14" y2="13" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#6366F1" />
+              <stop offset="1" stopColor="#A855F7" />
+            </linearGradient>
+          </defs>
+          <path
+            d="M8 1L9.2 5.8L14 7L9.2 8.2L8 13L6.8 8.2L2 7L6.8 5.8L8 1Z"
+            fill="url(#sparkGrad)"
+          />
+        </svg>
+      );
+    }
+
+    /* ──────────────────────────────────────────
+       메인 컴포넌트
+       Figma Node: 365:3104
+    ────────────────────────────────────────── */
+    function WorkoutMemoScreen() {
+      const [entries] = useState([
+        {
+          id: 1,
+          title: "오늘의 운동 종목을 적어주세요",
+          body: "운동의 무게와 세트수 등 편하게 적어주세요운동의 무게와 세트수 등 편하게 적어주세요운동의 무게와 세트수 등 편하게 적어주세요운동의 무게와 세트수 등 편하게 적어주세요",
+          showAI: true,
+        },
+        {
+          id: 2,
+          title: "오늘의 운동 종목을",
+          body: "운동의 무게와 세트수 등 편하게 적어주세요운동의 무게와 세트수 등 편하게 적어주세요운동의 무게와 세트수 등 편하게 적어주세요운동의 무게와 세트수 등 편하게 적어주세요",
+          showAI: false,
+        },
+        {
+          id: 3,
+          title: "오늘의 운동 종목을",
+          body: "운동의 무게와 세트수 등 편하게 적어주세요운동의 무게와 세트수 등 편하게 적어주세요운동의 무게와 세트수 등 편하게 적어주세요운동의 무게와 세트수 등 편하게 적어주세요",
+          showAI: false,
+        },
+      ]);
+
+      return (
+        /* 최외곽 컨테이너 — Figma: 365:3104
+           bg: #f8f9fa, rounded-[16px], Elevation3 shadow */
+        <div
+          className="relative flex flex-col bg-[#f8f9fa] w-full max-w-[402px] h-screen mx-auto
+                      rounded-[16px] overflow-hidden
+                      shadow-[0px_8px_16px_0px_rgba(23,26,29,0.10),0px_4px_8px_0px_rgba(23,26,29,0.05)]"
+          data-node-id="365:3104"
+        >
+          {/* ═══════════════════════════════════════
+              SECTION 1 — 상단 네비게이션 (fixed)
+              Figma: 365:3105 Top Navigation/Top Navigation
+          ════════════════════════════════════════ */}
+          <header
+            className="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-[402px] z-50
+                       bg-white/90 backdrop-blur-[32px]
+                       border-b border-[rgba(112,115,124,0.16)]"
+            data-node-id="365:3105"
+          >
+            {/* 스테이터스 바 — I365:3105;16215:20447 */}
+            <div className="flex items-center justify-between h-[36px] px-[16px]">
+              {/* 레이어: Time */}
+              <span style={{ fontSize: 14, fontWeight: 500, color: 'rgba(0,0,0,0.6)', fontFamily: 'Pretendard, sans-serif' }}>
+                9:41
+              </span>
+              {/* 레이어: Wrapper (Wi-Fi / Cellular / Battery) */}
+              <div className="flex items-center gap-1">
+                {/* Shape2: Wi-Fi */}
+                <svg width="16" height="11" viewBox="0 0 16 11" fill="none">
+                  <path d="M8 2.5C9.8 2.5 11.4 3.2 12.6 4.3L14 2.9C12.4 1.4 10.3.5 8 .5S3.6 1.4 2 2.9L3.4 4.3C4.6 3.2 6.2 2.5 8 2.5Z" fill="black"/>
+                  <path d="M8 5.5C9.1 5.5 10 5.9 10.7 6.6L12.1 5.2C11 4.2 9.6 3.5 8 3.5S5 4.2 3.9 5.2L5.3 6.6C6 5.9 6.9 5.5 8 5.5Z" fill="black"/>
+                  <circle cx="8" cy="9.5" r="1.5" fill="black"/>
+                </svg>
+                {/* Shape1: Cellular */}
+                <svg width="15" height="11" viewBox="0 0 15 11" fill="none">
+                  <rect x="0" y="7" width="3" height="4" rx="0.5" fill="black"/>
+                  <rect x="4.5" y="4" width="3" height="7" rx="0.5" fill="black"/>
+                  <rect x="9" y="1" width="3" height="10" rx="0.5" fill="black"/>
+                </svg>
+                {/* Shape: Battery */}
+                <svg width="25" height="12" viewBox="0 0 25 12" fill="none">
+                  <rect x=".5" y=".5" width="21" height="11" rx="3.5" stroke="black" strokeOpacity=".35"/>
+                  <rect x="2" y="2" width="16" height="8" rx="2" fill="black"/>
+                  <path d="M23 4V8C23.8 7.5 24.5 6.8 24.5 6S23.8 4.5 23 4Z" fill="black" fillOpacity=".4"/>
+                </svg>
+              </div>
+            </div>
+
+            {/* 네비게이션 바 — I365:3105;16215:20448
+                padding: px-16 py-16, height: 56px */}
+            <div
+              className="relative flex items-center justify-between px-[16px] py-[16px] h-[56px]"
+              data-node-id="I365:3105;16215:20448"
+            >
+              {/* Leading — 레이어: Back (chevronLeft) */}
+              <button
+                className="flex items-center justify-center w-[24px] h-[24px] rounded-full"
+                style={{ WebkitTapHighlightColor: 'transparent' }}
+                aria-label="뒤로가기"
+              >
+                <IconChevronLeft />
+              </button>
+
+              {/* Title — 쇠질 메모
+                  Pretendard SemiBold 20px, tracking -0.5px, leading 36px */}
+              <h1
+                className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap overflow-hidden text-ellipsis"
+                style={{
+                  fontFamily: 'Pretendard, sans-serif',
+                  fontWeight: 600,
+                  fontSize: 20,
+                  color: '#000',
+                  letterSpacing: '-0.5px',
+                  lineHeight: '36px',
+                }}
+                data-node-id="I365:3105;16215:20448;16215:20467"
+              >
+                쇠질 메모
+              </h1>
+
+              {/* Trailing — 레이어: Icon 1 (plus) + Icon 2 (moreVertical) */}
+              <div className="flex items-center gap-[16px]">
+                {/* 레이어: Icon 1 (plus) */}
+                <button
+                  className="flex items-center justify-center w-[24px] h-[24px] rounded-full"
+                  aria-label="추가"
+                >
+                  <IconPlus />
+                </button>
+                {/* 레이어: Icon 2 (moreVertical) */}
+                <button
+                  className="flex items-center justify-center w-[24px] h-[24px] rounded-full"
+                  aria-label="더보기"
+                >
+                  <IconMoreVertical />
+                </button>
+              </div>
+            </div>
+          </header>
+
+          {/* ═══════════════════════════════════════
+              SECTION 2 — 중앙 스크롤 영역
+              pt: TopNav(36+56=92px), pb: BottomNav(~69px)
+          ════════════════════════════════════════ */}
+          <main
+            className="flex-1 overflow-y-auto pt-[92px] pb-[69px]"
+            data-node-id="365:3106-scroll"
+          >
+            {/* 툴바 (키보드 / AI / Undo / Redo)
+                Figma: 365:3119 — bg white, px-24 py-12 */}
+            <div
+              className="flex items-center justify-between bg-white px-[24px] py-[12px]"
+              data-node-id="365:3119"
+            >
+              {/* 왼쪽: 키보드 + AI */}
+              <div className="flex items-center gap-[16px]">
+                {/* 레이어: Button/Icon/Normal — 키보드 아이콘 */}
+                <button className="flex items-center justify-center w-[24px] h-[24px]" aria-label="키보드">
+                  <IconKeyboard />
+                </button>
+                {/* 레이어: icon/AI Generate A filled */}
+                <button className="flex items-center justify-center w-[24px] h-[24px]" aria-label="AI 생성">
+                  <IconAI />
+                </button>
+              </div>
+
+              {/* 오른쪽: Undo / Redo */}
+              <div className="flex items-center gap-[16px]">
+                {/* 레이어: Button/Icon/Normal — Flip Backward (Undo) */}
+                <button className="flex items-center justify-center w-[24px] h-[24px]" aria-label="되돌리기">
+                  <IconUndo />
+                </button>
+                {/* 레이어: Button/Icon/Normal — Flip Backward mirrored (Redo) */}
+                <button className="flex items-center justify-center w-[24px] h-[24px]" aria-label="다시실행">
+                  <IconRedo />
+                </button>
+              </div>
+            </div>
+
+            {/* 운동 부위 헤더
+                Figma: 365:3118 (쇠질 메모_운동 부위)
+                font: SB/l — 18px semibold #171A1D, tracking -0.45px, leading 28px
+                bg: white, px-16 py-32 */}
+            <div
+              className="flex items-center gap-[8px] bg-white px-[16px] py-[32px]"
+              data-node-id="365:3118"
+            >
+              <span
+                style={{
+                  flex: 1,
+                  fontFamily: 'Pretendard, sans-serif',
+                  fontWeight: 600,
+                  fontSize: 18,
+                  color: '#171A1D',
+                  letterSpacing: '-0.45px',
+                  lineHeight: '28px',
+                }}
+                data-node-id="I365:3118;357:1510"
+              >
+                하체
+              </span>
+              {/* 레이어: AI 요약_하위 — Vector */}
+              <button
+                className="flex items-center justify-center w-[24px] h-[24px] bg-white rounded-[8px] p-[4px]"
+                aria-label="AI 요약"
+                data-node-id="I365:3118;357:1511"
+              >
+                <IconAISpark />
+              </button>
+            </div>
+
+            {/* 메모 항목 목록
+                Figma: 365:3107 ~ 365:3116
+                종목: SB/m 16px semibold #495057, tracking -0.4px, leading 24px
+                본문: M/s  14px medium  #646D76, tracking -0.35px, leading 20px */}
+            <div className="flex flex-col" data-node-id="365:3106-list">
+              {entries.map((entry) => (
+                <div key={entry.id} className="flex flex-col w-full">
+                  {/* 운동 종목 헤더 — 쇠질 메모_운동 종목
+                      bg: white, pt-16 pb-8 px-16 */}
+                  <div
+                    className="flex items-center gap-[8px] bg-white pt-[16px] pb-[8px] px-[16px] w-full"
+                    data-node-id="365:3108"
+                  >
+                    <p
+                      style={{
+                        flex: 1,
+                        fontFamily: 'Pretendard, sans-serif',
+                        fontWeight: 600,
+                        fontSize: 16,
+                        color: '#495057',
+                        letterSpacing: '-0.4px',
+                        lineHeight: '24px',
+                      }}
+                    >
+                      {entry.title}
+                    </p>
+                    {/* 레이어: AI 요약_하위 (첫 항목만) */}
+                    {entry.showAI && (
+                      <button
+                        className="flex items-center justify-center w-[24px] h-[24px] bg-white rounded-[8px] p-[4px] shrink-0"
+                        aria-label="AI 요약"
+                        data-node-id="I365:3108;363:1479"
+                      >
+                        {/* 레이어: Vector */}
+                        <IconAISpark />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* 운동 본문 — 쇠질 메모_운동 무게,세트수 등
+                      bg: white, pt-8 pb-16 px-16 */}
+                  <div
+                    className="flex items-start bg-white pt-[8px] pb-[16px] px-[16px] w-full"
+                    data-node-id="365:3109"
+                  >
+                    <p
+                      style={{
+                        flex: 1,
+                        fontFamily: 'Pretendard, sans-serif',
+                        fontWeight: 500,
+                        fontSize: 14,
+                        color: '#646D76',
+                        letterSpacing: '-0.35px',
+                        lineHeight: '20px',
+                      }}
+                    >
+                      {entry.body}
+                    </p>
+                  </div>
+                </div>
+              ))}
+
+              {/* + 항목 추가 버튼
+                  Figma: 365:3116 → I365:3117;365:3813
+                  bg: #f1f3f5, rounded-[12px], p-8 */}
+              <div
+                className="flex items-center justify-center p-[8px] w-full"
+                data-node-id="365:3116"
+              >
+                <button
+                  className="flex flex-1 items-center justify-center bg-[#f1f3f5] rounded-[12px] py-[8px]"
+                  aria-label="메모 항목 추가"
+                  data-node-id="I365:3117;365:3813"
+                >
+                  {/* 레이어: Icon/Normal/Plus */}
+                  <IconPlus color="#495057" />
+                </button>
+              </div>
+            </div>
+          </main>
+
+          {/* ═══════════════════════════════════════
+              SECTION 3 — 하단 탭 바 (fixed)
+              Figma: 365:3127 Bottom Nav → GNB_NEW (I365:3127;119:708)
+              border: #e9ecef, rounded-tl/tr-[16px]
+              shadow: 0px 6px 16px rgba(3,7,19,0.10)
+              탭: 홈(active #0066FF) / 분석 / 마이
+              font: Pretendard Medium 12px
+          ════════════════════════════════════════ */}
+          <nav
+            className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[402px] z-50"
+            data-node-id="365:3127"
+          >
+            <div
+              className="flex items-center bg-white border border-[#e9ecef] rounded-tl-[16px] rounded-tr-[16px]"
+              style={{ boxShadow: '0px 6px 16px 0px rgba(3,7,19,0.10)' }}
+              data-node-id="I365:3127;119:708"
+            >
+              {/* 탭: 홈 (active) */}
+              <button
+                className="flex flex-col flex-1 items-center justify-center gap-[2px] py-[8px] bg-white"
+                aria-label="홈"
+                data-node-id="I365:3127;119:709"
+              >
+                {/* 레이어: GNB_home */}
+                <IconHome active={true} />
+                <span style={{ fontFamily: 'Pretendard, sans-serif', fontWeight: 500, fontSize: 12, color: '#0066FF', lineHeight: 1.5 }}>
+                  홈
+                </span>
+              </button>
+
+              {/* 탭: 분석 */}
+              <button
+                className="flex flex-col flex-1 items-center justify-center gap-[2px] py-[8px] bg-white"
+                aria-label="분석"
+                data-node-id="I365:3127;119:715"
+              >
+                {/* 레이어: GNB_Analytics */}
+                <IconGrid />
+                <span style={{ fontFamily: 'Pretendard, sans-serif', fontWeight: 500, fontSize: 12, color: '#ADB5BD', lineHeight: 1.5 }}>
+                  분석
+                </span>
+              </button>
+
+              {/* 탭: 마이 */}
+              <button
+                className="flex flex-col flex-1 items-center justify-center gap-[2px] py-[8px] bg-white"
+                aria-label="마이"
+                data-node-id="I365:3127;119:722"
+              >
+                {/* 레이어: GNB_MY */}
+                <IconUser />
+                <span style={{ fontFamily: 'Pretendard, sans-serif', fontWeight: 500, fontSize: 12, color: '#ADB5BD', lineHeight: 1.5 }}>
+                  마이
+                </span>
+              </button>
+            </div>
+          </nav>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(
+      <WorkoutMemoScreen />
+    );
+  </script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { height: 100%; overflow: hidden; }
+      iframe { width: 100%; height: 100%; border: none; display: block; }
+    </style>
+  </head>
+  <body>
+    <iframe id="f" src="https://jhlee3663-netizen.github.io/imbc_smart-pin/"></iframe>
+    <script>
+      var iframe = document.getElementById('f');
+      window.addEventListener('message', function(e) {
+        if (e.source === iframe.contentWindow) {
+          // iframe(React앱) → Figma(code.js)
+          parent.postMessage(e.data, '*');
+        } else {
+          // Figma(code.js) → iframe(React앱)
+          if (iframe.contentWindow) {
+            iframe.contentWindow.postMessage(e.data, '*');
+          }
+        }
+      });
+    </script>
+  </body>
+</html>

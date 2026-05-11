@@ -1,0 +1,8 @@
+{
+  "name": "Smart Pin",
+  "id": "smart-pin-spec",
+  "api": "1.0.0",
+  "main": "dist/code.js",
+  "ui": "dist/ui.html",
+  "editorType": ["figma", "dev"]
+}

@@ -1,0 +1,785 @@
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { db } from '../../lib/firebase';
+import { collection, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { IcBack, IcMore, IcSpark, QuoteIcon, IcPencil } from '../icons/Icons';
+import { AutoTextarea } from '../common/AutoTextarea';
+import DonutChart from '../dashboard/DonutChart';
+import ConfirmModal from '../common/ConfirmModal';
+
+const DEFAULT_SECTIONS = [
+  { id: 'breakfast',   name: '아침',     placeholder: '아침에 먹은 식단을 적어주세요\n(예: 고구마 하나 우유 한잔)' },
+  { id: 'am_snack',    name: '오전간식', placeholder: '오전 간식에 먹은 식단을 적어주세요\n(예: 바나나 하나 아몬드 한줌)' },
+  { id: 'lunch',       name: '점심',     placeholder: '점심에 먹은 식단을 적어주세요\n(예: 닭가슴살 200g 흰쌀밥 한공기)' },
+  { id: 'pm_snack',    name: '오후간식', placeholder: '오후 간식에 먹은 식단을 적어주세요\n(예: 단백질 쉐이크 1스쿱)' },
+  { id: 'dinner',      name: '저녁',     placeholder: '저녁에 먹은 식단을 적어주세요\n(예: 연어 150g 샐러드)' },
+  { id: 'night_snack', name: '야식',     placeholder: '야식에 먹은 식단을 적어주세요\n(예: 카제인 단백질 1스쿱)' },
+];
+
+function getChipType(kcal, goal) {
+  if (!goal || kcal === 0) return null;
+  const r = kcal / goal;
+  if (r >= 0.95 && r <= 1.05) return 'success';
+  if (r < 0.5)  return 'low';
+  if (r > 1.1)  return 'over';
+  return 'going';
+}
+
+const CHIP = {
+  success: { label: '오늘도 성공! 🔥', bg: 'rgba(0,152,178,0.1)', color: '#008dcf' },
+  going:   { label: '좀만 더! 🤯',     bg: 'rgba(0,152,178,0.1)', color: '#008dcf' },
+  low:     { label: '더 먹어요 🍚',    bg: 'rgba(0,152,178,0.1)', color: '#008dcf' },
+  over:    { label: '초과했어요 😅',   bg: 'rgba(255,80,80,0.1)',  color: '#e05a2b' },
+};
+
+/* 끼니별 피드백 — PDF 원칙: 단백질 체중×1.7g/일 ÷ 5끼, 지방 총칼로리 20~30%, 탄수 나머지 */
+function getMealTip(items, profile) {
+  if (!items || items.length === 0) return null;
+  const p = items.reduce((s, i) => s + Number(i.protein || 0), 0);
+  const c = items.reduce((s, i) => s + Number(i.carb    || 0), 0);
+  const f = items.reduce((s, i) => s + Number(i.fat     || 0), 0);
+  const k = items.reduce((s, i) => s + Number(i.kcal    || 0), 0);
+  if (k === 0) return null;
+  const weight = Number(profile?.weight) || 70;
+  const perMeal = Math.round(weight * 1.7 / 5);
+  if (p < perMeal * 0.5)       return `단백질(${p}g)이 많이 부족해요 💪 다음 끼니에 닭가슴살·계란을 꼭 챙기세요`;
+  if (p < perMeal)              return `다음 끼니에 단백질 ${perMeal - p}g를 더 보충해보세요 🥩`;
+  if ((f * 9) / k > 0.35)      return `지방 비율이 높아요 🥗 다음 끼니는 저지방 고단백으로 균형을 맞춰보세요`;
+  if ((c * 4) / k > 0.65 && p < 25) return `탄수 위주 끼니예요 🍚 다음 끼니에 단백질도 함께 챙겨보세요`;
+  return null;
+}
+
+const RECENT_KEY = 'diet_recent_foods';
+
+function loadRecentFoods() {
+  try { return JSON.parse(localStorage.getItem(RECENT_KEY)) || []; } catch { return []; }
+}
+
+function pushRecent(newItems, current) {
+  const norm = newItems.map(({ name, kcal, carb, protein, fat }) => ({ name, kcal, carb, protein, fat }));
+  const merged = [...norm, ...current.filter(r => !norm.some(n => n.name === r.name))].slice(0, 15);
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify(merged)); } catch {}
+  return merged;
+}
+
+function serializeDietDraft(sections, aiInputs, goalKcal) {
+  const filledInputs = Object.fromEntries(
+    Object.entries(aiInputs || {}).filter(([, value]) => String(value || '').trim())
+  );
+  return JSON.stringify({ sections, aiInputs: filledInputs, goalKcal });
+}
+
+export default function DietDetailScreen({ onBack, onSave, initialData, uid, profile }) {
+  const originalSectionsRef = useRef(null);
+  const [showExitModal, setShowExitModal] = useState(false);
+
+  const [sections, setSections]       = useState(DEFAULT_SECTIONS.map(s => ({ ...s, items: [] })));
+  const [goalKcal, setGoalKcal]       = useState(2500);
+  const [saving, setSaving]           = useState(false);
+  const [aiComment, setAiComment]     = useState('');
+  const [aiInputs, setAiInputs]       = useState({});
+  const analyzingIds = useRef(new Set());
+  const [analyzingVersion, setAnalyzingVersion] = useState(0);
+  const [editTarget, setEditTarget]   = useState(null);
+  const [editForm, setEditForm]       = useState({ name: '', kcal: '', carb: '', protein: '', fat: '' });
+  const [recentFoods, setRecentFoods] = useState(loadRecentFoods);
+  const [searchModal, setSearchModal] = useState(null); // secId | null
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResult, setSearchResult] = useState(null);
+  const [searching, setSearching]     = useState(false);
+  const searchInputRef = useRef(null);
+  const mainRef = useRef(null);
+  const compactBarRef = useRef(null);
+  const [moreSheetOpen, setMoreSheetOpen] = useState(false);
+  const [editingGoal, setEditingGoal] = useState(false);
+  const [goalInput, setGoalInput] = useState('');
+
+  useEffect(() => {
+    if (initialData) {
+      const merged = DEFAULT_SECTIONS.map(def => {
+        const found = (initialData.sections || []).find(s => s.id === def.id);
+        return found ? { ...def, items: found.items || [] } : { ...def, items: [] };
+      });
+      setSections(merged);
+      setGoalKcal(initialData.goal || profile?.targetKcal || 2500);
+      setAiComment(initialData.aiComment || '');
+      originalSectionsRef.current = serializeDietDraft(merged, {}, initialData.goal || profile?.targetKcal || 2500);
+    } else {
+      const defaultMerged = DEFAULT_SECTIONS.map(s => ({ ...s, items: [] }));
+      const defaultGoal = profile?.targetKcal || 2500;
+      setSections(defaultMerged);
+      setGoalKcal(defaultGoal);
+      originalSectionsRef.current = serializeDietDraft(defaultMerged, {}, defaultGoal);
+    }
+  }, [initialData]);
+
+  const handleBackClick = () => {
+    const currentDraft = serializeDietDraft(sections, aiInputs, goalKcal);
+    const isDirty = originalSectionsRef.current && originalSectionsRef.current !== currentDraft;
+    if (isDirty) {
+      setShowExitModal(true);
+    } else {
+      onBack();
+    }
+  };
+
+  useEffect(() => {
+    if (searchModal && searchInputRef.current) {
+      const t = setTimeout(() => searchInputRef.current?.focus(), 300);
+      return () => clearTimeout(t);
+    }
+  }, [searchModal]);
+
+  useEffect(() => {
+    const el = mainRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      const p = Math.min(Math.max((el.scrollTop - 20) / 140, 0), 1);
+      if (compactBarRef.current) {
+        compactBarRef.current.style.opacity = `${p}`;
+      }
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
+
+  const totals = useMemo(() => {
+    let kcal = 0, carb = 0, protein = 0, fat = 0;
+    sections.forEach(sec => (sec.items || []).forEach(item => {
+      kcal    += Number(item.kcal    || 0);
+      carb    += Number(item.carb    || 0);
+      protein += Number(item.protein || 0);
+      fat     += Number(item.fat     || 0);
+    }));
+    return { kcal, carb, protein, fat };
+  }, [sections]);
+
+  const chipType = getChipType(totals.kcal, goalKcal);
+  const chip     = chipType ? CHIP[chipType] : null;
+
+  /* AI 텍스트 분석 */
+  async function handleAIAnalyze(secId) {
+    const text = aiInputs[secId]?.trim();
+    if (!text) return;
+    analyzingIds.current.add(secId);
+    setAnalyzingVersion(v => v + 1);
+    const GEMINI_KEY = import.meta.env.VITE_GEMINI_KEY;
+    try {
+      const prompt = `다음 먹은 음식 메모를 분석해 순수 JSON 배열만 반환해라. 설명 없이 JSON만.
+형식: [{"name": "음식명(수량포함)", "kcal": 숫자(정수), "carb": 숫자(그램정수), "protein": 숫자(그램정수), "fat": 숫자(그램정수)}]
+모든 수치는 반드시 숫자(number) 타입. 문자열 불가.
+메모: "${text}"`;
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) }
+      );
+      const json = await res.json();
+      if (!json.candidates) throw new Error('AI 응답 없음');
+      const cp = json.candidates[0].content.parts;
+      let raw = (cp.find(p => !p.thought) ?? cp[cp.length - 1]).text;
+      const match = raw.match(/\[[\s\S]*\]/);
+      if (!match) throw new Error('JSON 파싱 실패');
+      const newItems = JSON.parse(match[0]).map(item => ({
+        id:      Math.random().toString(36).slice(2, 11),
+        name:    String(item.name    || ''),
+        kcal:    Number(item.kcal    || 0),
+        carb:    Number(item.carb    || item.carbohydrate || 0),
+        protein: Number(item.protein || 0),
+        fat:     Number(item.fat     || 0),
+      }));
+      setSections(prev => prev.map(sec =>
+        sec.id === secId ? { ...sec, items: [...(sec.items || []), ...newItems] } : sec
+      ));
+      setAiInputs(prev => ({ ...prev, [secId]: '' }));
+      setRecentFoods(prev => pushRecent(newItems, prev));
+    } catch (e) {
+      alert('AI 분석 오류: ' + e.message);
+    } finally {
+      analyzingIds.current.delete(secId);
+      setAnalyzingVersion(v => v + 1);
+    }
+  }
+
+  /* 식품 검색 */
+  async function handleFoodSearch() {
+    if (!searchQuery.trim()) return;
+    setSearching(true);
+    setSearchResult(null);
+    const GEMINI_KEY = import.meta.env.VITE_GEMINI_KEY;
+    try {
+      const prompt = `음식 "${searchQuery}"의 영양성분을 알려줘. 순수 JSON 객체만 반환:
+{"name": "음식명(수량포함)", "kcal": 숫자, "carb": 숫자, "protein": 숫자, "fat": 숫자}
+수치는 정수. 설명 없이 JSON만.`;
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) }
+      );
+      const json = await res.json();
+      const cp = json.candidates?.[0]?.content?.parts;
+      if (!cp) throw new Error('응답 없음');
+      let raw = (cp.find(p => !p.thought) ?? cp[cp.length - 1]).text;
+      const match = raw.match(/\{[\s\S]*\}/);
+      if (!match) throw new Error('파싱 실패');
+      const item = JSON.parse(match[0]);
+      setSearchResult({
+        id: Math.random().toString(36).slice(2, 11),
+        name: String(item.name || searchQuery),
+        kcal: Number(item.kcal || 0), carb: Number(item.carb || 0),
+        protein: Number(item.protein || 0), fat: Number(item.fat || 0),
+      });
+    } catch (e) {
+      alert('검색 실패: ' + e.message);
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  function handleAddSearchResult() {
+    if (!searchResult || !searchModal) return;
+    const item = { ...searchResult, id: Math.random().toString(36).slice(2, 11) };
+    setSections(prev => prev.map(sec =>
+      sec.id === searchModal ? { ...sec, items: [...(sec.items || []), item] } : sec
+    ));
+    setRecentFoods(prev => pushRecent([item], prev));
+    setSearchResult(null); setSearchQuery(''); setSearchModal(null);
+  }
+
+  function handleAddRecentFood(secId, food) {
+    const item = { ...food, id: Math.random().toString(36).slice(2, 11) };
+    setSections(prev => prev.map(sec =>
+      sec.id === secId ? { ...sec, items: [...(sec.items || []), item] } : sec
+    ));
+    setRecentFoods(prev => pushRecent([food], prev));
+  }
+
+  function handleRemoveItem(secId, itemId) {
+    setSections(prev => prev.map(sec =>
+      sec.id === secId ? { ...sec, items: (sec.items || []).filter(i => i.id !== itemId) } : sec
+    ));
+  }
+
+  function handleOpenEdit(secId, item) {
+    setEditTarget({ secId, itemId: item.id });
+    setEditForm({ name: item.name, kcal: item.kcal, carb: item.carb, protein: item.protein, fat: item.fat });
+  }
+
+  function handleSaveEdit() {
+    if (!editTarget) return;
+    const { secId, itemId } = editTarget;
+    setSections(prev => prev.map(sec =>
+      sec.id === secId
+        ? { ...sec, items: (sec.items || []).map(item =>
+            item.id === itemId
+              ? { ...item, name: editForm.name,
+                  kcal: Number(editForm.kcal || 0), carb: Number(editForm.carb || 0),
+                  protein: Number(editForm.protein || 0), fat: Number(editForm.fat || 0) }
+              : item
+          )}
+        : sec
+    ));
+    setEditTarget(null);
+  }
+
+  function handleMoreCopy() {
+    const lines = [`[식단 기록] ${dateStr}`, `총 ${totals.kcal}kcal | 탄 ${totals.carb}g · 단 ${totals.protein}g · 지 ${totals.fat}g`, ''];
+    sections.forEach(sec => {
+      const items = sec.items || [];
+      if (items.length === 0) return;
+      lines.push(`[${sec.name}]`);
+      items.forEach(i => lines.push(`  ${i.name} — ${i.kcal}kcal (탄${i.carb}g 단${i.protein}g 지${i.fat}g)`));
+      lines.push('');
+    });
+    navigator.clipboard.writeText(lines.join('\n')).catch(() => {});
+    setMoreSheetOpen(false);
+  }
+
+  function handleMoreReset() {
+    setSections(DEFAULT_SECTIONS.map(s => ({ ...s, items: [] })));
+    setAiInputs({});
+    setAiComment('');
+    setMoreSheetOpen(false);
+  }
+
+  function handleGoalSave() {
+    const v = Number(goalInput);
+    if (v > 0) setGoalKcal(v);
+    setEditingGoal(false);
+    setGoalInput('');
+  }
+
+  async function handleSaveClick() {
+    setSaving(true);
+    try {
+      const isNew      = !initialData?.docId;
+      const totalItems = sections.reduce((acc, sec) => acc + (sec.items || []).length, 0);
+      let comment      = aiComment;
+      if (totalItems > 0 && (!comment || isNew)) {
+        const GEMINI_KEY = import.meta.env.VITE_GEMINI_KEY;
+        const weightKg = Number(profile?.weight) || 70;
+        const proteinTarget = Math.round(weightKg * 1.8);
+        const prompt = `파워빌딩 운동 중인 사람(체중 ${weightKg}kg)의 하루 식단.
+탄수화물: ${totals.carb}g | 단백질: ${totals.protein}g(목표 ${proteinTarget}g) | 지방: ${totals.fat}g | 총 ${totals.kcal}kcal
+파워빌딩 원칙: 단백질 ${proteinTarget}g/일, 지방 총칼로리의 20~30%, 운동 후 속방성 탄수 섭취.
+실제 수치 기반으로 가장 부족하거나 과한 영양소 1가지만 명시해. 이모지 포함 25자 이내. 예: "단백질이 ${proteinTarget - totals.protein}g 부족해요 💪"
+순수 텍스트만.`;
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,
+          { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) }
+        );
+        const json = await res.json();
+        if (json.candidates?.[0]) {
+          const cp = json.candidates[0].content.parts;
+          comment = (cp.find(p => !p.thought) ?? cp[cp.length - 1]).text.trim();
+        } else { comment = '식단 기록 완료!'; }
+        setAiComment(comment);
+      }
+      const docData = { type: 'diet', goal: goalKcal, kcal: totals.kcal,
+        carb: totals.carb, protein: totals.protein, fat: totals.fat, sections,
+        aiComment: comment || '식단이 기록되었습니다.' };
+      if (isNew) {
+        await addDoc(collection(db, 'logs'), { ...docData, uid, timestamp: serverTimestamp() });
+      } else {
+        await updateDoc(doc(db, 'logs', initialData.docId), { ...docData, timestamp: serverTimestamp() });
+      }
+      onSave();
+    } catch (e) {
+      alert('저장 실패: ' + e.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const ds      = initialData?.timestamp ? new Date(initialData.timestamp.seconds * 1000) : new Date();
+  const dateStr = `${String(ds.getFullYear()).slice(2)}. ${ds.getMonth() + 1}. ${ds.getDate()}`;
+
+  return (
+    <div className="flex flex-col h-full bg-[#f8f9fa] overflow-hidden">
+      <ConfirmModal
+        isOpen={showExitModal}
+        title="작성 중인 기록이 있습니다"
+        subtitle="현재까지 작성한 내용을 저장하지 않고 나가시겠습니까?"
+        confirmText="나가기"
+        cancelText="계속 작성"
+        confirmVariant="danger"
+        onConfirm={onBack}
+        onCancel={() => setShowExitModal(false)}
+      />
+      <header className="flex-none bg-white z-20">
+        <div className="flex items-center justify-between h-14 px-4">
+          <div className="flex items-center gap-2">
+            <button onClick={handleBackClick} className="flex items-center justify-center w-8 h-8 rounded-full transition-all duration-100 active:scale-[0.85] active:opacity-50">
+              <IcBack />
+            </button>
+            <h1 className="font-pretendard text-[20px] font-semibold text-black tracking-[-0.5px] leading-[36px] whitespace-nowrap m-0">
+              식단 메모
+            </h1>
+          </div>
+          <button onClick={() => { setMoreSheetOpen(true); setEditingGoal(false); }} className="flex items-center justify-center w-8 h-8 rounded-full transition-all duration-100 active:scale-[0.85] active:opacity-50">
+            <IcMore size={24} />
+          </button>
+        </div>
+      </header>
+
+      <main ref={mainRef} className="flex-1 overflow-y-auto pb-6">
+        {/* 컴팩트 sticky 바 — 고정 높이 52px, opacity만 변함 (레이아웃 변화 없음) */}
+        <div
+          ref={compactBarRef}
+          className="sticky top-0 z-10 bg-white border-b border-[#f1f3f5] px-4"
+          style={{ height: 52, display: 'flex', alignItems: 'center', opacity: 0 }}
+        >
+          <div className="flex items-center justify-between w-full">
+            <p className="font-pretendard font-semibold text-[17px] text-[#171a1d] m-0 tracking-[-0.43px]">
+              {totals.kcal.toLocaleString()} kcal
+            </p>
+            <span className="font-pretendard text-[13px] text-[#646d76] tracking-[-0.325px]">{dateStr}</span>
+          </div>
+        </div>
+
+        {/* 풀 요약 카드 — non-sticky, 자연스럽게 스크롤. -mt-[52px]로 compact bar 영역과 겹쳐 시작 */}
+        <div className="bg-white px-4 pb-4" style={{ marginTop: -52, paddingTop: 52 }}>
+          {chip && (
+            <div className="inline-flex items-center px-2 py-1 rounded-[8px] w-fit mb-2" style={{ background: chip.bg }}>
+              <span className="font-pretendard font-normal text-[13px] leading-[20px] tracking-[-0.325px] whitespace-nowrap" style={{ color: chip.color }}>
+                {chip.label}
+              </span>
+            </div>
+          )}
+          <div className="flex items-center justify-between whitespace-nowrap">
+            <p className="font-pretendard font-semibold text-[24px] leading-[32px] tracking-[-0.6px] text-[#171a1d] m-0">
+              {totals.kcal.toLocaleString()} kcal
+            </p>
+            <span className="font-pretendard font-normal text-[14px] leading-[20px] tracking-[-0.35px] text-[#646d76]">{dateStr}</span>
+          </div>
+          <p className="font-pretendard font-normal text-[14px] leading-[20px] tracking-[-0.35px] text-[#495057] m-0 mt-1">
+            목표 {goalKcal.toLocaleString()}
+          </p>
+          <div className="border-b border-[#f1f3f5] mt-3" />
+          <div className="flex items-center gap-4 py-4">
+            <DonutChart carb={totals.carb} protein={totals.protein} fat={totals.fat} />
+            <div className="flex flex-col gap-2 flex-1">
+              {[
+                { color: '#3385ff', label: '탄수화물', value: totals.carb },
+                { color: '#e05a2b', label: '단백질',   value: totals.protein },
+                { color: '#e8a126', label: '지방',     value: totals.fat },
+              ].map(({ color, label, value }) => (
+                <div key={label} className="flex items-center gap-[4px]">
+                  <div className="w-[10px] h-[10px] rounded-full shrink-0" style={{ background: color }} />
+                  <span className="font-pretendard font-medium text-[12px] leading-[18px] tracking-[-0.3px] text-[#868e96] flex-1 whitespace-nowrap">{label}</span>
+                  <span className="font-pretendard font-medium text-[12px] leading-[18px] tracking-[-0.3px] text-[#495057] whitespace-nowrap">{value}g</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          {aiComment && (
+            <div className="border-t border-[#f1f3f5] py-4 flex gap-2 items-start">
+              <QuoteIcon gid="diet_quote" />
+              <p className="font-pretendard font-medium text-[14px] leading-[20px] tracking-[-0.35px] bg-gradient-to-r from-[#228bed] to-[#c509d6] bg-clip-text text-transparent flex-1 m-0 truncate">
+                {aiComment}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* 식단 슬롯 */}
+        {sections.map(sec => {
+          const secItems = sec.items || [];
+          const secKcal  = secItems.reduce((a, i) => a + Number(i.kcal || 0), 0);
+          const tip      = getMealTip(secItems, profile);
+
+          return (
+            <div key={sec.id} className="bg-white mt-2 flex flex-col p-4 gap-2">
+              {/* 섹션 헤더 */}
+              <div className="flex items-center justify-between">
+                <h3 className="font-pretendard font-semibold text-[18px] leading-[28px] tracking-[-0.45px] text-[#171a1d] m-0">
+                  {sec.name}
+                </h3>
+                <div className="flex items-center gap-2">
+                  {secKcal > 0 && (
+                    <span className="font-pretendard font-medium text-[13px] text-[#646d76] tracking-[-0.35px]">
+                      {secKcal.toLocaleString()} kcal
+                    </span>
+                  )}
+                  <button
+                    onClick={() => { setSearchModal(sec.id); setSearchQuery(''); setSearchResult(null); }}
+                    className="w-7 h-7 flex items-center justify-center rounded-full bg-[#f1f3f5] hover:bg-[#e9ecef] transition-colors"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                      <circle cx="11" cy="11" r="8" stroke="#868e96" strokeWidth="2"/>
+                      <path d="M21 21l-4.35-4.35" stroke="#868e96" strokeWidth="2" strokeLinecap="round"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              {/* 기록 항목 */}
+              {secItems.length > 0 && (
+                <div className="flex flex-col divide-y divide-[#f1f3f5]">
+                  {secItems.map(item => (
+                    <div key={item.id} className="flex items-center justify-between py-2 gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-pretendard font-semibold text-[14px] text-[#171a1d] tracking-[-0.35px] truncate m-0">{item.name}</p>
+                        <p className="font-pretendard text-[11px] text-[#868e96] tracking-[-0.2px] mt-0.5 m-0">
+                          탄 {item.carb}g · 단 {item.protein}g · 지 {item.fat}g
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="font-pretendard font-semibold text-[13px] text-[#3476EE]">{item.kcal} kcal</span>
+                        <button onClick={() => handleOpenEdit(sec.id, item)}
+                          className="w-6 h-6 flex items-center justify-center text-[#adb5bd] hover:text-[#495057] transition-colors rounded-full hover:bg-[#f1f3f5]">
+                          <IcPencil size={13} color="#adb5bd" />
+                        </button>
+                        <button onClick={() => handleRemoveItem(sec.id, item.id)}
+                          className="w-6 h-6 flex items-center justify-center text-[#adb5bd] hover:text-[#e05a2b] transition-colors text-[18px] leading-none">
+                          &times;
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* 끼니별 피드백 */}
+              {tip && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-[#f8f9fa] rounded-[10px]">
+                  <span className="text-[11px]">💬</span>
+                  <p className="font-pretendard text-[12px] text-[#646d76] tracking-[-0.3px] leading-relaxed m-0 flex-1">{tip}</p>
+                </div>
+              )}
+
+              {/* 입력 폼 */}
+              <div className="flex items-center gap-3 mt-1">
+                <div className="flex-1 bg-[#f8f9fa] rounded-[8px] px-3 py-2 min-h-[40px]">
+                  <AutoTextarea
+                    value={aiInputs[sec.id] || ''}
+                    onChange={e => setAiInputs(p => ({ ...p, [sec.id]: e.target.value }))}
+                    placeholder={sec.placeholder}
+                    className="font-pretendard font-normal text-[14px] leading-[20px] tracking-[-0.35px] text-[#171a1d] w-full bg-transparent border-none outline-none resize-none placeholder:text-[#adb5bd]"
+                  />
+                </div>
+                <button
+                  onClick={() => handleAIAnalyze(sec.id)}
+                  disabled={analyzingIds.current.has(sec.id) || !(aiInputs[sec.id]?.trim())}
+                  className="bg-white flex items-center justify-center rounded-[8px] w-6 h-6 shrink-0 p-px disabled:opacity-40 transition-opacity cursor-pointer shadow-sm"
+                >
+                  {analyzingIds.current.has(sec.id)
+                    ? <div className="w-3.5 h-3.5 border-2 border-[#c509d6]/30 border-t-[#228bed] rounded-full animate-spin" />
+                    : <IcSpark />}
+                </button>
+              </div>
+
+              {/* 최근 식품 빠른 추가 */}
+              {recentFoods.length > 0 && (
+                <div className="flex gap-2 overflow-x-auto -mx-1 px-1 pb-0.5" style={{ scrollbarWidth: 'none' }}>
+                  {recentFoods.slice(0, 8).map(food => (
+                    <button
+                      key={food.name}
+                      onClick={() => handleAddRecentFood(sec.id, food)}
+                      className="flex-none px-2.5 py-1 bg-[#f1f3f5] rounded-full font-pretendard text-[12px] text-[#495057] tracking-[-0.3px] whitespace-nowrap hover:bg-[#e9ecef] active:scale-95 transition-all"
+                    >
+                      + {food.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {saving && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm">
+            <div className="bg-white px-6 py-4 rounded-xl shadow-lg flex items-center gap-3">
+              <div className="w-5 h-5 border-2 border-[#3476EE]/30 border-t-[#3476EE] rounded-full animate-spin" />
+              <span className="font-pretendard text-[14px] font-semibold text-[#171a1d]">저장 중...</span>
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* 하단 저장 액션바 */}
+      <div className="flex-none bg-white border-t border-[#f1f3f5] px-5 pt-4 pb-10">
+        <button
+          onClick={handleSaveClick}
+          disabled={saving}
+          className="w-full h-[56px] bg-[#3476EE] rounded-2xl font-pretendard font-bold text-[16px] text-white tracking-[-0.4px] disabled:opacity-40 transition-all duration-100 active:scale-[0.97] active:brightness-90"
+        >
+          저장하기
+        </button>
+      </div>
+
+      {/* 식품 검색 모달 */}
+      {searchModal && (
+        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 backdrop-blur-sm"
+             onClick={() => setSearchModal(null)}>
+          <div className="bg-white w-full max-w-[430px] rounded-t-[24px] px-5 pt-5 pb-8 shadow-2xl max-h-[75vh] flex flex-col"
+               onClick={e => e.stopPropagation()}>
+            <div className="w-10 h-1 bg-[#dee2e6] rounded-full mx-auto mb-4" />
+            <h2 className="font-pretendard font-semibold text-[18px] tracking-[-0.45px] text-[#171a1d] mb-4 m-0">식품 검색</h2>
+
+            <div className="flex gap-2 mb-4">
+              <input
+                ref={searchInputRef}
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleFoodSearch()}
+                placeholder="식품명 + 수량 (예: 닭가슴살 200g)"
+                className="flex-1 bg-[#f8f9fa] rounded-[10px] px-4 py-2.5 font-pretendard text-[14px] text-[#171a1d] outline-none border border-transparent focus:border-[#3476EE] transition-colors placeholder:text-[#adb5bd]"
+              />
+              <button
+                onClick={handleFoodSearch}
+                disabled={searching || !searchQuery.trim()}
+                className="bg-[#3476EE] text-white font-pretendard font-semibold text-[13px] px-4 rounded-[10px] disabled:opacity-40 flex items-center justify-center min-w-[56px]"
+              >
+                {searching
+                  ? <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                  : '검색'}
+              </button>
+            </div>
+
+            {searchResult && (
+              <div className="mb-4 p-3 border border-[#3476EE]/30 rounded-[12px] bg-[#eef4ff]">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-pretendard font-semibold text-[14px] text-[#171a1d] m-0 truncate">{searchResult.name}</p>
+                    <p className="font-pretendard text-[12px] text-[#868e96] mt-0.5 m-0">
+                      탄 {searchResult.carb}g · 단 {searchResult.protein}g · 지 {searchResult.fat}g
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="font-pretendard font-bold text-[14px] text-[#3476EE]">{searchResult.kcal} kcal</span>
+                    <button onClick={handleAddSearchResult}
+                      className="bg-[#3476EE] text-white font-pretendard font-semibold text-[12px] px-3 py-1.5 rounded-full">
+                      추가
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {recentFoods.length > 0 ? (
+              <div className="flex-1 overflow-y-auto">
+                <p className="font-pretendard font-semibold text-[12px] text-[#868e96] uppercase tracking-[0.5px] mb-2">최근 식품</p>
+                <div className="flex flex-col">
+                  {recentFoods.map(food => (
+                    <div key={food.name} className="flex items-center justify-between py-2.5 border-b border-[#f1f3f5] last:border-0">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-pretendard font-semibold text-[14px] text-[#171a1d] m-0 truncate">{food.name}</p>
+                        <p className="font-pretendard text-[12px] text-[#868e96] m-0">
+                          탄 {food.carb}g · 단 {food.protein}g · 지 {food.fat}g
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="font-pretendard font-bold text-[13px] text-[#3476EE]">{food.kcal} kcal</span>
+                        <button
+                          onClick={() => { handleAddRecentFood(searchModal, food); setSearchModal(null); }}
+                          className="w-8 h-8 bg-[#3476EE] text-white rounded-full flex items-center justify-center font-bold text-[18px] leading-none"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : !searchResult && (
+              <p className="font-pretendard text-[14px] text-[#adb5bd] text-center py-8">
+                위에서 식품을 검색해보세요
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 더보기 바텀시트 */}
+      {moreSheetOpen && (
+        <div className="fixed inset-0 z-[100] flex flex-col justify-end">
+          <div onClick={() => setMoreSheetOpen(false)} className="absolute inset-0 bg-[#171719]/50" />
+          <div className="relative bg-white rounded-t-[24px] px-4 pb-10 flex flex-col items-center shadow-lg animate-[bottomSheetUp_0.4s_cubic-bezier(0.2,0.8,0.2,1)_forwards]">
+            <div className="py-3 w-full flex justify-center">
+              <div className="w-10 h-1 rounded-full bg-[#dee2e6]" />
+            </div>
+            <div className="w-full flex flex-col divide-y divide-[#f1f3f5]">
+              {/* 목표 칼로리 수정 */}
+              <div className="py-4">
+                <button
+                  onClick={() => { setEditingGoal(p => !p); setGoalInput(String(goalKcal)); }}
+                  className="flex items-center gap-3 w-full bg-transparent border-none outline-none text-left cursor-pointer transition-all duration-100 active:opacity-50"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#171a1d" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 8v4l3 3"/>
+                  </svg>
+                  <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                    <span className="font-pretendard text-[15px] font-medium text-[#171a1d] tracking-[-0.4px]">목표 칼로리 수정</span>
+                    <span className="font-pretendard text-[13px] text-[#868e96] tracking-[-0.35px]">현재 {goalKcal.toLocaleString()} kcal</span>
+                  </div>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#adb5bd" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform ${editingGoal ? 'rotate-180' : ''}`}>
+                    <path d="M6 9l6 6 6-6"/>
+                  </svg>
+                </button>
+                {editingGoal && (
+                  <div className="flex gap-2 mt-3">
+                    <input
+                      type="number"
+                      value={goalInput}
+                      onChange={e => setGoalInput(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleGoalSave()}
+                      placeholder="목표 칼로리"
+                      className="flex-1 bg-[#f8f9fa] rounded-[10px] px-4 py-2.5 font-pretendard text-[14px] text-[#171a1d] outline-none border border-transparent focus:border-[#3476EE] transition-colors"
+                      autoFocus
+                    />
+                    <span className="font-pretendard text-[13px] text-[#adb5bd] self-center">kcal</span>
+                    <button
+                      onClick={handleGoalSave}
+                      className="bg-[#3476EE] text-white font-pretendard font-semibold text-[13px] px-4 rounded-[10px]"
+                    >
+                      확인
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* 클립보드 복사 */}
+              <button
+                onClick={handleMoreCopy}
+                className="flex items-center gap-3 w-full py-4 bg-transparent border-none outline-none text-left cursor-pointer transition-all duration-100 active:opacity-50"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#171a1d" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2"/>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+                <div className="flex flex-col gap-0.5">
+                  <span className="font-pretendard text-[15px] font-medium text-[#171a1d] tracking-[-0.4px]">클립보드 복사</span>
+                  <span className="font-pretendard text-[13px] text-[#868e96] tracking-[-0.35px]">현재 식단 기록을 텍스트로 복사해요</span>
+                </div>
+              </button>
+
+              {/* 전체 초기화 */}
+              <button
+                onClick={handleMoreReset}
+                className="flex items-center gap-3 w-full py-4 bg-transparent border-none outline-none text-left cursor-pointer transition-all duration-100 active:opacity-50"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#e03e52" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                  <path d="M3 3v5h5"/>
+                </svg>
+                <div className="flex flex-col gap-0.5">
+                  <span className="font-pretendard text-[15px] font-medium text-[#e03e52] tracking-[-0.4px]">전체 초기화</span>
+                  <span className="font-pretendard text-[13px] text-[#868e96] tracking-[-0.35px]">모든 식단 기록을 지우고 처음부터 시작해요</span>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 수정 모달 */}
+      {editTarget && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 backdrop-blur-sm"
+             onClick={() => setEditTarget(null)}>
+          <div className="bg-white w-full max-w-[430px] rounded-t-[24px] px-5 pt-6 pb-10 shadow-2xl"
+               onClick={e => e.stopPropagation()}>
+            <div className="w-10 h-1 bg-[#dee2e6] rounded-full mx-auto mb-5" />
+            <h2 className="font-pretendard font-semibold text-[18px] tracking-[-0.45px] text-[#171a1d] mb-5 m-0">항목 수정</h2>
+            <div className="mb-3">
+              <label className="font-pretendard text-[12px] text-[#868e96] tracking-[-0.3px] mb-1 block">음식명</label>
+              <input
+                value={editForm.name}
+                onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))}
+                className="w-full bg-[#f8f9fa] rounded-[8px] px-3 py-2.5 font-pretendard text-[14px] text-[#171a1d] tracking-[-0.35px] outline-none border border-transparent focus:border-[#3476EE] transition-colors"
+              />
+            </div>
+            <div className="grid grid-cols-4 gap-2 mb-6">
+              {[
+                { key: 'kcal', label: 'kcal', unit: 'kcal' },
+                { key: 'carb', label: '탄수화물', unit: 'g' },
+                { key: 'protein', label: '단백질', unit: 'g' },
+                { key: 'fat', label: '지방', unit: 'g' },
+              ].map(({ key, label, unit }) => (
+                <div key={key}>
+                  <label className="font-pretendard text-[11px] text-[#868e96] tracking-[-0.2px] mb-1 block">{label}</label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      value={editForm[key]}
+                      onChange={e => setEditForm(p => ({ ...p, [key]: e.target.value }))}
+                      className="w-full bg-[#f8f9fa] rounded-[8px] px-2 py-2 font-pretendard text-[13px] text-[#171a1d] outline-none border border-transparent focus:border-[#3476EE] transition-colors"
+                    />
+                    <span className="absolute right-1.5 top-1/2 -translate-y-1/2 font-pretendard text-[10px] text-[#adb5bd]">{unit}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={handleSaveEdit}
+              className="w-full bg-[#3476EE] text-white font-pretendard font-semibold text-[16px] tracking-[-0.4px] py-3.5 rounded-[12px] transition-opacity hover:opacity-90 active:opacity-80"
+            >
+              수정 완료
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

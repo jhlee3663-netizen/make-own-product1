@@ -1,0 +1,62 @@
+{
+  "mcpServers": {
+    "figma": {
+      "type": "sse",
+      "url": "http://127.0.0.1:3845/mcp"
+    }
+  },
+  "permissions": {
+    "allow": [
+      "mcp__MCPMagic__join_channel",
+      "mcp__MCPMagic__get_document_info",
+      "mcp__MCPMagic__get_selection",
+      "mcp__MCPMagic__get_node_info",
+      "mcp__MCPMagic__get_nodes_info",
+      "mcp__MCPMagic__create_frame",
+      "mcp__MCPMagic__create_text",
+      "mcp__MCPMagic__create_rectangle",
+      "mcp__MCPMagic__clone_node",
+      "mcp__MCPMagic__move_node",
+      "mcp__MCPMagic__resize_node",
+      "mcp__MCPMagic__delete_node",
+      "mcp__MCPMagic__delete_multiple_nodes",
+      "mcp__MCPMagic__set_fill_color",
+      "mcp__MCPMagic__set_stroke_color",
+      "mcp__MCPMagic__set_corner_radius",
+      "mcp__MCPMagic__set_layout_mode",
+      "mcp__MCPMagic__set_layout_sizing",
+      "mcp__MCPMagic__set_padding",
+      "mcp__MCPMagic__set_item_spacing",
+      "mcp__MCPMagic__set_axis_align",
+      "mcp__MCPMagic__set_text_content",
+      "mcp__MCPMagic__set_multiple_text_contents",
+      "mcp__MCPMagic__set_focus",
+      "mcp__MCPMagic__set_selections",
+      "mcp__MCPMagic__get_local_components",
+      "mcp__MCPMagic__get_styles",
+      "mcp__MCPMagic__scan_nodes_by_types",
+      "mcp__MCPMagic__scan_text_nodes",
+      "mcp__MCPMagic__read_my_design",
+      "mcp__MCPMagic__get_active_channels",
+      "mcp__MCPMagic__send_notification",
+      "mcp__MCPMagic__export_node_as_image",
+      "mcp__MCPMagic__create_connections",
+      "mcp__MCPMagic__set_default_connector",
+      "mcp__MCPMagic__get_annotations",
+      "mcp__MCPMagic__set_annotation",
+      "mcp__MCPMagic__set_multiple_annotations",
+      "mcp__MCPMagic__get_reactions",
+      "mcp__MCPMagic__figma_get_reactions",
+      "mcp__MCPMagic__figma_post_reaction",
+      "mcp__MCPMagic__figma_delete_reaction",
+      "mcp__MCPMagic__figma_get_comments",
+      "mcp__MCPMagic__figma_post_reply",
+      "mcp__MCPMagic__figma_get_config",
+      "mcp__MCPMagic__figma_set_config",
+      "mcp__MCPMagic__get_instance_overrides",
+      "mcp__MCPMagic__set_instance_overrides",
+      "mcp__MCPMagic__create_component_instance",
+      "mcp__MCPMagic__connection_diagnostics"
+    ]
+  }
+}

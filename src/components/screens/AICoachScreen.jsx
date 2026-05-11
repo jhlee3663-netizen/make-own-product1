@@ -118,22 +118,50 @@ const QUICK_QUESTIONS = [
   '이번 주 목표 달성률',
 ];
 
-export default function AICoachScreen({ user, profile, onNavChange }) {
+export default function AICoachScreen({ user, profile, onNavChange, initialMessage }) {
+  const greetingText = `안녕하세요, ${profile?.name || user?.name || ''}님! 👋\n저는 AI 헬스 코치예요. 운동이나 식단에 대해 뭐든지 물어보세요!`;
   const [messages, setMessages] = useState([
-    {
-      role: 'model',
-      text: `안녕하세요, ${profile?.name || user?.name || ''}님! 👋\n저는 AI 헬스 코치예요. 운동이나 식단에 대해 뭐든지 물어보세요!`,
-    },
+    { role: 'model', text: greetingText },
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [context, setContext] = useState({ workouts: [], diets: [] });
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
+  const didSendInitial = useRef(false);
 
   useEffect(() => {
-    fetchRecentLogs(user?.uid).then(setContext);
+    fetchRecentLogs(user?.uid).then((ctx) => {
+      setContext(ctx);
+      // initialMessage가 있으면 컨텍스트 로드 후 자동 전송
+      if (initialMessage && !didSendInitial.current) {
+        didSendInitial.current = true;
+        autoSend(initialMessage, ctx);
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid]);
+
+  async function autoSend(text, ctx) {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    const newMsgs = [{ role: 'model', text: greetingText }, { role: 'user', text: trimmed }];
+    setMessages(newMsgs);
+    setLoading(true);
+    try {
+      const reply = await callGemini(
+        newMsgs,
+        { ...profile, name: profile?.name || user?.name },
+        ctx.workouts,
+        ctx.diets
+      );
+      setMessages(prev => [...prev, { role: 'model', text: reply }]);
+    } catch {
+      setMessages(prev => [...prev, { role: 'model', text: '네트워크 오류가 발생했어요. 다시 시도해 주세요.' }]);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
