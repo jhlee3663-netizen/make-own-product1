@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { db } from '../../lib/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { PDF_CONTEXT } from '../../lib/pdfContext';
@@ -381,7 +381,10 @@ export default function AICoachScreen({ user, profile, roomType = 'powerbuilding
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [context, setContext] = useState({ workouts: [], diets: [] });
+  const scrollRef = useRef(null);
   const bottomRef = useRef(null);
+  const didInitialScrollRef = useRef(false);
+  const skipNextSmoothScrollRef = useRef(false);
 
   useEffect(() => {
     fetchRecentLogs(user?.uid).then(setContext);
@@ -403,8 +406,21 @@ export default function AICoachScreen({ user, profile, roomType = 'powerbuilding
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el || didInitialScrollRef.current) return;
+    el.scrollTop = el.scrollHeight;
+    didInitialScrollRef.current = true;
+    skipNextSmoothScrollRef.current = true;
+  }, []);
+
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (!didInitialScrollRef.current) return;
+    if (skipNextSmoothScrollRef.current) {
+      skipNextSmoothScrollRef.current = false;
+      return;
+    }
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [messages, loading]);
 
   function updateMessages(newMessages) {
@@ -471,7 +487,7 @@ export default function AICoachScreen({ user, profile, roomType = 'powerbuilding
       </header>
 
       {/* 채팅 영역 */}
-      <main className="flex-1 overflow-y-auto px-4 pt-3 pb-4">
+      <main ref={scrollRef} className="flex-1 overflow-y-auto px-4 pt-3 pb-4">
         {messages.map((msg, i) =>
           msg.role === 'user'
             ? <UserBubble key={i} msg={msg} />

@@ -73,16 +73,19 @@ export const IcMore = ({ size = 24 }) => (
   </svg>
 );
 
-export const IcKeyboard = ({ size = 24 }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-    <rect x="2" y="6" width="20" height="13" rx="2" stroke="#171719" strokeWidth="1.5" />
-    <rect x="5" y="10" width="2" height="2" rx=".5" fill="#171719" />
-    <rect x="9" y="10" width="2" height="2" rx=".5" fill="#171719" />
-    <rect x="13" y="10" width="2" height="2" rx=".5" fill="#171719" />
-    <rect x="17" y="10" width="2" height="2" rx=".5" fill="#171719" />
-    <rect x="7" y="14" width="10" height="2" rx="1" fill="#171719" />
-  </svg>
-);
+export const IcKeyboard = ({ size = 24, active = false }) => {
+  const c = active ? '#3476EE' : '#171719';
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <rect x="2" y="6" width="20" height="13" rx="2" stroke={c} strokeWidth="1.5" fill={active ? 'rgba(52,118,238,0.12)' : 'none'} />
+      <rect x="5" y="10" width="2" height="2" rx=".5" fill={c} />
+      <rect x="9" y="10" width="2" height="2" rx=".5" fill={c} />
+      <rect x="13" y="10" width="2" height="2" rx=".5" fill={c} />
+      <rect x="17" y="10" width="2" height="2" rx=".5" fill={c} />
+      <rect x="7" y="14" width="10" height="2" rx="1" fill={c} />
+    </svg>
+  );
+};
 
 export const IcAI = ({ active = false }) => {
   const fill = active ? "white" : "url(#tbAiG)";

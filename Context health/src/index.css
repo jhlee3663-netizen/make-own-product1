@@ -16,11 +16,15 @@ button, [role="button"] {
 }
 
 
+html {
+  overflow: hidden;
+}
+
 body {
   font-family: 'Pretendard', sans-serif;
   @apply bg-ui-1 text-typo-normal;
   margin: 0;
-  overflow: hidden
+  overflow: hidden;
 }
 
 ::-webkit-scrollbar {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 
 export const COACH_ROOMS = [
   {
@@ -57,9 +57,13 @@ function formatDate(ts) {
   return `${d.getMonth() + 1}.${d.getDate()}`;
 }
 
-export default function CoachListScreen({ rooms, onOpenRoom }) {
+export default function CoachListScreen({ rooms, onOpenRoom, onDeleteRoom }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [inputText, setInputText] = useState('');
+  const [roomMenu, setRoomMenu] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const longPressTimer = useRef(null);
+  const longPressTriggered = useRef(false);
 
   const roomsWithHistory = COACH_ROOMS.filter(r => rooms?.[r.id]?.length > 1);
 
@@ -77,13 +81,107 @@ export default function CoachListScreen({ rooms, onOpenRoom }) {
     setInputText('');
   }
 
+  function startLongPress(room) {
+    longPressTriggered.current = false;
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    longPressTimer.current = setTimeout(() => {
+      longPressTriggered.current = true;
+      setConfirmDelete(false);
+      setRoomMenu(room);
+    }, 1000);
+  }
+
+  function clearLongPress() {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+  }
+
+  function handleHistoryClick(roomId) {
+    if (longPressTriggered.current) {
+      longPressTriggered.current = false;
+      return;
+    }
+    setSidebarOpen(false);
+    onOpenRoom(roomId);
+  }
+
+  function handleDeleteRoom() {
+    if (!roomMenu) return;
+    onDeleteRoom?.(roomMenu.id);
+    setRoomMenu(null);
+    setConfirmDelete(false);
+  }
+
   return (
     <div className="flex flex-col h-full bg-white relative overflow-hidden">
       
       {/* Sidebar + backdrop */}
       <>
+        {roomMenu && (
+          <div className="absolute inset-0 z-[90] flex items-end bg-black/40" onClick={() => { setRoomMenu(null); setConfirmDelete(false); }}>
+            <div
+              className="w-full bg-white rounded-t-[24px] px-4 pb-8 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="py-3 flex justify-center">
+                <div className="w-10 h-1 rounded-full bg-ui-3" />
+              </div>
+              <div className="flex items-center gap-3 px-1 pb-4 border-b border-ui-2">
+                <div className="w-11 h-11 rounded-full flex items-center justify-center text-2xl" style={{ background: roomMenu.bg }}>
+                  {roomMenu.emoji}
+                </div>
+                <div className="min-w-0">
+                  <p className="font-pretendard font-bold text-body-m text-typo-strong truncate">{roomMenu.name}</p>
+                  <p className="font-pretendard text-caption-l text-typo-alternative mt-0.5">대화 기록 관리</p>
+                </div>
+              </div>
+              <button
+                onClick={() => { const id = roomMenu.id; setRoomMenu(null); setSidebarOpen(false); onOpenRoom(id); }}
+                className="w-full flex items-center gap-3 py-4 text-left border-b border-ui-2 active:opacity-60"
+              >
+                <span className="w-8 h-8 rounded-full bg-ui-1 flex items-center justify-center text-typo-secondary">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"/>
+                  </svg>
+                </span>
+                <span className="font-pretendard text-body-s font-medium text-typo-normal">대화 열기</span>
+              </button>
+              {confirmDelete ? (
+                <div className="py-4">
+                  <p className="font-pretendard text-body-s font-semibold text-typo-strong">이 대화를 삭제할까요?</p>
+                  <p className="font-pretendard text-caption-l text-typo-alternative mt-1">삭제한 대화 기록은 다시 불러올 수 없습니다.</p>
+                  <div className="flex gap-2 mt-4">
+                    <button
+                      onClick={() => setConfirmDelete(false)}
+                      className="flex-1 h-11 rounded-[12px] bg-ui-1 font-pretendard text-body-s font-semibold text-typo-normal active:opacity-60"
+                    >
+                      취소
+                    </button>
+                    <button
+                      onClick={handleDeleteRoom}
+                      className="flex-1 h-11 rounded-[12px] bg-[#e03e52] font-pretendard text-body-s font-semibold text-white active:opacity-80"
+                    >
+                      삭제
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirmDelete(true)}
+                  className="w-full flex items-center gap-3 py-4 text-left active:opacity-60"
+                >
+                  <span className="w-8 h-8 rounded-full bg-[#fff1f3] flex items-center justify-center text-[#e03e52]">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+                      <path d="M4 7h16M10 11v6M14 11v6M6 7l1 14h10l1-14M9 7V4h6v3" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </span>
+                  <span className="font-pretendard text-body-s font-medium text-[#e03e52]">대화 삭제</span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
         <div 
-          onClick={() => setSidebarOpen(false)} 
+          onClick={() => { setSidebarOpen(false); setRoomMenu(null); setConfirmDelete(false); }} 
           className={`absolute inset-0 bg-black/40 z-[60] transition-opacity duration-500 ease-in-out ${sidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`} 
         />
         <div className={`absolute inset-y-0 left-0 w-[280px] bg-white z-[70] flex flex-col shadow-2xl transition-transform duration-500 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
@@ -110,7 +208,12 @@ export default function CoachListScreen({ rooms, onOpenRoom }) {
                   return (
                     <button
                       key={r.id}
-                      onClick={() => { setSidebarOpen(false); onOpenRoom(r.id); }}
+                      onClick={() => handleHistoryClick(r.id)}
+                      onPointerDown={() => startLongPress(r)}
+                      onPointerUp={clearLongPress}
+                      onPointerCancel={clearLongPress}
+                      onPointerLeave={clearLongPress}
+                      onContextMenu={(e) => { e.preventDefault(); setConfirmDelete(false); setRoomMenu(r); }}
                       className="w-full flex items-center gap-3 px-5 py-4 border-b border-ui-1 text-left active:bg-ui-1 transition-colors"
                     >
                       <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-xl" style={{ background: r.bg }}>

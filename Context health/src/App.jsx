@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './lib/firebase';
-import { loadUserData, saveUserData, loadAllCoachRooms, saveCoachRoom } from './lib/userStore';
+import { loadUserData, saveUserData, loadAllCoachRooms, saveCoachRoom, deleteCoachRoom } from './lib/userStore';
 
 import LoginScreen      from './components/screens/LoginScreen';
 import OnboardingScreen from './components/screens/OnboardingScreen';
@@ -43,6 +43,16 @@ function loadAiGoals() {
   try { return JSON.parse(localStorage.getItem('ai_goals')) || []; } catch { return []; }
 }
 
+const APP_HISTORY_KEY = '__contextHealthView';
+
+function makeHistoryState(index, view) {
+  return { [APP_HISTORY_KEY]: true, index, view };
+}
+
+function isAppHistoryState(state) {
+  return Boolean(state?.[APP_HISTORY_KEY]);
+}
+
 
 function App() {
   const [user, setUser]       = useState(undefined); // undefined = 로딩 중
@@ -65,6 +75,58 @@ function App() {
   const [coachPendingMessage, setCoachPendingMessage] = useState(null);
   const [coachOverlay, setCoachOverlay] = useState(null);
   const [aiGoals, setAiGoals]           = useState(loadAiGoals);
+  const historyIndexRef = useRef(0);
+  const latestViewRef = useRef({ tab: 'home', screen: 'home', coachRoom: null, coachOverlay: null });
+  const popRestoringRef = useRef(false);
+
+  const currentView = () => ({
+    tab,
+    screen,
+    coachRoom,
+    coachOverlay: coachOverlay
+      ? { roomId: coachOverlay.roomId, pendingMessage: coachOverlay.pendingMessage || null }
+      : null,
+  });
+
+  function applyView(view) {
+    if (!view) return;
+    setPrevTab(latestViewRef.current.tab || 'home');
+    setTab(view.tab || 'home');
+    setScreen(view.screen || 'home');
+    setCoachRoom(view.coachRoom || null);
+    setCoachOverlay(view.coachOverlay || null);
+    if ((view.screen || 'home') !== 'memo') setEditingLog(null);
+    if ((view.screen || 'home') !== 'diet-detail') setEditingDietLog(null);
+    if (view.screen === 'memo') setMemoKey(k => k + 1);
+    if (view.screen === 'diet-detail') setDietKey(k => k + 1);
+  }
+
+  function pushAppHistory(nextView) {
+    if (popRestoringRef.current) return;
+    const index = historyIndexRef.current + 1;
+    historyIndexRef.current = index;
+    latestViewRef.current = nextView;
+    window.history.pushState(makeHistoryState(index, nextView), '');
+  }
+
+  function navigateApp(nextView) {
+    applyView(nextView);
+    pushAppHistory(nextView);
+  }
+
+  function replaceApp(nextView) {
+    applyView(nextView);
+    latestViewRef.current = nextView;
+    window.history.replaceState(makeHistoryState(historyIndexRef.current, nextView), '');
+  }
+
+  function goBackOrHome(fallbackView = { tab: 'home', screen: 'home', coachRoom: null, coachOverlay: null }) {
+    if (isAppHistoryState(window.history.state) && window.history.state.index > 0) {
+      window.history.back();
+      return;
+    }
+    navigateApp(fallbackView);
+  }
 
   /* ── 인증 ── */
   useEffect(() => {
@@ -83,6 +145,30 @@ function App() {
       }
     });
     return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    latestViewRef.current = currentView();
+  }, [tab, screen, coachRoom, coachOverlay]);
+
+  useEffect(() => {
+    const initialView = currentView();
+    if (!isAppHistoryState(window.history.state)) {
+      window.history.replaceState(makeHistoryState(0, initialView), '');
+    } else {
+      historyIndexRef.current = Number(window.history.state.index || 0);
+    }
+
+    const handlePopState = (event) => {
+      if (!isAppHistoryState(event.state)) return;
+      popRestoringRef.current = true;
+      historyIndexRef.current = Number(event.state.index || 0);
+      applyView(event.state.view);
+      window.setTimeout(() => { popRestoringRef.current = false; }, 0);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
   /* ── Firestore 동기화 (로그인 후 1회) ── */
@@ -145,24 +231,16 @@ function App() {
 
   function handleNavChange(id) {
     if (id === tab) return;
-    setPrevTab(tab);
-    setTab(id);
-    setScreen('home');
-    if (id !== 'coach') setCoachRoom(null);
+    navigateApp({ tab: id, screen: 'home', coachRoom: id === 'coach' ? coachRoom : null, coachOverlay: null });
   }
 
   function handleCoachRoomOpen(roomId) {
-    setPrevTab(tab);
-    setTab('coach');
-    setCoachRoom(roomId);
+    navigateApp({ tab: 'coach', screen: 'home', coachRoom: roomId, coachOverlay: null });
   }
 
   function handleOpenCoachWithMessage(roomId, message) {
     setCoachPendingMessage(message);
-    setCoachRoom(roomId);
-    setPrevTab(tab);
-    setTab('coach');
-    setScreen('home');
+    navigateApp({ tab: 'coach', screen: 'home', coachRoom: roomId, coachOverlay: null });
   }
 
   function handleCoachMessagesChange(roomId, msgs) {
@@ -171,18 +249,38 @@ function App() {
     if (user?.uid) saveCoachRoom(user.uid, roomId, msgs).catch(() => {});
   }
 
+  function handleCoachRoomDelete(roomId) {
+    setCoachRooms(prev => ({ ...prev, [roomId]: null }));
+    try { localStorage.removeItem(`coach_msgs_${roomId}`); } catch {}
+    if (coachRoom === roomId) {
+      replaceApp({ tab: 'coach', screen: 'home', coachRoom: null, coachOverlay: null });
+    }
+    if (coachOverlay?.roomId === roomId) {
+      replaceApp({ tab: 'home', screen, coachRoom: null, coachOverlay: null });
+    }
+    if (user?.uid) deleteCoachRoom(user.uid, roomId).catch(() => {});
+  }
+
   function handleSaveMemo() {
-    setScreen('home'); setEditingLog(null);
+    replaceApp({ tab: 'home', screen: 'home', coachRoom: null, coachOverlay: null });
+    setEditingLog(null);
     setShowToast(true); setMemoKey(k => k + 1);
     setTimeout(() => setShowToast(false), 3000);
   }
-  function handleCardClick(data)     { setEditingLog(data);     setMemoKey(k => k + 1); setScreen('memo'); }
+  function handleCardClick(data) {
+    setEditingLog(data);
+    navigateApp({ tab: 'home', screen: 'memo', coachRoom: null, coachOverlay: null });
+  }
   function handleSaveDiet() {
-    setScreen('home'); setEditingDietLog(null);
+    replaceApp({ tab: 'home', screen: 'home', coachRoom: null, coachOverlay: null });
+    setEditingDietLog(null);
     setShowToast(true); setDietKey(k => k + 1);
     setTimeout(() => setShowToast(false), 3000);
   }
-  function handleDietCardClick(data) { setEditingDietLog(data); setDietKey(k => k + 1);  setScreen('diet-detail'); }
+  function handleDietCardClick(data) {
+    setEditingDietLog(data);
+    navigateApp({ tab: 'home', screen: 'diet-detail', coachRoom: null, coachOverlay: null });
+  }
 
   function addAiGoal(goal) {
     const next = [goal, ...aiGoals];
@@ -193,9 +291,7 @@ function App() {
 
   function handleAcceptSuggestion(goal) {
     addAiGoal(goal);
-    setPrevTab(tab);
-    setTab('home');
-    setCoachRoom(null);
+    navigateApp({ tab: 'home', screen: 'home', coachRoom: null, coachOverlay: null });
   }
 
   function handleRemoveGoal(goalId) {
@@ -254,7 +350,10 @@ function App() {
                 profile={profile}
                 aiGoals={aiGoals}
                 onRemoveGoal={handleRemoveGoal}
-                onNavigateToMemo={() => { setEditingLog(null); setMemoKey(k => k + 1); setScreen('memo'); }}
+                onNavigateToMemo={() => {
+                  setEditingLog(null);
+                  navigateApp({ tab: 'home', screen: 'memo', coachRoom: null, coachOverlay: null });
+                }}
                 onCardClick={handleCardClick}
                 onDietCardClick={handleDietCardClick}
                 onNavChange={handleNavChange}
@@ -269,8 +368,9 @@ function App() {
                   rooms={coachRooms}
                   onOpenRoom={(roomId, msg) => {
                     if (msg) handleOpenCoachWithMessage(roomId, msg);
-                    else setCoachRoom(roomId);
+                    else navigateApp({ tab: 'coach', screen: 'home', coachRoom: roomId, coachOverlay: null });
                   }}
+                  onDeleteRoom={handleCoachRoomDelete}
                   onNavChange={handleNavChange}
                 />
               ) : (
@@ -283,7 +383,7 @@ function App() {
                   savedMessages={coachRooms[coachRoom]}
                   onMessagesChange={(msgs) => handleCoachMessagesChange(coachRoom, msgs)}
                   onAcceptSuggestion={handleAcceptSuggestion}
-                  onBack={() => setCoachRoom(null)}
+                  onBack={() => goBackOrHome({ tab: 'coach', screen: 'home', coachRoom: null, coachOverlay: null })}
                   pendingMessage={coachPendingMessage}
                   onPendingMessageSent={() => setCoachPendingMessage(null)}
                 />
@@ -300,14 +400,17 @@ function App() {
               <div className="detail-overlay">
                 <WorkoutMemoScreen
                   key={`memo-${memoKey}`}
-                  onBack={() => setScreen('home')}
+                  onBack={() => goBackOrHome()}
                   onSave={handleSaveMemo}
                   initialData={editingLog}
                   uid={user.uid}
                   onOpenCoachWithMessage={(roomId, message) => {
-                    setCoachOverlay({ roomId, pendingMessage: message });
-                    setPrevTab('home');
-                    setTab('home');
+                    navigateApp({
+                      tab: 'home',
+                      screen: 'memo',
+                      coachRoom: null,
+                      coachOverlay: { roomId, pendingMessage: message },
+                    });
                   }}
                 />
               </div>
@@ -323,7 +426,7 @@ function App() {
                   savedMessages={coachRooms[coachOverlay.roomId]}
                   onMessagesChange={(msgs) => handleCoachMessagesChange(coachOverlay.roomId, msgs)}
                   onAcceptSuggestion={addAiGoal}
-                  onBack={() => setCoachOverlay(null)}
+                  onBack={() => goBackOrHome({ tab: 'home', screen, coachRoom: null, coachOverlay: null })}
                   pendingMessage={coachOverlay.pendingMessage}
                   onPendingMessageSent={() => setCoachOverlay(prev => prev ? { ...prev, pendingMessage: null } : prev)}
                 />
@@ -335,7 +438,7 @@ function App() {
               <div className="detail-overlay">
                 <DietDetailScreen
                   key={`diet-${dietKey}`}
-                  onBack={() => setScreen('home')}
+                  onBack={() => goBackOrHome()}
                   onSave={handleSaveDiet}
                   initialData={editingDietLog}
                   uid={user.uid}
@@ -349,7 +452,7 @@ function App() {
                 activeId={tab}
                 onChange={(id) => {
                   if (id === tab && tab === 'coach' && coachRoom !== null) {
-                    setCoachRoom(null);
+                    goBackOrHome({ tab: 'coach', screen: 'home', coachRoom: null, coachOverlay: null });
                   } else {
                     handleNavChange(id);
                   }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../../lib/firebase';
 import {
   collection,
@@ -14,6 +14,8 @@ import GoalCard from '../dashboard/GoalCard';
 import { IcPencil, IcSpark } from '../icons/Icons';
 import TopNav from '../common/TopNav';
 import MainTab from '../common/MainTab';
+import Toast from '../common/Toast';
+import ConfirmModal from '../common/ConfirmModal';
 
 function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, onCardClick, onDietCardClick, onOpenCoachRoom }) {
   const [mainTab, setMainTab] = useState("workout");
@@ -23,18 +25,34 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
   const [dietLogs, setDietLogs] = useState([]);
   const [coachingInsight, setCoachingInsight] = useState(null);
   const [isGoalSaving, setIsGoalSaving] = useState(false);
+  const [toast, setToast] = useState({ show: false, message: '' });
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const prevAiStatusRef = useRef({});
+  const toastTimerRef = useRef(null);
 
   useEffect(() => {
     if (!user?.uid) return;
     const q = query(collection(db, "logs"), where("uid", "==", user.uid));
     const unsub = onSnapshot(q, (snap) => {
-      const all = snap.docs
-        .map(d => ({ ...d.data(), docId: d.id }))
-        .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
-      setWorkoutLogs(all.filter(d => !d.type || d.type === "workout"));
-      setDietLogs(all.filter(d => d.type === "diet"));
+      const all = snap.docs.map(d => ({ ...d.data(), docId: d.id }));
+
+      all.forEach(d => {
+        if (d.type !== 'workout') return;
+        const prev = prevAiStatusRef.current[d.docId];
+        if ((prev === 'processing' || prev === 'summarized') && d.aiStatus === 'done') {
+          const msg = d.overloadMsg ? `✨ ${d.overloadMsg}` : '✨ AI 기록 정리 완료!';
+          if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+          setToast({ show: true, message: msg });
+          toastTimerRef.current = setTimeout(() => setToast(t => ({ ...t, show: false })), 3500);
+        }
+        prevAiStatusRef.current[d.docId] = d.aiStatus;
+      });
+
+      const sorted = all.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+      setWorkoutLogs(sorted.filter(d => !d.type || d.type === "workout"));
+      setDietLogs(sorted.filter(d => d.type === "diet"));
     }, (err) => console.error("Firestore 쿼리 오류:", err));
-    return () => unsub();
+    return () => { unsub(); if (toastTimerRef.current) clearTimeout(toastTimerRef.current); };
   }, [user?.uid]);
 
   useEffect(() => {
@@ -59,7 +77,22 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
     if (type === "diet") onDietCardClick(null); // 새 식단 생성
   }
 
-  function handleDelete(docId) {
+  function handleDeleteRequest(target) {
+    const nextTarget = typeof target === 'string'
+      ? workoutLogs.find(log => log.docId === target) || { docId: target, title: '쇠질 메모' }
+      : target;
+    if (!nextTarget?.docId) return;
+    setDeleteTarget(nextTarget);
+  }
+
+  function handleDeleteCancel() {
+    setDeleteTarget(null);
+  }
+
+  function handleDeleteConfirm() {
+    if (!deleteTarget?.docId) return;
+    const docId = deleteTarget.docId;
+    setDeleteTarget(null);
     setDeletingId(docId);
     setTimeout(async () => {
       await deleteDoc(doc(db, "logs", docId));
@@ -97,6 +130,17 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        title="쇠질 메모를 삭제할까요?"
+        subtitle={`${deleteTarget?.title || '이 기록'} 기록이 삭제됩니다.\n삭제한 메모는 다시 불러올 수 없습니다.`}
+        confirmText="삭제"
+        cancelText="취소"
+        confirmVariant="danger"
+        onConfirm={handleDeleteConfirm}
+        onCancel={handleDeleteCancel}
+      />
+
       {/* 헤더 */}
       <header className="z-20 flex-none flex flex-col">
         <TopNav title="할 일" />
@@ -154,7 +198,7 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
         {mainTab === "workout"
           ? workoutLogs.length === 0
             ? <div className="text-center text-typo-alternative text-body-s mt-10">기록된 쇠질이 없습니다.</div>
-            : workoutLogs.map((d) => <WorkoutCard key={d.docId} data={d} onCardClick={onCardClick} onDelete={handleDelete} isDeleting={d.docId === deletingId} />)
+            : workoutLogs.map((d) => <WorkoutCard key={d.docId} data={d} onCardClick={onCardClick} onDelete={handleDeleteRequest} isDeleting={d.docId === deletingId} />)
           : dietLogs.length === 0
             ? <div className="text-center text-typo-alternative text-body-s mt-10">기록된 식단이 없습니다.</div>
             : dietLogs.map((d) => (
@@ -181,6 +225,7 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
         )}
       </div>
 
+      <Toast show={toast.show} message={toast.message} />
     </div>
   );
 }

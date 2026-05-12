@@ -9,8 +9,10 @@ const WorkoutCard = ({ data, onCardClick, onDelete, isDeleting }) => {
     docId,
     title = "오늘의 운동",
     exercises = [],
-    aiComment = "계획대로 완벽하게 했어요. 내일도 달려봅시다!" // 기본값 (Figma 동일)
+    aiComment,
+    aiStatus,
   } = data;
+  const isProcessing = aiStatus === 'processing' || aiStatus === 'summarized';
 
   // 타임스탬프 포맷 (25. 1. 9)
   const dt = data.timestamp ? new Date(data.timestamp.seconds * 1000) : new Date();
@@ -53,8 +55,9 @@ const WorkoutCard = ({ data, onCardClick, onDelete, isDeleting }) => {
                     <div onClick={(e) => { e.stopPropagation(); setMenuOpen(false); }} className="fixed inset-0 z-[98]" />
                     <div className="absolute top-8 right-0 bg-white rounded-[12px] shadow-lg py-1 z-[99] min-w-[120px]" onClick={e => e.stopPropagation()}>
                       <button 
-                        onClick={() => {
-                          if (onDelete) onDelete(docId);
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (onDelete) onDelete(data);
                           setMenuOpen(false);
                         }}
                         className="flex w-full px-4 py-[10px] text-body-s text-[#e03131] font-medium bg-none border-none text-left transition-all duration-100 active:opacity-60 active:bg-[#fff5f5]"
@@ -114,7 +117,12 @@ const WorkoutCard = ({ data, onCardClick, onDelete, isDeleting }) => {
         </div>
 
         {/* AI Comment Section */}
-        {aiComment && (
+        {isProcessing ? (
+          <div className="border-t border-[#f1f3f5] px-4 py-3 flex gap-2 items-center bg-white">
+            <div className="w-3 h-3 flex-none border-2 border-brand/20 border-t-brand rounded-full animate-spin" />
+            <p className="font-pretendard text-[13px] text-ui-4 tracking-[-0.3px] m-0">AI가 기록을 정리하고 있어요...</p>
+          </div>
+        ) : aiComment ? (
           <div className="border-t border-[#f1f3f5] p-4 flex gap-2 items-start bg-white">
             <QuoteIcon gid={gid} />
             <div className="flex-1 mt-0.5 min-w-0">
@@ -123,7 +131,7 @@ const WorkoutCard = ({ data, onCardClick, onDelete, isDeleting }) => {
               </p>
             </div>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

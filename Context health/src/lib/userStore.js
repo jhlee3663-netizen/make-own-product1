@@ -1,5 +1,5 @@
 import { db } from './firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { deleteDoc, doc, getDoc, setDoc } from 'firebase/firestore';
 
 const ROOMS = ['powerbuilding', 'dumbbell', 'diet', 'mobility', 'routine'];
 
@@ -35,4 +35,8 @@ export async function saveCoachRoom(uid, roomId, messages) {
     timestamp: m.timestamp instanceof Date ? m.timestamp.toISOString() : m.timestamp,
   }));
   await setDoc(doc(db, 'users', uid, 'coachRooms', roomId), { messages: serialized });
+}
+
+export async function deleteCoachRoom(uid, roomId) {
+  await deleteDoc(doc(db, 'users', uid, 'coachRooms', roomId));
 }

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { auth, googleProvider } from '../../lib/firebase';
 import { signInWithPopup, signInWithRedirect, getRedirectResult } from 'firebase/auth';
 
+
 /* ── 아이콘 ── */
 const GoogleIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24">
@@ -36,12 +37,15 @@ const BUBBLES = [
 const isKakaoInAppBrowser = () =>
   typeof navigator !== 'undefined' && /KAKAOTALK/i.test(navigator.userAgent);
 
+const isNaverInAppBrowser = () =>
+  typeof navigator !== 'undefined' && /NAVER\(inapp|NaverApp|com\.naver\.naver/i.test(navigator.userAgent);
+
 export default function LoginScreen({ onLogin }) {
   const [loading, setLoading] = useState(null); // 'google' | 'kakao' | 'naver'
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
   const [bubbleStates, setBubbleStates] = useState({}); // id → 'popping' | 'hidden'
-  const isKakaoBrowser = isKakaoInAppBrowser();
+  const isInAppBrowser = isKakaoInAppBrowser() || isNaverInAppBrowser();
 
   function popBubble(id) {
     if (bubbleStates[id]) return;
@@ -79,33 +83,30 @@ export default function LoginScreen({ onLogin }) {
   useEffect(() => {
     const clientId = import.meta.env.VITE_NAVER_CLIENT_ID;
     if (!clientId || !window.naver) return;
+    // 네이버 OAuth 리다이렉트로 돌아온 경우에만 처리 (기존 세션 자동로그인 방지)
+    if (!window.location.hash.includes('access_token')) return;
 
     const naverLogin = new window.naver.LoginWithNaverId({
       clientId,
       callbackUrl: window.location.origin,
       isPopup: false,
-      loginButton: { color: "green", type: 1, height: 1 } // 히든 버튼
+      loginButton: { color: "green", type: 1, height: 1 },
     });
     naverLogin.init();
 
-    // 콜백으로 돌아왔을 때 상태 확인
-    window.addEventListener('load', () => {
-      naverLogin.getLoginStatus((status) => {
-        if (status) {
-          const user = naverLogin.user;
-          const userData = {
-            uid:      `naver_${user.id}`,
-            name:     user.name || '네이버 사용자',
-            email:    user.email || '',
-            photo:    user.profile_image || '',
-            provider: 'naver',
-          };
-          localStorage.setItem('auth_user', JSON.stringify(userData));
-          onLogin(userData);
-          // 해시 제거 (깔끔한 URL 유지)
-          window.history.replaceState({}, document.title, window.location.pathname);
-        }
-      });
+    naverLogin.getLoginStatus((status) => {
+      if (!status) return;
+      const user = naverLogin.user;
+      const userData = {
+        uid:      `naver_${user.id}`,
+        name:     user.name || '네이버 사용자',
+        email:    user.email || '',
+        photo:    user.profile_image || '',
+        provider: 'naver',
+      };
+      localStorage.setItem('auth_user', JSON.stringify(userData));
+      onLogin(userData);
+      window.history.replaceState({}, document.title, window.location.pathname);
     });
   }, [onLogin]);
 
@@ -113,13 +114,8 @@ export default function LoginScreen({ onLogin }) {
   async function handleGoogle() {
     setLoading('google');
     setError('');
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     try {
-      if (isMobile) {
-        // 모바일에서는 redirect 방식 사용 (popup 차단 이슈 방지)
-        await signInWithRedirect(auth, googleProvider);
-        return; // 페이지 이동 후 useEffect에서 결과 처리
-      }
+      // PWA 서비스워커가 redirect 흐름을 가로채므로 항상 popup 우선
       const result = await signInWithPopup(auth, googleProvider);
       onLogin({
         uid:    result.user.uid,
@@ -129,8 +125,12 @@ export default function LoginScreen({ onLogin }) {
         provider: 'google',
       });
     } catch (e) {
-      if (e.code !== 'auth/popup-closed-by-user') {
+      if (e.code === 'auth/popup-blocked') {
+        // 팝업이 차단된 경우에만 redirect fallback
+        await signInWithRedirect(auth, googleProvider);
+      } else if (e.code !== 'auth/popup-closed-by-user') {
         setError('Google 로그인에 실패했습니다. 잠시 후 다시 시도해주세요.');
+        console.error('[Google Auth]', e.code, e.message);
       }
     } finally {
       setLoading(null);
@@ -149,53 +149,37 @@ export default function LoginScreen({ onLogin }) {
         window.Kakao.init(key);
       }
 
-      // PWA 팝업 차단 등으로 무한 로딩 대비 5초 후 해제
-      const fallbackTimer = setTimeout(() => {
-        setLoading(null);
-        setError('팝업이 차단되었거나 응답이 없습니다. (홈 화면 앱 대신 사파리/크롬 브라우저에서 열어보세요)');
-      }, 5000);
-
-      const loginObj = window.Kakao.Auth.login || window.Kakao.Auth.loginForm;
-      
-      if (typeof loginObj === 'function') {
-        loginObj({
-          success() {
-            clearTimeout(fallbackTimer);
-            window.Kakao.API.request({
-              url: '/v2/user/me',
-              success(res) {
-                const profile = res.kakao_account?.profile;
-                const user = {
-                  uid:      `kakao_${res.id}`,
-                  name:     profile?.nickname || '카카오 사용자',
-                  email:    res.kakao_account?.email || '',
-                  photo:    profile?.profile_image_url || '',
-                  provider: 'kakao',
-                };
-                localStorage.setItem('auth_user', JSON.stringify(user));
-                onLogin(user);
-                setLoading(null);
-              },
-              fail(err) { clearTimeout(fallbackTimer); setError('프로필 조회 실패: ' + JSON.stringify(err)); setLoading(null); console.error(err); },
-            });
-          },
-          fail(err) {
-            clearTimeout(fallbackTimer);
-            const msg = err?.code === 'KOE009'
-              ? '카카오 앱 설정 오류입니다. 잠시 후 다시 시도하거나 Google 로그인을 이용해주세요.'
-              : `Kakao 로그인 실패: ${err?.msg || JSON.stringify(err)}`;
-            setError(msg);
-            setLoading(null);
-            console.error(err);
-          },
-        });
-      } else {
-        clearTimeout(fallbackTimer);
-        // Kakao SDK v2 fallback
-        window.Kakao.Auth.authorize({
-          redirectUri: window.location.origin
-        });
-      }
+      window.Kakao.Auth.login({
+        success() {
+          window.Kakao.API.request({
+            url: '/v2/user/me',
+            success(res) {
+              const profile = res.kakao_account?.profile;
+              const user = {
+                uid:      `kakao_${res.id}`,
+                name:     profile?.nickname || '카카오 사용자',
+                email:    res.kakao_account?.email || '',
+                photo:    profile?.profile_image_url || '',
+                provider: 'kakao',
+              };
+              localStorage.setItem('auth_user', JSON.stringify(user));
+              onLogin(user);
+              setLoading(null);
+            },
+            fail(err) {
+              setError('프로필 조회 실패: ' + JSON.stringify(err));
+              setLoading(null);
+            },
+          });
+        },
+        fail(err) {
+          const msg = err?.code === 'KOE009'
+            ? '카카오 앱 설정 오류입니다. 잠시 후 다시 시도하거나 Google 로그인을 이용해주세요.'
+            : `Kakao 로그인 실패: ${err?.msg || JSON.stringify(err)}`;
+          setError(msg);
+          setLoading(null);
+        },
+      });
     } catch (err) {
       setError('에러 발생: ' + err.message);
       setLoading(null);
@@ -329,13 +313,13 @@ export default function LoginScreen({ onLogin }) {
         className="relative z-10 px-5 flex flex-col gap-3"
         style={{ paddingBottom: 'max(40px, calc(env(safe-area-inset-bottom) + 16px))', animation: 'loginButtonsIn 0.7s 0.4s cubic-bezier(.4,0,.2,1) both' }}
       >
-        {isKakaoBrowser ? (
+        {isInAppBrowser ? (
           <div className="w-full rounded-[16px] border border-[#e9ecef] bg-white/85 px-4 py-4 shadow-[0_8px_24px_rgba(23,26,29,0.08)]">
             <p className="font-pretendard font-semibold text-[16px] text-[#171a1d] text-center tracking-[-0.4px]">
               외부 브라우저에서 열어주세요
             </p>
             <p className="font-pretendard text-[13px] text-[#646d76] text-center leading-[19px] tracking-[-0.325px] mt-2">
-              카카오톡 안에서는 Google·카카오 로그인이 제한될 수 있어요. 우측 상단 메뉴에서 Safari 또는 Chrome으로 열면 정상 이용할 수 있습니다.
+              앱 내 브라우저에서는 로그인이 제한될 수 있어요. 우측 상단 메뉴에서 Safari 또는 Chrome으로 열면 정상 이용할 수 있습니다.
             </p>
             <button
               onClick={handleCopyLink}
@@ -372,13 +356,13 @@ export default function LoginScreen({ onLogin }) {
           </>
         )}
 
-        {!isKakaoBrowser && (
+        {!isInAppBrowser && (
           <p className="font-pretendard text-[12px] text-[#adb5bd] text-center tracking-[-0.3px] mt-1">
             로그인 시 <span className="underline cursor-pointer">이용약관</span> 및 <span className="underline cursor-pointer">개인정보처리방침</span>에 동의합니다
           </p>
         )}
 
-        {isKakaoBrowser && error && (
+        {isInAppBrowser && error && (
           <p className="font-pretendard text-[13px] text-[#e05a2b] text-center tracking-[-0.325px] -mb-1">{error}</p>
         )}
 

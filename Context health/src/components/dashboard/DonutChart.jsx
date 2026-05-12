@@ -1,7 +1,7 @@
 import React from 'react';
 
 export default function DonutChart({ carb, protein, fat }) {
-  const cx = 60, cy = 60, R = 45, SW = 22, C = 2 * Math.PI * R;
+  const cx = 60, cy = 60, R = 40, SW = 30, C = 2 * Math.PI * R;
   const total = carb + protein + fat;
   const pC = total > 0 ? (carb / total) * 100 : 0;
   const pP = total > 0 ? (protein / total) * 100 : 0;
@@ -33,14 +33,14 @@ export default function DonutChart({ carb, protein, fat }) {
       {seg(lenF, "#e8a126", startF - 90, 0.4)}
       {seg(lenP, "#e05a2b", startP - 90, 0.2)}
       {seg(lenC, "#3385ff", startC - 90, 0)}
-      <circle cx={cx} cy={cy} r="27" fill="#fff" />
+      <circle cx={cx} cy={cy} r={R - SW / 2} fill="#fff" />
       {[[lC, pC], [lP, pP], [lF, pF]].map(([l, v], i) => (
-        <text 
-          key={i} 
+        <text
+          key={i}
           x={l.x} y={l.y} textAnchor="middle" dominantBaseline="central"
-          className="font-pretendard text-[10px] font-semibold fill-white transition-opacity duration-300 opacity-100"
+          fontSize="9" fontWeight="700" fill="white"
         >
-          {v > 5 ? `${Math.round(v)}%` : ""}
+          {v > 8 ? `${Math.round(v)}%` : ''}
         </text>
       ))}
     </svg>

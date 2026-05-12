@@ -32,6 +32,14 @@ const HIGHLIGHT_COLORS = [
   '#fecaca', '#e9d5ff', '#fed7aa',
 ];
 
+const SUMMARY_SET_TYPES = [
+  { pattern: /\(드랍(?:\s*세트?)?\)|드랍\s*세트/gi, label: '드랍', bg: '#fff3e0', color: '#e65100' },
+  { pattern: /\(슈퍼(?:\s*세트?)?\)|슈퍼\s*세트/gi, label: '슈퍼세트', bg: '#f3e5f5', color: '#7b1fa2' },
+  { pattern: /\(컴파운드(?:\s*세트?)?\)|컴파운드\s*세트/gi, label: '컴파운드', bg: '#e3f2fd', color: '#1565c0' },
+  { pattern: /\(강제\s*반복\)|강제\s*반복/gi, label: '강제반복', bg: '#fce4ec', color: '#c62828' },
+  { pattern: /\(저\s*중량\)|저중량/gi, label: '저중량고반복', bg: '#e8f5e9', color: '#2e7d32' },
+];
+
 const GEMINI_KEY = import.meta.env.VITE_GEMINI_KEY;
 
 const createEmptyWorkoutSections = () => [
@@ -47,6 +55,87 @@ function RichToolbarBtn({ active, onClick, children, title }) {
     >
       {children}
     </button>
+  );
+}
+
+function SummaryBodyRenderer({ body, note }) {
+  const lines = (body || '').split('\n').filter(l => l.trim());
+
+  const lineTypes = lines.map(l => {
+    if (l.trim().startsWith('💬')) return [];
+    return SUMMARY_SET_TYPES.filter(t => { t.pattern.lastIndex = 0; return t.pattern.test(l); });
+  });
+  const hasMark = lineTypes.map(types => types.length > 0);
+
+  // Line i is "in group" if it has a mark, or if the immediately next non-💬 line has a mark
+  const inGroup = lines.map((l, i) => {
+    if (l.trim().startsWith('💬')) return false;
+    if (hasMark[i]) return true;
+    for (let j = i + 1; j < lines.length; j++) {
+      if (!lines[j].trim().startsWith('💬')) return hasMark[j];
+    }
+    return false;
+  });
+
+  // Build segments: consecutive inGroup lines → single box, others → individual
+  const segments = [];
+  let i = 0;
+  while (i < lines.length) {
+    if (lines[i].trim().startsWith('💬')) {
+      segments.push({ type: 'note-inline', line: lines[i] });
+      i++;
+    } else if (inGroup[i]) {
+      const gLines = [];
+      const gTypes = [];
+      while (i < lines.length && inGroup[i] && !lines[i].trim().startsWith('💬')) {
+        gLines.push(lines[i]);
+        lineTypes[i].forEach(t => { if (!gTypes.find(gt => gt.label === t.label)) gTypes.push(t); });
+        i++;
+      }
+      segments.push({ type: 'group', lines: gLines, types: gTypes });
+    } else {
+      segments.push({ type: 'normal', line: lines[i] });
+      i++;
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      {segments.map((seg, idx) => {
+        if (seg.type === 'note-inline') {
+          return (
+            <span key={idx} className="block px-2.5 py-1.5 rounded-lg bg-white/60 text-[11px] italic text-typo-secondary leading-relaxed">
+              {seg.line}
+            </span>
+          );
+        }
+        if (seg.type === 'group') {
+          const mainType = seg.types[0];
+          return (
+            <div key={idx} className="relative rounded-xl px-2.5 pt-2 pb-5"
+              style={{ background: mainType?.bg || '#fff3e0', margin: '4px 0' }}>
+              {seg.lines.map((line, li) => (
+                <div key={li} className="text-[13px] font-pretendard text-typo-normal leading-5 py-0.5">{line}</div>
+              ))}
+              {mainType && (
+                <span className="absolute bottom-1.5 right-2.5 text-[10px] font-bold font-pretendard"
+                  style={{ color: mainType.color }}>
+                  {mainType.label}
+                </span>
+              )}
+            </div>
+          );
+        }
+        return (
+          <div key={idx} className="text-[13px] font-pretendard text-typo-normal leading-5 py-0.5">{seg.line}</div>
+        );
+      })}
+      {note && (
+        <span className="block px-2.5 py-1.5 rounded-lg bg-white/60 text-[11px] italic text-typo-secondary leading-relaxed">
+          💬 {note}
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -78,7 +167,12 @@ export default function WorkoutMemoScreen({ onBack, onSave, initialData, uid, on
   };
 
   /* ── 자유 메모 모드 ── */
-  const [freeMode, setFreeMode] = useState(() => !!(initialData?.freeHtml));
+  const [freeMode, setFreeMode] = useState(() => {
+    if (!initialData?.freeHtml) return false;
+    // AI가 완료되고 sections가 있으면 구조적 모드로 열기
+    if (initialData?.aiStatus === 'done' && initialData?.sections?.length > 0) return false;
+    return true;
+  });
   const editorRef = useRef(null);
   const [showColorPicker, setShowColorPicker] = useState(null); // null | 'text' | 'highlight'
   const [activeFormats, setActiveFormats] = useState({});
@@ -88,7 +182,10 @@ export default function WorkoutMemoScreen({ onBack, onSave, initialData, uid, on
   useEffect(() => {
     if (freeMode && editorRef.current && !editorRef.current.innerHTML) {
       editorRef.current.innerHTML = initialData?.freeHtml || '';
-      editorRef.current.focus();
+      // 기존 메모 편집 시 auto-focus는 iOS 스크롤 버그를 유발하므로 새 메모만 포커스
+      if (!initialData?.freeHtml) {
+        editorRef.current.focus();
+      }
     }
   }, [freeMode]);
 
@@ -154,10 +251,23 @@ export default function WorkoutMemoScreen({ onBack, onSave, initialData, uid, on
   const [partSuggestions, setPartSuggestions] = useState({ secId: null, items: [] });
 
   // 최근 기록 바텀시트
-  const [recentSheet, setRecentSheet] = useState({ open: false, secId: null, records: [], currentIdx: 0, loading: false });
+  const [recentSheet, setRecentSheet] = useState({ open: false, secId: null, itemId: null, mode: 'section', records: [], currentIdx: 0, loading: false });
 
   // 더보기 바텀시트
   const [moreSheetOpen, setMoreSheetOpen] = useState(false);
+
+  // 워크아웃 모드 (과부하 / 디로딩)
+  const [workoutMode, setWorkoutMode] = useState('overload');
+
+  // 글 정리 후 종목별 볼륨 증감
+  const [exerciseVolumeDeltas, setExerciseVolumeDeltas] = useState({});
+
+  // 섹션별 AI 루틴 근거
+  const [sectionAiTheories, setSectionAiTheories] = useState({});
+  // 팝오버가 item 레벨에서 열렸을 때의 itemId
+  const [sectionPopoverItemId, setSectionPopoverItemId] = useState(null);
+  // 증량 비율 (%)
+  const [incrementPercent, setIncrementPercent] = useState(5);
 
   // 단위 변환 중인 아이템 id (여러 동시 변환 지원)
   const convertingItems = useRef(new Set());
@@ -226,6 +336,18 @@ export default function WorkoutMemoScreen({ onBack, onSave, initialData, uid, on
     return Math.max(...matches.map(m => parseFloat(m[1])));
   }
 
+  function parseVolumeFromBody(body) {
+    if (!body) return 0;
+    let total = 0;
+    for (const m of body.matchAll(/(\d+(?:\.\d+)?)\s*kg\s*(?:(\d+)\s*회|[x×]\s*(\d+))/g))
+      total += parseFloat(m[1]) * parseInt(m[2] || m[3]);
+    for (const m of body.matchAll(/(\d+(?:\.\d+)?)\s*(?:lbs?|파운드)\s*(?:(\d+)\s*회|[x×]\s*(\d+))/gi))
+      total += parseFloat(m[1]) * 0.453592 * parseInt(m[2] || m[3]);
+    for (const m of body.matchAll(/(\d+(?:\.\d+)?)\s*칸\s*(?:(\d+)\s*회|[x×]\s*(\d+))/g))
+      total += parseFloat(m[1]) * 5 * parseInt(m[2] || m[3]);
+    return total;
+  }
+
   async function fetchPrevWeight(exerciseName) {
     if (!exerciseName?.trim() || !uid) return;
     const q = query(collection(db, "logs"), where("uid", "==", uid));
@@ -269,6 +391,7 @@ export default function WorkoutMemoScreen({ onBack, onSave, initialData, uid, on
     setAiMenuOpen(false);
     setBsOpen(true);
     setIsBsLoading(true);
+    setExerciseVolumeDeltas({});
     try {
       const rawText = sections.map(s => `부위: ${s.part}\n${s.items.map(i => `- 종목: ${i.title}\n  기록: ${i.body}`).join('\n')}`).join('\n\n');
       const prompt = `다음 사용자의 거친 운동 메모 데이터를 보기 좋게 정리해서 JSON 배열로 반환해줘.
@@ -279,8 +402,9 @@ export default function WorkoutMemoScreen({ onBack, onSave, initialData, uid, on
 3. [가장 중요] 세트 번호(N)는 종목이 바뀌더라도 절대 1부터 다시 시작하지 말고, 이전 종목의 마지막 세트 번호에 이어서 전체 누적으로 계속 카운트해줘.
 4. [가장 중요] 원문에 있는 (드랍), (드랍세트), (슈퍼세트), (컴파운드), (강제반복), (저중량) 같은 세트 타입 표기는 절대 삭제하지 말고 해당 세트의 body 텍스트 안에 그대로 유지해.
 5. 드랍/슈퍼세트 등 세트 타입 표기는 note로 분리하지 마. 우리 앱은 body 안의 텍스트를 감지해 별도 뱃지로 처리한다.
-6. [가장 중요] 세트 기록 뒤에 "-", "()", "..." 등으로 이어지는 주관적 느낌·코멘트 (예: "확실히 10회는 빡세다", "자세가 흔들림", "다음엔 무게 늘려보자", "8회까지만 제대로") 는 반드시 note 필드로 분리해. kg/회/세트 숫자나 세트 타입 표기가 아닌 주관적 경험·느낌 텍스트만 note로. 없으면 note 필드 생략.
-7. JSON 이외의 다른 텍스트(마크다운 등)는 절대 포함하지 마.
+6. [가장 중요] 세트 기록과 함께 또는 독립적으로 적힌 주관적 느낌·코멘트 (예: "확실히 10회는 빡세다", "가슴&어깨 마사지받음, 확실히 나아짐", "자세가 흔들림", "다음엔 무게 늘려보자") 는 반드시 note 필드로 분리해. 쉼표로 이어진 문장 전체를 하나의 note로 합쳐야 해. 절대 일부만 잘라 넣지 마. kg/회/세트 숫자나 세트 타입 표기가 아닌 주관적 경험·느낌 텍스트만 note로. 없으면 note 필드 생략.
+7. 운동 기록이 전혀 없고 코멘트만 있는 경우(예: "가슴 마사지받음"), body는 빈 문자열로, note에 해당 문장 전체를 넣어.
+8. JSON 이외의 다른 텍스트(마크다운 등)는 절대 포함하지 마.
 
 사용자 입력:
 ${rawText}`;
@@ -297,7 +421,7 @@ ${rawText}`;
       const text = (parts.find(p => !p.thought) ?? parts[parts.length - 1]).text;
       const cleanText = text.replace(/```json/gi, '').replace(/```/g, '').trim();
       const parsed = JSON.parse(cleanText);
-      setParsedSections(parsed.map(s => ({
+      const mappedSections = parsed.map(s => ({
         id: Date.now() + Math.random(),
         part: s.part || "운동 부위",
         items: (s.items || []).map(it => ({
@@ -306,7 +430,38 @@ ${rawText}`;
           body: it.body,
           note: it.note,
         }))
-      })));
+      }));
+      setParsedSections(mappedSections);
+
+      // 종목별 볼륨 증감 계산
+      if (uid) {
+        try {
+          const q = query(collection(db, "logs"), where("uid", "==", uid), where("type", "==", "workout"));
+          const snap = await getDocs(q);
+          const sorted = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+            .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+          const deltas = {};
+          for (const sec of parsed) {
+            for (const item of (sec.items || [])) {
+              if (!item.title || deltas[item.title] !== undefined) continue;
+              const curVol = parseVolumeFromBody(item.body);
+              if (curVol <= 0) continue;
+              for (const d of sorted) {
+                if (initialData && d.id === initialData.docId) continue;
+                const prevItem = (d.sections || []).flatMap(s => s.items || []).find(it => it.title === item.title);
+                if (prevItem?.body) {
+                  const prevVol = parseVolumeFromBody(prevItem.body);
+                  if (prevVol > 0) {
+                    deltas[item.title] = parseFloat(((curVol - prevVol) / prevVol * 100).toFixed(1));
+                    break;
+                  }
+                }
+              }
+            }
+          }
+          setExerciseVolumeDeltas(deltas);
+        } catch {}
+      }
     } catch (e) {
       console.error("AI 글 정리 에러:", e);
       alert("AI 글 정리 오류: " + e.message);
@@ -367,76 +522,130 @@ ${rawText}`;
   }
 
   /* ── 섹션별 AI 팝오버 열기 ── */
-  function openSectionPopover(secId, e, source = 'section') {
-    if (sectionPopover === secId) {
+  function openSectionPopover(secId, e, source = 'section', itemId = null) {
+    if (sectionPopover === secId && sectionPopoverSource === source && sectionPopoverItemId === itemId) {
       setSectionPopover(null);
       setSectionPopoverSource(null);
+      setSectionPopoverItemId(null);
       return;
     }
     const rect = e.currentTarget.getBoundingClientRect();
-    setSectionPopoverPos({ top: rect.bottom + 8 });
+    const popoverWidth = 279;
+    const left = Math.max(16, Math.min(rect.right - popoverWidth, window.innerWidth - popoverWidth - 16));
+    setSectionPopoverPos({ top: rect.bottom + 8, left });
     setSectionPopover(secId);
     setSectionPopoverSource(source);
+    setSectionPopoverItemId(itemId);
   }
 
   /* ── 섹션별 AI 루틴 생성 ── */
-  async function handleSectionAiRoutine(secId) {
+  async function handleSectionAiRoutine(secId, source, itemId) {
     setSectionPopover(null);
     const sec = sections.find(s => s.id === secId);
-    if (!sec?.part?.trim()) {
-      alert('운동 부위를 먼저 입력해주세요.');
-      return;
+    const isItemMode = source === 'item' && itemId;
+
+    if (isItemMode) {
+      const exerciseName = sec?.items.find(it => it.id === itemId)?.title?.trim();
+      if (!exerciseName) { alert('운동 종목을 먼저 입력해주세요.'); return; }
+    } else {
+      if (!sec?.part?.trim()) { alert('운동 부위를 먼저 입력해주세요.'); return; }
     }
+
     setSectionAiLoading(secId);
     try {
-      let context = '';
-      if (uid) {
-        try {
-          const q = query(collection(db, "logs"), where("uid", "==", uid), where("type", "==", "workout"));
-          const snap = await getDocs(q);
-          const sorted = snap.docs
-            .map(d => ({ ...d.data() }))
-            .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
-          const relevant = sorted
-            .filter(d => (d.sections || []).some(s => s.part === sec.part))
-            .slice(0, 2);
-          if (relevant.length > 0) {
-            context = `\n\n사용자의 최근 ${sec.part} 기록:\n` + relevant.map(d => {
-              const s = d.sections.find(s => s.part === sec.part);
-              return (s?.items || []).map(it => `- ${it.title}: ${it.body}`).join('\n');
-            }).join('\n');
-          }
-        } catch {}
-      }
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`;
 
-      const prompt = `사용자가 "${sec.part}" 부위를 운동할 루틴을 짜줘.${context}
+      if (isItemMode) {
+        const exerciseName = sec.items.find(it => it.id === itemId).title.trim();
+        let context = '';
+        if (uid) {
+          try {
+            const q = query(collection(db, "logs"), where("uid", "==", uid), where("type", "==", "workout"));
+            const snap = await getDocs(q);
+            const sorted = snap.docs.map(d => ({ ...d.data() }))
+              .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+            const exerciseRecords = [];
+            for (const d of sorted) {
+              for (const s of (d.sections || [])) {
+                const found = (s.items || []).find(it => it.title === exerciseName);
+                if (found?.body) { exerciseRecords.push(found.body); break; }
+              }
+              if (exerciseRecords.length >= 3) break;
+            }
+            if (exerciseRecords.length > 0) {
+              context = `\n\n사용자의 최근 ${exerciseName} 기록:\n` + exerciseRecords.join('\n---\n');
+            }
+          } catch {}
+        }
+
+        const prompt = `사용자가 "${exerciseName}" 운동의 오늘 세트 구성을 제안해줘.${context}
 
 JSON 형식으로만 반환해줘:
-[{ "title": "운동명", "body": "• 세트 1: Xkg N회 (설명)\n\n• 세트 2: Xkg N회 (설명)\n\n• 세트 3: Xkg N회 (설명)" }]
+{ "theory": "이 세트 구성의 근거를 1-2문장으로 (예: 과거 기록 대비 5% 점진적 과부하 적용...)", "body": "• 세트 1: Xkg N회 (설명)\\n• 세트 2: Xkg N회 (설명)\\n• 세트 3: Xkg N회 (설명)" }
 
 규칙:
-1. 3~5가지 종목
-2. 각 종목 3세트
-3. 과거 기록 기반으로 무게를 제안하되, 없으면 적절한 초급 무게로
-4. 괄호 안에 권장 무게 이유 또는 목표 간략히
-5. JSON만 반환`;
+1. 3~5세트 구성
+2. 과거 기록 기반으로 무게 제안, 없으면 적절한 초급 무게로
+3. 괄호 안에 권장 무게 이유 또는 목표 간략히
+4. JSON만 반환`;
 
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`;
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-      });
-      const json = await res.json();
-      if (json.error) throw new Error(json.error.message);
-      const parts = json.candidates[0].content.parts;
-      const text = (parts.find(p => !p.thought) ?? parts[parts.length - 1]).text;
-      const items = JSON.parse(text.replace(/```json/gi, '').replace(/```/g, '').trim());
+        const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
+        const json = await res.json();
+        if (json.error) throw new Error(json.error.message);
+        const resParts = json.candidates[0].content.parts;
+        const text = (resParts.find(p => !p.thought) ?? resParts[resParts.length - 1]).text;
+        const parsed = JSON.parse(text.replace(/```json/gi, '').replace(/```/g, '').trim());
 
-      setSections(prev => prev.map(s => s.id !== secId ? s : {
-        ...s,
-        items: items.map((it, i) => ({ id: Date.now() + i, title: it.title || '', body: it.body || '', isAI: true }))
-      }));
+        const theoryNote = parsed.theory ? `\n\n💬 ${parsed.theory}` : '';
+        setSections(prev => prev.map(s => s.id !== secId ? s : {
+          ...s,
+          items: s.items.map(it => it.id !== itemId ? it : { ...it, body: (parsed.body || '') + theoryNote, isAI: true })
+        }));
+      } else {
+        let context = '';
+        if (uid) {
+          try {
+            const q = query(collection(db, "logs"), where("uid", "==", uid), where("type", "==", "workout"));
+            const snap = await getDocs(q);
+            const sorted = snap.docs.map(d => ({ ...d.data() }))
+              .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+            const relevant = sorted.filter(d => (d.sections || []).some(s => s.part === sec.part)).slice(0, 2);
+            if (relevant.length > 0) {
+              context = `\n\n사용자의 최근 ${sec.part} 기록:\n` + relevant.map(d => {
+                const s = d.sections.find(s => s.part === sec.part);
+                return (s?.items || []).map(it => `- ${it.title}: ${it.body}`).join('\n');
+              }).join('\n');
+            }
+          } catch {}
+        }
+
+        const prompt = `사용자가 "${sec.part}" 부위를 운동할 루틴을 짜줘.${context}
+
+JSON 형식으로만 반환해줘:
+{ "theory": "이 루틴 구성의 근거를 1-2문장으로 (예: 대흉근 전체 자극을 위해 수평/경사 각도 복합 구성...)", "items": [{ "title": "운동명", "body": "• 세트 1: Xkg N회 (설명)\\n• 세트 2: Xkg N회 (설명)\\n• 세트 3: Xkg N회 (설명)" }] }
+
+규칙:
+1. 3~5가지 종목, 각 종목 3세트
+2. 과거 기록 기반으로 무게를 제안하되, 없으면 적절한 초급 무게로
+3. 괄호 안에 권장 무게 이유 또는 목표 간략히
+4. JSON만 반환`;
+
+        const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
+        const json = await res.json();
+        if (json.error) throw new Error(json.error.message);
+        const resParts = json.candidates[0].content.parts;
+        const text = (resParts.find(p => !p.thought) ?? resParts[resParts.length - 1]).text;
+        const parsed = JSON.parse(text.replace(/```json/gi, '').replace(/```/g, '').trim());
+
+        const items = parsed.items || [];
+        setSections(prev => prev.map(s => s.id !== secId ? s : {
+          ...s,
+          items: items.map((it, i) => ({ id: Date.now() + i, title: it.title || '', body: it.body || '', isAI: true }))
+        }));
+        if (parsed.theory) {
+          setSectionAiTheories(prev => ({ ...prev, [secId]: parsed.theory }));
+        }
+      }
     } catch (e) {
       alert("AI 루틴 생성 오류: " + e.message);
     } finally {
@@ -445,86 +654,74 @@ JSON 형식으로만 반환해줘:
   }
 
   /* ── 최근 기록 보기 ── */
-  async function handleShowRecentRecords(secId) {
+  async function handleShowRecentRecords(secId, source, itemId) {
     setSectionPopover(null);
     if (!uid) return;
     const sec = sections.find(s => s.id === secId);
-    setRecentSheet({ open: true, secId, records: [], currentIdx: 0, loading: true });
-    try {
-      const q = query(collection(db, "logs"), where("uid", "==", uid), where("type", "==", "workout"));
-      const snap = await getDocs(q);
-      const sorted = snap.docs
-        .map(d => ({ id: d.id, ...d.data() }))
-        .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+    const q = query(collection(db, "logs"), where("uid", "==", uid), where("type", "==", "workout"));
 
-      const matching = [];
-      for (const d of sorted) {
-        if (initialData && d.id === initialData.docId) continue;
-        const part = sec?.part?.trim();
-        const matchingSec = (d.sections || []).find(s =>
-          !part || s.part === part || s.part?.includes(part) || part?.includes(s.part)
-        );
-        if (matchingSec) {
-          matching.push({
-            docId: d.id,
-            date: d.timestamp?.toDate ? d.timestamp.toDate() : new Date((d.timestamp?.seconds || 0) * 1000),
-            section: matchingSec
-          });
+    if (source === 'item' && itemId) {
+      const exerciseName = sec?.items.find(it => it.id === itemId)?.title?.trim();
+      if (!exerciseName) return;
+
+      setRecentSheet({ open: true, secId, itemId, mode: 'item', records: [], currentIdx: 0, loading: true });
+      try {
+        const snap = await getDocs(q);
+        const sorted = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+        const matching = [];
+        for (const d of sorted) {
+          if (initialData && d.id === initialData.docId) continue;
+          for (const s of (d.sections || [])) {
+            const found = (s.items || []).find(it => it.title === exerciseName);
+            if (found) {
+              matching.push({
+                docId: d.id,
+                date: d.timestamp?.toDate ? d.timestamp.toDate() : new Date((d.timestamp?.seconds || 0) * 1000),
+                section: { part: exerciseName, items: [found] }
+              });
+              break;
+            }
+          }
           if (matching.length >= 6) break;
         }
+        setRecentSheet(prev => ({ ...prev, records: matching, loading: false }));
+      } catch (e) {
+        alert("기록 조회 오류: " + e.message);
+        setRecentSheet(prev => ({ ...prev, loading: false }));
       }
-      setRecentSheet(prev => ({ ...prev, records: matching, loading: false }));
-    } catch (e) {
-      alert("기록 조회 오류: " + e.message);
-      setRecentSheet(prev => ({ ...prev, loading: false }));
-    }
-  }
-
-  /* ── 단위 변환 (lbs / 한칸 / 두칸 → kg) ── */
-  async function handleBodyBlur(secId, itemId, body) {
-    if (!body?.trim()) return;
-    const hasNonKg = /\d+\s*(lbs?|파운드|lb|한칸|두칸|세칸|네칸|다섯칸|여섯칸|일곱칸|여덟칸|아홉칸|열칸)/i.test(body);
-    if (!hasNonKg) return;
-
-    const convertKey = `${secId}_${itemId}`;
-    convertingItems.current.add(convertKey);
-    setConvertingVersion(v => v + 1);
-    try {
-      const prompt = `다음 운동 기록 텍스트에서 lbs(파운드), 한칸/두칸/세칸(기구 핀 눈금) 등 kg이 아닌 단위를 모두 kg으로 변환해줘.
-변환 규칙:
-1. 1 lbs = 0.453592 kg, 변환 후 2.5kg 단위로 반올림
-2. 한칸/두칸 등 기구 핀 눈금은 일반적으로 한칸=5kg으로 계산
-3. (드랍세트), (슈퍼세트) 등 세트 타입 표기는 그대로 유지
-4. 숫자와 단위 외 텍스트는 절대 변경하지 마
-5. 오직 변환된 텍스트만 반환 (설명 없이)
-
-원문:
-${body}`;
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`;
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-      });
-      const json = await res.json();
-      if (json.error || !json.candidates?.[0]) return;
-      const parts = json.candidates[0].content.parts;
-      const converted = (parts.find(p => !p.thought) ?? parts[parts.length - 1]).text.trim();
-      if (converted && converted !== body) {
-        setSections(prev => prev.map(s =>
-          s.id !== secId ? s : {
-            ...s,
-            items: s.items.map(it => it.id !== itemId ? it : { ...it, body: converted })
+    } else {
+      setRecentSheet({ open: true, secId, itemId: null, mode: 'section', records: [], currentIdx: 0, loading: true });
+      try {
+        const snap = await getDocs(q);
+        const sorted = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+        const matching = [];
+        for (const d of sorted) {
+          if (initialData && d.id === initialData.docId) continue;
+          const part = sec?.part?.trim();
+          const matchingSec = (d.sections || []).find(s =>
+            !part || s.part === part || s.part?.includes(part) || part?.includes(s.part)
+          );
+          if (matchingSec) {
+            matching.push({
+              docId: d.id,
+              date: d.timestamp?.toDate ? d.timestamp.toDate() : new Date((d.timestamp?.seconds || 0) * 1000),
+              section: matchingSec
+            });
+            if (matching.length >= 6) break;
           }
-        ));
+        }
+        setRecentSheet(prev => ({ ...prev, records: matching, loading: false }));
+      } catch (e) {
+        alert("기록 조회 오류: " + e.message);
+        setRecentSheet(prev => ({ ...prev, loading: false }));
       }
-    } catch (e) {
-      console.error("단위 변환 오류:", e);
-    } finally {
-      convertingItems.current.delete(convertKey);
-      setConvertingVersion(v => v + 1);
     }
   }
+
+  /* lb/칸 단위는 텍스트 변환 없이 볼륨 계산에서만 kg으로 처리 */
+  function handleBodyBlur() {}
 
   /* ── 더보기: 복사 / 새로 시작 ── */
   function handleCopyToClipboard() {
@@ -544,9 +741,9 @@ ${body}`;
     setMoreSheetOpen(false);
   }
 
-  function incrementWeights(text) {
+  function incrementWeights(text, percent = 5) {
     return (text || '').replace(/(\d+(?:\.\d+)?)\s*kg/gi, (_, w) => {
-      const newW = Math.round((parseFloat(w) * 1.05) / 2.5) * 2.5;
+      const newW = Math.round((parseFloat(w) * (1 + percent / 100)) / 2.5) * 2.5;
       return `${newW}kg`;
     });
   }
@@ -554,13 +751,25 @@ ${body}`;
   function handleUseRecord(withIncrement) {
     const rec = recentSheet.records[recentSheet.currentIdx];
     if (!rec) return;
-    const newItems = (rec.section.items || []).map((it, i) => ({
-      id: Date.now() + i,
-      title: it.title || '',
-      body: withIncrement ? incrementWeights(it.body) : (it.body || ''),
-      isAI: false
-    }));
-    setSections(prev => prev.map(s => s.id === recentSheet.secId ? { ...s, items: newItems } : s));
+    if (recentSheet.mode === 'item' && recentSheet.itemId) {
+      const itemBody = rec.section.items[0]?.body || '';
+      setSections(prev => prev.map(s => s.id === recentSheet.secId ? {
+        ...s,
+        items: s.items.map(it => it.id === recentSheet.itemId ? {
+          ...it,
+          body: withIncrement ? incrementWeights(itemBody, incrementPercent) : itemBody,
+          isAI: false
+        } : it)
+      } : s));
+    } else {
+      const newItems = (rec.section.items || []).map((it, i) => ({
+        id: Date.now() + i,
+        title: it.title || '',
+        body: withIncrement ? incrementWeights(it.body, incrementPercent) : (it.body || ''),
+        isAI: false
+      }));
+      setSections(prev => prev.map(s => s.id === recentSheet.secId ? { ...s, items: newItems } : s));
+    }
     setRecentSheet(prev => ({ ...prev, open: false }));
   }
 
@@ -593,53 +802,58 @@ ${body}`;
     setSections(prev => [...prev, { id, part: "", items: [{ id: id + 1, title: "", body: "" }] }]);
   }
 
-  /* ── 저장 ── */
-  async function handleSave() {
+  /* ── 백그라운드 AI 처리 ── */
+  async function runBackgroundAI(docRef, currentSections, title, capturedMode, rawTextOverride) {
+    const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`;
     try {
-      // 자유 메모 모드
-      if (freeMode) {
-        const html = editorRef.current?.innerHTML || '';
-        const plainText = editorRef.current?.innerText || '';
-        const title = plainText.split('\n').find(l => l.trim()) || '운동 메모';
-        const data = { type: 'workout', uid, timestamp: serverTimestamp(), title: title.substring(0, 40), freeHtml: html, mode: 'free' };
-        if (initialData?.docId) {
-          await updateDoc(doc(db, 'logs', initialData.docId), { title: title.substring(0, 40), freeHtml: html });
-        } else {
-          await addDoc(collection(db, 'logs'), data);
-        }
-        if (onSave) onSave();
-        return;
-      }
+      // 글 정리
+      const rawText = rawTextOverride || currentSections.map(s =>
+        `부위: ${s.part}\n${s.items.map(i => `- 종목: ${i.title}\n  기록: ${i.body}`).join('\n')}`
+      ).join('\n\n');
+      const summarizePrompt = `다음 사용자의 거친 운동 메모 데이터를 보기 좋게 정리해서 JSON 배열로 반환해줘.
+응답 형식: [{ "part": "운동부위", "items": [{ "title": "운동종목", "body": "• 세트 1: 20kg 15회\\n• 세트 2: 40kg 20회", "note": "느낀점(선택)" }] }]
+중요 규칙:
+1. 각 세트별 기록은 반드시 '• 세트 N: 무게 횟수' 형태로 작성해줘.
+2. 여러 세트인 경우 쉼표(,) 대신 반드시 줄바꿈(\\n)으로 구분해서 작성해줘.
+3. [가장 중요] 세트 번호(N)는 종목이 바뀌더라도 절대 1부터 다시 시작하지 말고, 이전 종목의 마지막 세트 번호에 이어서 전체 누적으로 계속 카운트해줘.
+4. [가장 중요] 원문에 있는 (드랍), (드랍세트), (슈퍼세트), (컴파운드), (강제반복), (저중량) 같은 세트 타입 표기는 절대 삭제하지 말고 해당 세트의 body 텍스트 안에 그대로 유지해.
+5. 드랍/슈퍼세트 등 세트 타입 표기는 note로 분리하지 마. 우리 앱은 body 안의 텍스트를 감지해 별도 뱃지로 처리한다.
+6. [가장 중요] 세트 기록과 함께 또는 독립적으로 적힌 주관적 느낌·코멘트는 반드시 note 필드로 분리해. kg/회/세트 숫자나 세트 타입 표기가 아닌 주관적 경험·느낌 텍스트만 note로. 없으면 note 필드 생략.
+7. 운동 기록이 전혀 없고 코멘트만 있는 경우, body는 빈 문자열로, note에 해당 문장 전체를 넣어.
+8. JSON 이외의 다른 텍스트(마크다운 등)는 절대 포함하지 마.
+사용자 입력:\n${rawText}`;
 
-      const title = sections.map(s => s.part).filter(Boolean).join(", ") || "운동 기록";
-      const exercises = sections
-        .flatMap(s => s.items.map(it => ({ name: it.title })))
-        .filter(ex => ex.name);
-      const originalText = sections
-        .flatMap(s => s.items.map(it => it.body))
-        .filter(Boolean)
-        .join("\n");
-      const sectionsData = sections.map(s => ({
-        part: s.part,
-        items: s.items.map(it => ({ title: it.title, body: it.body }))
+      const sumRes = await fetch(GEMINI_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contents: [{ parts: [{ text: summarizePrompt }] }] })
+      });
+      const sumJson = await sumRes.json();
+      if (sumJson.error || !sumJson.candidates?.[0]) throw new Error("글 정리 실패");
+
+      const sumParts = sumJson.candidates[0].content.parts;
+      const sumText = (sumParts.find(p => !p.thought) ?? sumParts[sumParts.length - 1]).text;
+      const parsed = JSON.parse(sumText.replace(/```json/gi, '').replace(/```/g, '').trim());
+
+      const structuredSections = parsed.map(s => ({
+        part: s.part || "운동 부위",
+        items: (s.items || []).map(it => ({ title: it.title, body: it.body, note: it.note }))
       }));
+      const structuredExercises = structuredSections.flatMap(s => s.items.map(it => ({ name: it.title }))).filter(ex => ex.name);
+      const totalVolume = parseVolume(structuredSections);
 
-      const totalVolume = parseVolume(sections);
+      // 이전 볼륨 조회
       let lastVolume = 0;
-      const currentParts = sections.map(s => s.part).filter(Boolean);
-
+      const currentParts = structuredSections.map(s => s.part).filter(Boolean);
       if (currentParts.length > 0 && uid) {
         const q = query(collection(db, "logs"), where("uid", "==", uid));
-        const querySnapshot = await getDocs(q);
-        const sorted = querySnapshot.docs
-          .map(d => ({ id: d.id, ...d.data() }))
+        const snap = await getDocs(q);
+        const sorted = snap.docs.map(d => ({ id: d.id, ...d.data() }))
           .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
-
         for (const d of sorted) {
-          if (initialData && d.id === initialData.docId) continue;
+          if (d.id === docRef.id) continue;
           if (d.type !== "workout") continue;
-          const hasMatch = currentParts.some(p => (d.title || "").includes(p));
-          if (hasMatch && d.totalVolume) {
+          if (currentParts.some(p => (d.title || "").includes(p)) && d.totalVolume) {
             lastVolume = d.totalVolume;
             break;
           }
@@ -650,20 +864,99 @@ ${body}`;
       if (lastVolume > 0) {
         const diff = totalVolume - lastVolume;
         const pct = ((diff / lastVolume) * 100).toFixed(1);
-        overloadMsg = `오늘 볼륨 ${totalVolume.toLocaleString()}kg, 저번보다 ${Math.abs(pct)}% 과부하 ${diff >= 0 ? "성공" : "실패"}!`;
+        overloadMsg = capturedMode === 'deload'
+          ? (diff <= 0 ? `오늘 볼륨 ${totalVolume.toLocaleString()}kg, 디로딩 성공! (${Math.abs(pct)}% 감량)` : `오늘 볼륨 ${totalVolume.toLocaleString()}kg, 디로딩 목표 미달 (${pct}% 증가)`)
+          : `오늘 볼륨 ${totalVolume.toLocaleString()}kg, 저번보다 ${Math.abs(pct)}% 과부하 ${diff >= 0 ? "성공" : "실패"}!`;
       } else {
         overloadMsg = `오늘 첫 기록 볼륨 ${totalVolume.toLocaleString()}kg 달성!`;
       }
 
+      await updateDoc(docRef, { sections: structuredSections, exercises: structuredExercises, totalVolume, overloadMsg, aiStatus: 'summarized' });
+
+      // 한줄평
+      const commentPrompt = `운동 기록을 분석해서 동기부여가 되는 한줄평을 써줘.
+필수 포함 문구: "${overloadMsg}"
+규칙:
+1. 반드시 저 문구가 제일 앞에 나오게 해.
+2. 30자 이내로 짧고 강렬하게 한국어로 써.
+3. 순수 텍스트만 반환해.
+정보: 운동부위: ${title}, 총 볼륨: ${totalVolume}kg`;
+
+      const commentRes = await fetch(GEMINI_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contents: [{ parts: [{ text: commentPrompt }] }] })
+      });
+      const commentJson = await commentRes.json();
+      if (commentJson.candidates?.[0]) {
+        const cParts = commentJson.candidates[0].content.parts;
+        const aiComment = (cParts.find(p => !p.thought) ?? cParts[cParts.length - 1]).text.trim();
+        await updateDoc(docRef, { aiComment, aiStatus: 'done' });
+      } else {
+        await updateDoc(docRef, { aiStatus: 'done' });
+      }
+    } catch (err) {
+      console.error("백그라운드 AI 처리 실패:", err);
+      try { await updateDoc(docRef, { aiStatus: 'done' }); } catch {}
+    }
+  }
+
+  /* ── 저장 ── */
+  async function handleSave() {
+    try {
+      // 자유 메모 모드
+      if (freeMode) {
+        const html = editorRef.current?.innerHTML || '';
+        const plainText = editorRef.current?.innerText || '';
+        const title = plainText.split('\n').find(l => l.trim()) || '운동 메모';
+
+        let docRef;
+        if (initialData?.docId) {
+          docRef = doc(db, 'logs', initialData.docId);
+          await updateDoc(docRef, {
+            title: title.substring(0, 40),
+            freeHtml: html,
+            originalText: plainText,
+            aiStatus: 'processing',
+          });
+        } else {
+          const res = await addDoc(collection(db, 'logs'), {
+            type: 'workout', uid, timestamp: serverTimestamp(),
+            title: title.substring(0, 40),
+            freeHtml: html,
+            originalText: plainText,
+            mode: 'free',
+            exercises: [],
+            sections: [],
+            totalVolume: 0,
+            aiStatus: 'processing',
+          });
+          docRef = res;
+        }
+
+        originalSectionsRef.current = JSON.stringify(sections);
+        if (onSave) onSave();
+        runBackgroundAI(docRef, [], title, workoutMode, plainText).catch(() => {});
+        return;
+      }
+
+      const title = sections.map(s => s.part).filter(Boolean).join(", ") || "운동 기록";
+      const exercises = sections.flatMap(s => s.items.map(it => ({ name: it.title }))).filter(ex => ex.name);
+      const originalText = sections.flatMap(s => s.items.map(it => it.body)).filter(Boolean).join("\n");
+      const sectionsData = sections.map(s => ({
+        part: s.part,
+        items: s.items.map(it => ({ title: it.title, body: it.body }))
+      }));
+      const roughVolume = parseVolume(sections);
+
       let docRef;
       if (initialData && initialData.docId) {
         docRef = doc(db, "logs", initialData.docId);
-        await updateDoc(docRef, { title, exercises, originalText, sections: sectionsData, totalVolume });
+        await updateDoc(docRef, { title, exercises, originalText, sections: sectionsData, totalVolume: roughVolume, aiStatus: 'processing' });
       } else {
         const res = await addDoc(collection(db, "logs"), {
-          type: "workout",
-          timestamp: serverTimestamp(),
-          uid, title, exercises, originalText, sections: sectionsData, totalVolume
+          type: "workout", timestamp: serverTimestamp(),
+          uid, title, exercises, originalText, sections: sectionsData, totalVolume: roughVolume, aiStatus: 'processing'
         });
         docRef = res;
       }
@@ -671,31 +964,8 @@ ${body}`;
       originalSectionsRef.current = JSON.stringify(sections);
       if (onSave) onSave();
 
-      try {
-        const workoutSummary = `운동부위: ${title}, 총 볼륨: ${totalVolume}kg, 이전 대비 분석: ${overloadMsg}`;
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`;
-        const prompt = `운동 기록을 분석해서 동기부여가 되는 한줄평을 써줘.
-필수 포함 문구: "${overloadMsg}"
-규칙:
-1. 반드시 저 문구가 제일 앞에 나오게 해.
-2. 30자 이내로 짧고 강렬하게 한국어로 써.
-3. 순수 텍스트만 반환해.
-정보: ${workoutSummary}`;
-
-        const res = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-        });
-        const json = await res.json();
-        if (json.candidates && json.candidates[0]) {
-          const parts = json.candidates[0].content.parts;
-          const aiComment = (parts.find(p => !p.thought) ?? parts[parts.length - 1]).text.trim();
-          await updateDoc(docRef, { aiComment });
-        }
-      } catch (aiErr) {
-        console.error("AI 한줄평 실패:", aiErr);
-      }
+      // 백그라운드 AI 처리 (컴포넌트 언마운트 후에도 계속 실행됨)
+      runBackgroundAI(docRef, sections, title, workoutMode).catch(() => {});
     } catch (e) {
       alert("저장 중 오류가 발생했습니다: " + e.message);
     }
@@ -724,7 +994,7 @@ ${body}`;
         </div>
         <div className="flex items-center justify-between px-4 h-14">
           <div className="flex items-center gap-2">
-            <button onClick={handleBackClick} className="flex items-center justify-center w-8 h-8 rounded-full bg-transparent">
+            <button onClick={handleBackClick} className="flex items-center justify-center w-8 h-8 rounded-full bg-transparent transition-all duration-100 active:scale-[0.85] active:opacity-50">
               <IcBack />
             </button>
             <h1 className="font-pretendard text-[20px] font-semibold text-black tracking-[-0.5px] leading-[36px] whitespace-nowrap m-0">
@@ -747,9 +1017,9 @@ ${body}`;
           <div className="flex items-center gap-4">
             <button
               onClick={() => { setFreeMode(p => !p); setShowColorPicker(null); }}
-              className={`w-6 h-6 flex items-center justify-center rounded transition-colors ${freeMode ? 'text-brand' : ''}`}
+              className="w-6 h-6 flex items-center justify-center rounded transition-colors"
             >
-              <IcKeyboard />
+              <IcKeyboard active={freeMode} />
             </button>
             {!freeMode && (
               <div className="relative">
@@ -774,15 +1044,28 @@ ${body}`;
               </div>
             )}
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <button
-              className={`w-6 h-6 flex items-center justify-center transition-all duration-100 active:scale-[0.99] ${freeMode || canUndo ? 'text-typo-normal opacity-100' : 'text-ui-3 opacity-40'}`}
+              onClick={() => setWorkoutMode(m => m === 'overload' ? 'deload' : 'overload')}
+              className={`flex items-center gap-1 px-2 py-1 rounded-full font-pretendard font-semibold text-[11px] tracking-[-0.2px] transition-transform duration-100 active:scale-[0.88] ${workoutMode === 'overload' ? 'bg-brand/10 text-brand' : 'bg-[#f07800]/10 text-[#f07800]'}`}
+              style={{ WebkitTapHighlightColor: 'transparent' }}
+            >
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                {workoutMode === 'overload'
+                  ? <path d="M12 19V5M5 12l7-7 7 7" />
+                  : <path d="M12 5v14M19 12l-7 7-7-7" />
+                }
+              </svg>
+              {workoutMode === 'overload' ? '과부하' : '디로딩'}
+            </button>
+            <button
+              className={`w-6 h-6 flex-none flex items-center justify-center p-0 leading-none transition-transform duration-100 active:scale-[0.85] ${freeMode || canUndo ? 'text-typo-normal opacity-100' : 'text-[#868E96] opacity-100'}`}
               onMouseDown={(e) => { e.preventDefault(); handleUndo(); }}
-            ><IcUndo /></button>
+            ><IcUndo size={18} /></button>
             <button
-              className={`w-6 h-6 flex items-center justify-center transition-all duration-100 active:scale-[0.99] ${freeMode || canRedo ? 'text-typo-normal opacity-100' : 'text-ui-3 opacity-40'}`}
+              className={`w-6 h-6 flex-none flex items-center justify-center p-0 leading-none transition-transform duration-100 active:scale-[0.85] ${freeMode || canRedo ? 'text-typo-normal opacity-100' : 'text-[#868E96] opacity-100'}`}
               onMouseDown={(e) => { e.preventDefault(); handleRedo(); }}
-            ><IcRedo /></button>
+            ><IcRedo size={18} /></button>
           </div>
         </div>
 
@@ -959,6 +1242,22 @@ ${body}`;
               )}
             </div>
 
+            {/* AI 루틴 근거 */}
+            {sectionAiTheories[sec.id] && (
+              <div className="mx-4 mt-2 mb-1 px-3 py-2.5 rounded-xl flex flex-col gap-1.5" style={{ background: '#eef2ff', border: '1px solid #c7d7fd' }}>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-brand font-pretendard">이 루틴의 근거</span>
+                  <button
+                    onClick={() => setSectionAiTheories(prev => { const n = { ...prev }; delete n[sec.id]; return n; })}
+                    className="w-4 h-4 flex items-center justify-center bg-transparent border-none cursor-pointer"
+                  >
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#868e96" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+                  </button>
+                </div>
+                <p className="text-[12px] text-typo-secondary font-pretendard leading-relaxed m-0">{sectionAiTheories[sec.id]}</p>
+              </div>
+            )}
+
             {/* 종목 항목들 */}
             {sec.items.map(item => (
               <WorkoutTaskItem
@@ -970,7 +1269,7 @@ ${body}`;
                 onBodyBlur={(val) => handleBodyBlur(sec.id, item.id, val)}
                 isAI={item.isAI}
                 prevMaxWeight={exerciseStats[item.title]}
-                onAiClick={(e) => openSectionPopover(sec.id, e, 'item')}
+                onAiClick={(e) => openSectionPopover(sec.id, e, 'item', item.id)}
                 isConverting={convertingItems.current.has(`${sec.id}_${item.id}`)}
               />
             ))}
@@ -1025,25 +1324,25 @@ ${body}`;
             className="fixed py-2 border border-[#dee2e6] rounded-[24px] z-[11] flex flex-col"
             style={{
               top: sectionPopoverPos.top,
-              left: 16,
+              left: sectionPopoverPos.left ?? 16,
               width: 279,
               background: 'linear-gradient(115deg, #EDECFF 1.7%, #E6DBFD 30.89%, #ECEFFB 64.69%, #EFFBED 100%)',
               boxShadow: '0 0 8px rgba(141,192,255,0.5), 0 0 32px rgba(215,231,255,0.5)'
             }}
           >
             <button
-              onClick={() => handleSectionAiRoutine(sectionPopover)}
+              onClick={() => handleSectionAiRoutine(sectionPopover, sectionPopoverSource, sectionPopoverItemId)}
               className="px-4 py-2 flex flex-col gap-1 w-full bg-transparent border-none outline-none text-left font-pretendard cursor-pointer"
             >
               <span className="text-body-m font-normal text-typo-normal tracking-[-0.4px] leading-lh-xs">AI 루틴</span>
-              <span className="text-body-s font-normal text-typo-secondary tracking-[-0.35px] leading-lh-2xs">기록에 기반해 관련 루틴을 자동으로 짜줘요</span>
+              <span className="text-body-s font-normal text-typo-secondary tracking-[-0.35px] leading-lh-2xs">{sectionPopoverSource === 'item' ? '해당 종목의 최적 세트 구성을 제안해줘요' : '기록에 기반해 관련 루틴을 자동으로 짜줘요'}</span>
             </button>
             <button
-              onClick={() => handleShowRecentRecords(sectionPopover)}
+              onClick={() => handleShowRecentRecords(sectionPopover, sectionPopoverSource, sectionPopoverItemId)}
               className="px-4 py-2 flex flex-col gap-1 w-full bg-transparent border-none outline-none text-left font-pretendard cursor-pointer"
             >
               <span className="text-body-m font-normal text-typo-normal tracking-[-0.4px] leading-lh-xs">최근 기록 보기</span>
-              <span className="text-body-s font-normal text-typo-secondary tracking-[-0.35px] leading-lh-2xs">해당 부위에 맞는 최근 운동 종목을 보여줘요</span>
+              <span className="text-body-s font-normal text-typo-secondary tracking-[-0.35px] leading-lh-2xs">{sectionPopoverSource === 'item' ? '해당 종목의 최근 기록을 보여줘요' : '해당 부위에 맞는 최근 운동 종목을 보여줘요'}</span>
             </button>
           </div>
         </>
@@ -1089,21 +1388,20 @@ ${body}`;
                         <span className="text-title-s font-semibold text-typo-strong tracking-[-0.5px] leading-[36px] font-pretendard">{sSec.part}</span>
                         {sIndex === 0 && <span className="text-body-s font-normal text-typo-secondary tracking-[-0.35px] leading-lh-2xs font-pretendard">{new Date().toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit' }).replace(/\.$/, '')}</span>}
                       </div>
-                      <div className="relative w-full -mt-2">
-                        <div className="text-body-s font-pretendard text-typo-normal tracking-[-0.35px] leading-lh-2xs whitespace-pre-wrap pr-4">
-                          {sSec.items.map((sIt, iIndex) => (
-                            <React.Fragment key={sIt.id}>
-                              <span className="font-semibold">{sIt.title}</span><br /><br />
-                              {sIt.body}
-                              {sIt.note && (
-                                <span className="block mt-2 px-2.5 py-1.5 rounded-lg bg-white/60 text-[11px] italic text-typo-secondary leading-relaxed">
-                                  💬 {sIt.note}
+                      <div className="relative w-full -mt-2 flex flex-col gap-4 pr-1">
+                        {sSec.items.map((sIt) => (
+                          <div key={sIt.id} className="flex flex-col gap-1.5">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-pretendard font-semibold text-[14px] text-typo-strong tracking-[-0.35px]">{sIt.title}</span>
+                              {exerciseVolumeDeltas[sIt.title] != null && (
+                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold font-pretendard tracking-[-0.2px] ${exerciseVolumeDeltas[sIt.title] >= 0 ? 'bg-[#e6f9f0] text-[#1a9e5c]' : 'bg-[#ffeef0] text-[#e03e52]'}`}>
+                                  {exerciseVolumeDeltas[sIt.title] > 0 ? '+' : ''}{exerciseVolumeDeltas[sIt.title]}%
                                 </span>
                               )}
-                              {iIndex < sSec.items.length - 1 && <><br /><br /></>}
-                            </React.Fragment>
-                          ))}
-                        </div>
+                            </div>
+                            <SummaryBodyRenderer body={sIt.body} note={sIt.note} />
+                          </div>
+                        ))}
                       </div>
                     </React.Fragment>
                   ))}
@@ -1112,15 +1410,17 @@ ${body}`;
               {!isBsLoading && parsedSections.length > 0 && (
                 <div className="flex justify-end flex-none pt-2">
                   <button onClick={() => {
-                    setSections(parsedSections.map(s => ({
-                      ...s,
-                      items: s.items.map(it => ({
-                        ...it,
-                        body: it.note ? `${it.body}\n\n💬 ${it.note}` : it.body,
+                    setSections(parsedSections.map((s, si) => ({
+                      id: Date.now() + si,
+                      part: s.part || '',
+                      items: (s.items || []).map((it, ii) => ({
+                        id: Date.now() + si * 1000 + ii,
+                        title: it.title || '',
+                        body: it.note ? `${it.body || ''}\n\n💬 ${it.note}` : (it.body || ''),
                       }))
                     })));
                     setBsOpen(false);
-                  }} className="background-transparent border-none outline-none cursor-pointer text-body-s font-medium text-brand font-pretendard tracking-[-0.35px]">
+                  }} className="bg-transparent border-none outline-none cursor-pointer text-body-s font-medium text-brand font-pretendard tracking-[-0.35px]">
                     붙여넣기
                   </button>
                 </div>
@@ -1183,7 +1483,7 @@ ${body}`;
               const rec = recentSheet.records[recentSheet.currentIdx];
               return (
                 <div
-                  className="w-full rounded-2xl p-4 flex flex-col gap-6 h-[320px]"
+                  className="w-full rounded-2xl p-4 flex flex-col gap-4 min-h-[320px]"
                   style={{ background: 'linear-gradient(105.71deg, #EDECFF 1.7%, #E6DBFD 30.89%, #ECEFFB 64.69%, #EFFBED 100%)' }}
                   onTouchStart={(e) => { touchStartX.current = e.touches[0].clientX; }}
                   onTouchEnd={(e) => {
@@ -1213,20 +1513,36 @@ ${body}`;
                     ))}
                   </div>
 
-                  {/* 액션 버튼 */}
-                  <div className="flex items-center justify-end gap-2 flex-shrink-0">
-                    <button
-                      onClick={() => handleUseRecord(true)}
-                      className="px-2 py-2 font-pretendard text-body-s font-medium text-brand tracking-[-0.35px] bg-transparent border-none outline-none cursor-pointer"
-                    >
-                      증량하기
-                    </button>
-                    <button
-                      onClick={() => handleUseRecord(false)}
-                      className="px-2 py-2 font-pretendard text-body-s font-medium text-typo-normal tracking-[-0.35px] bg-transparent border-none outline-none cursor-pointer"
-                    >
-                      이대로 하기
-                    </button>
+                  {/* 증량 비율 + 액션 버튼 */}
+                  <div className="flex flex-col gap-2 flex-shrink-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-typo-secondary font-pretendard flex-none">증량 비율</span>
+                      <div className="flex gap-1.5">
+                        {[2.5, 5, 7.5, 10].map(p => (
+                          <button
+                            key={p}
+                            onClick={() => setIncrementPercent(p)}
+                            className={`px-2 py-0.5 rounded-full text-[11px] font-semibold font-pretendard transition-colors ${incrementPercent === p ? 'bg-brand text-white' : 'bg-white/60 text-typo-secondary'}`}
+                          >
+                            +{p}%
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => handleUseRecord(true)}
+                        className="px-2 py-2 font-pretendard text-body-s font-medium text-brand tracking-[-0.35px] bg-transparent border-none outline-none cursor-pointer"
+                      >
+                        증량하기
+                      </button>
+                      <button
+                        onClick={() => handleUseRecord(false)}
+                        className="px-2 py-2 font-pretendard text-body-s font-medium text-typo-normal tracking-[-0.35px] bg-transparent border-none outline-none cursor-pointer"
+                      >
+                        이대로 하기
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
