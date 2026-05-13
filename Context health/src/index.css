@@ -75,24 +75,28 @@ body {
 
 @keyframes slideInFromRight {
   from { transform: translateX(100%); }
-  to   { transform: translateX(0); }
+  to   { transform: none; }
 }
 @keyframes slideInFromLeft {
   from { transform: translateX(-100%); }
-  to   { transform: translateX(0); }
+  to   { transform: none; }
 }
 
 .fab-menu {
-  transition: all .2s ease-out;
+  transition: opacity .15s ease-out;
   opacity: 0;
   pointer-events: none;
-  transform: translateY(10px);
 }
 
 .fab-menu.open {
   opacity: 1;
   pointer-events: auto;
-  transform: translateY(0)
+  animation: fabMenuEnter .2s ease-out;
+}
+
+@keyframes fabMenuEnter {
+  from { transform: translateY(8px); }
+  to { transform: translateY(0); }
 }
 
 .bottom-sheet {
@@ -198,6 +202,16 @@ textarea:focus {
   100% {
     background-position: 0% 50%;
   }
+}
+
+@keyframes popoverGradientIn {
+  0%   { background-position: 0% 50%; }
+  100% { background-position: 100% 50%; }
+}
+
+@keyframes bsGradientEnter {
+  0%   { opacity: 0; transform: translateX(20px); }
+  100% { opacity: 1; transform: none; }
 }
 
 @keyframes loginGradientIn {

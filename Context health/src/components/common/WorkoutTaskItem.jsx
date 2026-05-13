@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { IcSpark } from '../icons/Icons';
 import { AutoTextarea } from './AutoTextarea';
 import { filterExercises } from '../../utils/exerciseData';
+import Pressable from './Pressable';
 
 function parseMaxWeightFromText(text) {
   if (!text) return null;
@@ -16,12 +17,16 @@ function detectUnitType(line) {
   return null;
 }
 
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
 const BODY_SET_TYPES = [
-  { pattern: /\(드랍(?:\s*세트?)?\)|드랍\s*세트/i, label: '드랍', bg: '#fff3e0', color: '#e65100' },
-  { pattern: /\(슈퍼(?:\s*세트?)?\)|슈퍼\s*세트/i, label: '슈퍼세트', bg: '#f3e5f5', color: '#7b1fa2' },
-  { pattern: /\(컴파운드(?:\s*세트?)?\)|컴파운드\s*세트/i, label: '컴파운드', bg: '#e3f2fd', color: '#1565c0' },
-  { pattern: /\(강제\s*반복\)|강제\s*반복/i, label: '강제반복', bg: '#fce4ec', color: '#c62828' },
-  { pattern: /\(저\s*중량\)|저중량/i, label: '저중량고반복', bg: '#e8f5e9', color: '#2e7d32' },
+  { pattern: /\(드랍(?:\s*세트?)?\)|드랍\s*세트/i, label: '드랍', color: '#d47800' },
+  { pattern: /\(슈퍼(?:\s*세트?)?\)|슈퍼\s*세트/i, label: '슈퍼세트', color: '#7b1fa2' },
+  { pattern: /\(컴파운드(?:\s*세트?)?\)|컴파운드\s*세트/i, label: '컴파운드', color: '#1565c0' },
+  { pattern: /\(강제\s*반복\)|강제\s*반복/i, label: '강제반복', color: '#c62828' },
+  { pattern: /\(저\s*중량\)|저중량/i, label: '저중량고반복', color: '#2e7d32' },
 ];
 
 function buildBodySegments(body) {
@@ -61,12 +66,14 @@ function buildBodySegments(body) {
   return segments;
 }
 
-const WorkoutTaskItem = ({ title, body, onTitleChange, onBodyChange, onBodyBlur, isAI = false, prevMaxWeight, onAiClick, isConverting }) => {
+const WorkoutTaskItem = ({ title, body, onTitleChange, onBodyChange, onBodyBlur, isAI = false, prevMaxWeight, onAiClick, aiActive = false, isConverting }) => {
   const currentMax = useMemo(() => parseMaxWeightFromText(body), [body]);
   const delta = prevMaxWeight != null && currentMax != null ? currentMax - prevMaxWeight : null;
   const [suggestions, setSuggestions] = useState([]);
   const [editingBody, setEditingBody] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(!title);
   const [activeTooltip, setActiveTooltip] = useState(null);
+  const titleInputRef = useRef(null);
 
   const hasGroups = useMemo(() =>
     body ? (
@@ -78,34 +85,63 @@ const WorkoutTaskItem = ({ title, body, onTitleChange, onBodyChange, onBodyBlur,
 
   const segments = useMemo(() => buildBodySegments(body), [body]);
 
-  const renderChip = (line, key) => {
+  const renderKgChip = (line, key, variant = 'inline') => {
     const unitType = detectUnitType(line);
     if (!unitType) return null;
     return (
       <div className="relative flex-none">
-        {activeTooltip === key && (
+        {activeTooltip?.key === key && (
           <>
             <div
               className="fixed inset-0 z-[5]"
               onClick={(e) => { e.stopPropagation(); setActiveTooltip(null); }}
             />
             <div
-              className="absolute bottom-full right-0 mb-2 w-[176px] px-3 py-2.5 rounded-2xl text-[11px] font-pretendard leading-relaxed z-[6]"
-              style={{ background: '#E5F4EA', color: '#868E96' }}
+              className="fixed px-3 py-2.5 rounded-2xl text-[11px] font-pretendard leading-relaxed z-[6]"
+              style={{
+                background: '#E5F4EA',
+                color: '#868E96',
+                left: activeTooltip.left,
+                top: activeTooltip.top,
+                width: activeTooltip.width,
+              }}
             >
               {unitType === 'lb'
                 ? '1lb ≈ 0.45kg로 계산해서 총 볼륨에 반영해드려요 :)'
                 : '한 칸을 5kg으로 계산해서 총 볼륨에 반영해드려요 :)'}
               <div
-                className="absolute right-3 w-0 h-0"
-                style={{ top: 'calc(100% - 1px)', borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: '6px solid #E5F4EA' }}
+                className="absolute w-0 h-0"
+                style={{
+                  left: activeTooltip.arrowLeft,
+                  top: 'calc(100% - 1px)',
+                  borderLeft: '5px solid transparent',
+                  borderRight: '5px solid transparent',
+                  borderTop: '6px solid #E5F4EA'
+                }}
               />
             </div>
           </>
         )}
         <button
-          onClick={(e) => { e.stopPropagation(); setActiveTooltip(prev => prev === key ? null : key); }}
-          className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold font-pretendard bg-[#e6f9f0] text-[#1a9e5c] whitespace-nowrap"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (activeTooltip?.key === key) {
+              setActiveTooltip(null);
+              return;
+            }
+            const rect = e.currentTarget.getBoundingClientRect();
+            const width = Math.min(280, window.innerWidth - 32);
+            const center = rect.left + rect.width / 2;
+            const left = clamp(center - width / 2, 16, window.innerWidth - width - 16);
+            setActiveTooltip({
+              key,
+              width,
+              left,
+              top: Math.max(16, rect.top - 84),
+              arrowLeft: clamp(center - left - 5, 12, width - 22),
+            });
+          }}
+          className={`${variant === 'group' ? 'bg-white' : 'bg-[rgba(72,173,0,0.1)]'} inline-flex h-6 items-center justify-center px-3 rounded-full text-[11px] font-normal font-pretendard leading-4 tracking-[-0.275px] text-[#48ad00] whitespace-nowrap`}
         >
           kg 변환 완료
         </button>
@@ -113,46 +149,77 @@ const WorkoutTaskItem = ({ title, body, onTitleChange, onBodyChange, onBodyBlur,
     );
   };
 
+  const renderTypeChip = (type) => (
+    <span
+      key={type.label}
+      className="bg-white inline-flex h-6 items-center justify-center px-3 rounded-full text-[11px] font-normal font-pretendard leading-4 tracking-[-0.275px] whitespace-nowrap"
+      style={{ color: type.color }}
+    >
+      {type.label}
+    </span>
+  );
+
   return (
     <div className={`group flex flex-col bg-white border-b border-ui-2 transition-all ${isAI ? 'bg-brand/5' : ''}`}>
       {/* 종목 입력 영역 */}
-      <div className="flex items-center gap-2 px-4 pt-4 pb-1">
-        <input
-          value={title}
-          onChange={(e) => {
-            onTitleChange(e.target.value);
-            setSuggestions(filterExercises(e.target.value));
-          }}
-          onBlur={() => setTimeout(() => setSuggestions([]), 150)}
-          placeholder="오늘의 운동 종목을 적어주세요"
-          className="font-pretendard text-body-m font-semibold text-typo-normal tracking-[-0.4px] leading-lh-xs bg-transparent border-none outline-none w-full p-0 flex-1 placeholder:text-ui-4"
-        />
-        {delta !== null && (
-          <span className={`flex-none px-2 py-0.5 rounded-full text-[11px] font-semibold font-pretendard tracking-[-0.2px] ${
-            delta >= 0 ? 'bg-[#e6f9f0] text-[#1a9e5c]' : 'bg-[#ffeef0] text-[#e03e52]'
-          }`}>
-            저번대비 {delta >= 0 ? '+' : ''}{delta}kg
-          </span>
-        )}
-        <button
+      <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-1">
+        <div className="flex flex-1 min-w-0 items-center gap-2 flex-wrap">
+          {editingTitle || !title ? (
+            <input
+              ref={titleInputRef}
+              value={title}
+              onChange={(e) => {
+                onTitleChange(e.target.value);
+                setSuggestions(filterExercises(e.target.value));
+              }}
+              onBlur={() => {
+                setEditingTitle(false);
+                setTimeout(() => setSuggestions([]), 150);
+              }}
+              placeholder="오늘의 운동 종목을 적어주세요"
+              className="font-pretendard text-body-m font-semibold text-typo-normal tracking-[-0.4px] leading-lh-xs bg-transparent border-none outline-none p-0 placeholder:text-ui-4 w-full flex-1 min-w-[120px]"
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setEditingTitle(true);
+                requestAnimationFrame(() => titleInputRef.current?.focus());
+              }}
+              className="font-pretendard text-body-m font-semibold text-typo-normal tracking-[-0.4px] leading-lh-xs bg-transparent border-none outline-none p-0 text-left max-w-full truncate"
+            >
+              {title}
+            </button>
+          )}
+          {delta !== null && (
+            <span className={`flex-none px-3 py-1 rounded-[12px] text-[11px] font-medium font-pretendard leading-4 tracking-[-0.275px] ${
+              delta >= 0 ? 'bg-[rgba(0,150,50,0.1)] text-[#009632]' : 'bg-[#ffeef0] text-[#e03e52]'
+            }`}>
+              저번대비 {delta >= 0 ? '+' : ''}{delta}kg
+            </span>
+          )}
+        </div>
+        <Pressable
+          pressScale={0.88}
           onClick={onAiClick}
-          className={`w-6 h-6 flex-none flex items-center justify-center transition-all duration-100 active:scale-[0.80] active:opacity-60 ${isAI ? 'text-brand' : 'text-ui-3 group-hover:text-ui-5'}`}
+          className={`w-6 h-6 flex-none flex items-center justify-center ${isAI ? 'text-brand' : 'text-ui-3 group-hover:text-ui-5'}`}
         >
-          <IcSpark size={18} />
-        </button>
+          <IcSpark active={aiActive} />
+        </Pressable>
       </div>
 
       {/* 종목 자동완성 칩 */}
       {suggestions.length > 0 && (
         <div className="flex overflow-x-auto gap-2 px-4 pt-0.5 pb-1 scrollbar-hide">
           {suggestions.map(s => (
-            <button
+            <Pressable
               key={s}
+              pressScale={0.94}
               onMouseDown={e => { e.preventDefault(); onTitleChange(s); setSuggestions([]); }}
-              className="flex-none px-3 py-1 rounded-full bg-ui-2 text-typo-secondary text-[13px] font-medium font-pretendard tracking-[-0.3px] whitespace-nowrap transition-all duration-100 active:scale-[0.94] active:bg-ui-3"
+              className="flex-none px-3 py-1 rounded-full bg-ui-2 text-typo-secondary text-[13px] font-medium font-pretendard tracking-[-0.3px] whitespace-nowrap"
             >
               {s}
-            </button>
+            </Pressable>
           ))}
         </div>
       )}
@@ -169,7 +236,7 @@ const WorkoutTaskItem = ({ title, body, onTitleChange, onBodyChange, onBodyBlur,
             className={`font-pretendard text-body-s font-medium tracking-[-0.35px] leading-5 bg-transparent border-none outline-none w-full p-0 placeholder:text-ui-4/70 ${isAI ? 'text-[#0066ff]' : 'text-typo-secondary'}`}
           />
         ) : (
-          <div className="flex flex-col gap-0.5 cursor-text" onClick={() => setEditingBody(true)}>
+          <div className="flex flex-col gap-1 cursor-text" onClick={() => setEditingBody(true)}>
             {segments.map((seg, idx) => {
               if (seg.type === 'note') {
                 return (
@@ -179,27 +246,25 @@ const WorkoutTaskItem = ({ title, body, onTitleChange, onBodyChange, onBodyBlur,
                 );
               }
               if (seg.type === 'group') {
-                const mainType = seg.types[0];
+                const hasUnitChip = seg.lines.some(line => detectUnitType(line));
                 return (
-                  <div key={idx} className="relative rounded-xl px-2.5 pt-2 pb-5"
-                    style={{ background: mainType?.bg || '#fff3e0', margin: '4px 0' }}>
+                  <div key={idx} className="rounded-[16px] px-2 pt-4 pb-3 my-1 flex flex-col gap-4 bg-[rgba(212,120,0,0.1)]">
                     {seg.lines.map((line, li) => (
-                      <div key={li} className="flex items-center gap-1.5 py-0.5">
-                        <span className="text-[13px] font-pretendard text-typo-secondary leading-5 flex-1">{line}</span>
-                        {renderChip(line, `g_${idx}_${li}`)}
-                      </div>
+                      <div key={li} className="text-[14px] font-medium font-pretendard text-[#646d76] leading-[22px] tracking-[-0.35px]">{line}</div>
                     ))}
-                    {mainType && (
-                      <span className="absolute bottom-1.5 right-2.5 text-[10px] font-bold font-pretendard"
-                        style={{ color: mainType.color }}>{mainType.label}</span>
+                    {(seg.types.length > 0 || hasUnitChip) && (
+                      <div className="flex items-start gap-1 flex-wrap">
+                        {seg.types.map(renderTypeChip)}
+                        {hasUnitChip && renderKgChip(seg.lines.find(line => detectUnitType(line)), `g_${idx}_kg`, 'group')}
+                      </div>
                     )}
                   </div>
                 );
               }
               return (
-                <div key={idx} className="flex items-center gap-1.5 py-0.5">
-                  <span className="text-[13px] font-pretendard text-typo-secondary leading-5 flex-1">{seg.line}</span>
-                  {renderChip(seg.line, `n_${idx}`)}
+                <div key={idx} className="flex items-center gap-2 py-2">
+                  <span className="text-[14px] font-medium font-pretendard text-[#646d76] leading-5 tracking-[-0.35px] flex-1">{seg.line}</span>
+                  {renderKgChip(seg.line, `n_${idx}`)}
                 </div>
               );
             })}

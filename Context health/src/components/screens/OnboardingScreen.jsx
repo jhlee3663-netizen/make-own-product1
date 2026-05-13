@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Pressable from '../common/Pressable';
 
 const GOALS = ['체중 감량', '근육 증량', '체형 유지', '건강 증진'];
 const STEPS = ['목표', '체형 정보', '활동 수준'];
@@ -61,10 +62,12 @@ export default function OnboardingScreen({ user, onComplete }) {
         {step === 0 && (
           <div className="flex flex-col gap-3">
             {GOALS.map((g) => (
-              <button
+              <Pressable
                 key={g}
+                pressScale={0.985}
+                as="div"
                 onClick={() => setForm((f) => ({ ...f, goal: g }))}
-                className="flex items-center justify-between px-5 py-4 rounded-[16px] transition-all duration-100 active:scale-[0.985] active:opacity-70 text-left"
+                className="flex items-center justify-between px-5 py-4 rounded-[16px] text-left"
                 style={form.goal === g
                   ? { background: '#eef4ff', border: '2px solid rgba(52, 118, 238, 0.3)' }
                   : { background: '#f8f9fa', border: '2px solid transparent' }
@@ -82,7 +85,7 @@ export default function OnboardingScreen({ user, onComplete }) {
                     <path d="M8 12l3 3 5-5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 )}
-              </button>
+              </Pressable>
             ))}
           </div>
         )}
@@ -95,17 +98,18 @@ export default function OnboardingScreen({ user, onComplete }) {
               <p className="font-pretendard font-semibold text-[13px] text-[#868e96] mb-2 tracking-[-0.325px]">성별</p>
               <div className="flex gap-2">
                 {[{ id: 'male', label: '남성' }, { id: 'female', label: '여성' }].map(({ id, label }) => (
-                  <button
+                  <Pressable
                     key={id}
+                    pressScale={0.95}
                     onClick={() => setForm((f) => ({ ...f, gender: id }))}
-                    className="flex-1 py-3 rounded-[12px] font-pretendard font-semibold text-[15px] tracking-[-0.375px] transition-all duration-100 active:scale-[0.95] active:opacity-70"
+                    className="flex-1 py-3 rounded-[12px] font-pretendard font-semibold text-[15px] tracking-[-0.375px]"
                     style={form.gender === id
                       ? { background: '#3476EE', color: '#fff' }
                       : { background: '#f1f3f5', color: '#495057' }
                     }
                   >
                     {label}
-                  </button>
+                  </Pressable>
                 ))}
               </div>
             </div>
@@ -142,10 +146,12 @@ export default function OnboardingScreen({ user, onComplete }) {
               { id: 'moderate',   label: '보통 활동',     desc: '주 3~5회 운동',                    emoji: '🏃' },
               { id: 'active',     label: '활발한 활동',   desc: '주 6~7회 강도 높은 운동',          emoji: '💪' },
             ].map(({ id, label, desc, emoji }) => (
-              <button
+              <Pressable
                 key={id}
+                pressScale={0.985}
+                as="div"
                 onClick={() => setForm((f) => ({ ...f, activityLevel: id }))}
-                className="flex items-center gap-4 px-5 py-4 rounded-[16px] transition-all duration-100 active:scale-[0.985] active:opacity-70 text-left"
+                className="flex items-center gap-4 px-5 py-4 rounded-[16px] text-left"
                 style={form.activityLevel === id
                   ? { background: '#eef4ff', border: '2px solid rgba(52, 118, 238, 0.3)' }
                   : { background: '#f8f9fa', border: '2px solid transparent' }
@@ -167,7 +173,7 @@ export default function OnboardingScreen({ user, onComplete }) {
                     <path d="M8 12l3 3 5-5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 )}
-              </button>
+              </Pressable>
             ))}
           </div>
         )}
@@ -177,13 +183,14 @@ export default function OnboardingScreen({ user, onComplete }) {
 
       {/* 하단 버튼 */}
       <div className="flex-none px-5 pb-10 pt-4">
-        <button
+        <Pressable
+          pressScale={0.97}
           onClick={next}
           disabled={!canNext}
-          className="w-full h-[56px] bg-[#3476EE] rounded-[16px] font-pretendard font-bold text-[16px] text-white tracking-[-0.4px] disabled:opacity-40 transition-all duration-100 active:scale-[0.97] active:brightness-90"
+          className="w-full h-[56px] bg-[#3476EE] rounded-[16px] font-pretendard font-bold text-[16px] text-white tracking-[-0.4px] disabled:opacity-40"
         >
           {step === STEPS.length - 1 ? '시작하기 🚀' : '다음'}
-        </button>
+        </Pressable>
         {step > 0 && (
           <button
             onClick={() => setStep((s) => s - 1)}

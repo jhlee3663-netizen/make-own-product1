@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import Pressable from './Pressable';
 
 export default function ConfirmModal({
   isOpen,
@@ -61,19 +62,21 @@ export default function ConfirmModal({
           </p>
         )}
         <div className="flex w-full gap-2 mt-1">
-          <button
+          <Pressable
             ref={cancelButtonRef}
+            pressScale={0.97}
             onClick={onCancel}
-            className="flex-1 h-12 bg-[#F2F4F6] text-[#4E5968] font-pretendard font-medium text-[16px] rounded-[12px] transition-all duration-100 active:scale-[0.97] active:bg-[#E5E8EB] outline-none focus-visible:ring-2 focus-visible:ring-[#3182F6]/30"
+            className="flex-1 h-12 bg-[#F2F4F6] text-[#4E5968] font-pretendard font-medium text-[16px] rounded-[12px] outline-none focus-visible:ring-2 focus-visible:ring-[#3182F6]/30"
           >
             {cancelText}
-          </button>
-          <button
+          </Pressable>
+          <Pressable
+            pressScale={0.97}
             onClick={onConfirm}
-            className={`flex-1 h-12 font-pretendard font-medium text-[16px] rounded-[12px] transition-all duration-100 active:scale-[0.97] active:brightness-90 outline-none focus-visible:ring-2 focus-visible:ring-[#3182F6]/30 ${confirmClass}`}
+            className={`flex-1 h-12 font-pretendard font-medium text-[16px] rounded-[12px] outline-none focus-visible:ring-2 focus-visible:ring-[#3182F6]/30 ${confirmClass}`}
           >
             {confirmText}
-          </button>
+          </Pressable>
         </div>
       </div>
     </div>

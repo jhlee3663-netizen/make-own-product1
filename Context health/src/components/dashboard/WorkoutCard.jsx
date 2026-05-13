@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { QuoteIcon } from '../icons/Icons';
+import Pressable from '../common/Pressable';
 
-const WorkoutCard = ({ data, onCardClick, onDelete, isDeleting }) => {
+const WorkoutCard = ({ data, onCardClick, onDelete, isDeleting, onRetryAI }) => {
   if (!data) return null;
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -11,10 +12,11 @@ const WorkoutCard = ({ data, onCardClick, onDelete, isDeleting }) => {
     exercises = [],
     aiComment,
     aiStatus,
+    aiError,
   } = data;
   const isProcessing = aiStatus === 'processing' || aiStatus === 'summarized';
+  const isError = aiStatus === 'error';
 
-  // 타임스탬프 포맷 (25. 1. 9)
   const dt = data.timestamp ? new Date(data.timestamp.seconds * 1000) : new Date();
   const ds = `${String(dt.getFullYear()).slice(2)}. ${dt.getMonth() + 1}. ${dt.getDate()}`;
 
@@ -22,12 +24,14 @@ const WorkoutCard = ({ data, onCardClick, onDelete, isDeleting }) => {
 
   return (
     <div className={`px-4 py-2 transition-all duration-300 ${isDeleting ? 'card-exit-wrapper' : 'card-enter'}`}>
-      <div 
+      <Pressable
+        as="div"
+        pressScale={0.985}
         onClick={() => onCardClick(data)}
-        className="bg-white rounded-[16px] shadow-[0_0_25px_rgba(3,27,38,0.08)] cursor-pointer border border-transparent hover:border-ui-3 transition-all duration-150 active:scale-[0.985] active:shadow-[0_0_12px_rgba(3,27,38,0.06)] overflow-hidden"
+        className="bg-white rounded-[16px] shadow-[0_0_25px_rgba(3,27,38,0.08)] cursor-pointer border border-transparent hover:border-ui-3 overflow-hidden"
       >
         <div className="p-4 flex flex-col gap-4">
-          
+
           {/* Header */}
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
@@ -37,30 +41,31 @@ const WorkoutCard = ({ data, onCardClick, onDelete, isDeleting }) => {
                 </p>
               </div>
               <div className="relative">
-                <button 
+                <Pressable
+                  pressScale={0.85}
                   onClick={(e) => {
                     e.stopPropagation();
                     setMenuOpen(!menuOpen);
-                  }} 
-                  className={`w-6 h-6 flex items-center justify-center rounded-full transition-all duration-100 active:scale-[0.85] active:opacity-60 ${menuOpen ? 'bg-ui-2' : 'hover:bg-ui-2'}`}
+                  }}
+                  className={`w-6 h-6 flex items-center justify-center rounded-full ${menuOpen ? 'bg-ui-2' : 'hover:bg-ui-2'}`}
                 >
                   <svg width="20" height="4" viewBox="0 0 20 4" fill="none">
                     <circle cx="2" cy="2" r="2" fill="#ADB5BD"/>
                     <circle cx="10" cy="2" r="2" fill="#ADB5BD"/>
                     <circle cx="18" cy="2" r="2" fill="#ADB5BD"/>
                   </svg>
-                </button>
+                </Pressable>
                 {menuOpen && (
                   <>
                     <div onClick={(e) => { e.stopPropagation(); setMenuOpen(false); }} className="fixed inset-0 z-[98]" />
                     <div className="absolute top-8 right-0 bg-white rounded-[12px] shadow-lg py-1 z-[99] min-w-[120px]" onClick={e => e.stopPropagation()}>
-                      <button 
+                      <button
                         onClick={(e) => {
                           e.stopPropagation();
                           if (onDelete) onDelete(data);
                           setMenuOpen(false);
                         }}
-                        className="flex w-full px-4 py-[10px] text-body-s text-[#e03131] font-medium bg-none border-none text-left transition-all duration-100 active:opacity-60 active:bg-[#fff5f5]"
+                        className="flex w-full px-4 py-[10px] text-body-s text-[#e03131] font-medium bg-none border-none text-left active:opacity-60 active:bg-[#fff5f5]"
                       >
                         🗑️ 삭제하기
                       </button>
@@ -87,9 +92,7 @@ const WorkoutCard = ({ data, onCardClick, onDelete, isDeleting }) => {
                   <div className="bg-white h-[48px] w-full rounded-[8px] flex items-center justify-center overflow-hidden">
                     {ex.thumbnail ? (
                       <img src={ex.thumbnail} alt={ex.name} className="w-full h-full object-cover" />
-                    ) : (
-                      null
-                    )}
+                    ) : null}
                   </div>
                   <p className="font-pretendard font-medium text-[14px] text-[#495057] tracking-[-0.35px] text-center w-full truncate">
                     {ex.name}
@@ -97,7 +100,6 @@ const WorkoutCard = ({ data, onCardClick, onDelete, isDeleting }) => {
                 </div>
               ))
             ) : (
-              // 빈 상태일 경우 시안대로 더미 카드를 보여주거나 안내 메시지 표시
               <>
                 <div className="bg-[#f1f3f5] rounded-[16px] p-2 flex flex-col items-center gap-2 shrink-0 w-[80px]">
                   <div className="bg-white h-[48px] w-full rounded-[8px]" />
@@ -122,6 +124,19 @@ const WorkoutCard = ({ data, onCardClick, onDelete, isDeleting }) => {
             <div className="w-3 h-3 flex-none border-2 border-brand/20 border-t-brand rounded-full animate-spin" />
             <p className="font-pretendard text-[13px] text-ui-4 tracking-[-0.3px] m-0">AI가 기록을 정리하고 있어요...</p>
           </div>
+        ) : isError ? (
+          <div className="border-t border-[#f1f3f5] px-4 py-3 flex gap-2 items-center justify-between bg-white">
+            <p className="font-pretendard text-[13px] text-[#e03e52] tracking-[-0.3px] m-0 flex-1 truncate">AI 정리 실패 {aiError ? `(${aiError})` : ''}</p>
+            {onRetryAI && (
+              <Pressable
+                pressScale={0.92}
+                onClick={(e) => { e.stopPropagation(); onRetryAI(data); }}
+                className="flex-none text-[12px] font-semibold text-brand bg-brand/10 px-2 py-1 rounded-full"
+              >
+                재시도
+              </Pressable>
+            )}
+          </div>
         ) : aiComment ? (
           <div className="border-t border-[#f1f3f5] p-4 flex gap-2 items-start bg-white">
             <QuoteIcon gid={gid} />
@@ -132,7 +147,7 @@ const WorkoutCard = ({ data, onCardClick, onDelete, isDeleting }) => {
             </div>
           </div>
         ) : null}
-      </div>
+      </Pressable>
     </div>
   );
 };

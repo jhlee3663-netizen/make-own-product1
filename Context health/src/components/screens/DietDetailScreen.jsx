@@ -5,6 +5,9 @@ import { IcBack, IcMore, IcSpark, QuoteIcon, IcPencil } from '../icons/Icons';
 import { AutoTextarea } from '../common/AutoTextarea';
 import DonutChart from '../dashboard/DonutChart';
 import ConfirmModal from '../common/ConfirmModal';
+import Pressable from '../common/Pressable';
+import { getDietSummaryComment } from '../../utils/dietFeedback';
+import { estimateFoodNutrition, parseFoodMemo, resolveFoodNutrition, searchMfdsFoods } from '../../utils/nutritionLookup';
 
 const DEFAULT_SECTIONS = [
   { id: 'breakfast',   name: '아침',     placeholder: '아침에 먹은 식단을 적어주세요\n(예: 고구마 하나 우유 한잔)' },
@@ -164,7 +167,9 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
   const [searchModal, setSearchModal] = useState(null); // secId | null
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResult, setSearchResult] = useState(null);
+  const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching]     = useState(false);
+  const [estimatingSearch, setEstimatingSearch] = useState(false);
   const searchInputRef = useRef(null);
   const mainRef = useRef(null);
   const compactBarRef = useRef(null);
@@ -264,30 +269,18 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
     if (!text) return;
     analyzingIds.current.add(secId);
     setAnalyzingVersion(v => v + 1);
-    const GEMINI_KEY = import.meta.env.VITE_GEMINI_KEY;
     try {
-      const prompt = `다음 먹은 음식 메모를 분석해 순수 JSON 배열만 반환해라. 설명 없이 JSON만.
-형식: [{"name": "음식명(수량포함)", "kcal": 숫자(정수), "carb": 숫자(그램정수), "protein": 숫자(그램정수), "fat": 숫자(그램정수)}]
-모든 수치는 반드시 숫자(number) 타입. 문자열 불가.
-메모: "${text}"`;
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) }
-      );
-      const json = await res.json();
-      if (!json.candidates) throw new Error('AI 응답 없음');
-      const cp = json.candidates[0].content.parts;
-      let raw = (cp.find(p => !p.thought) ?? cp[cp.length - 1]).text;
-      const match = raw.match(/\[[\s\S]*\]/);
-      if (!match) throw new Error('JSON 파싱 실패');
-      const newItems = JSON.parse(match[0]).map(item => ({
+      const parsedFoods = await parseFoodMemo(text);
+      const resolvedFoods = await Promise.all(parsedFoods.map(resolveFoodNutrition));
+      const newItems = resolvedFoods.map(item => ({
         id:      Math.random().toString(36).slice(2, 11),
         name:    String(item.name    || ''),
         kcal:    Number(item.kcal    || 0),
-        carb:    Number(item.carb    || item.carbohydrate || 0),
+        carb:    Number(item.carb    || 0),
         protein: Number(item.protein || 0),
         fat:     Number(item.fat     || 0),
+        source:  item.source || 'ai',
+        matchedName: item.matchedName || null,
       }));
       setSections(prev => prev.map(sec =>
         sec.id === secId ? { ...sec, items: [...(sec.items || []), ...newItems] } : sec
@@ -307,29 +300,14 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
     if (!searchQuery.trim()) return;
     setSearching(true);
     setSearchResult(null);
-    const GEMINI_KEY = import.meta.env.VITE_GEMINI_KEY;
+    setSearchResults([]);
     try {
-      const prompt = `음식 "${searchQuery}"의 영양성분을 알려줘. 순수 JSON 객체만 반환:
-{"name": "음식명(수량포함)", "kcal": 숫자, "carb": 숫자, "protein": 숫자, "fat": 숫자}
-수치는 정수. 설명 없이 JSON만.`;
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) }
-      );
-      const json = await res.json();
-      const cp = json.candidates?.[0]?.content?.parts;
-      if (!cp) throw new Error('응답 없음');
-      let raw = (cp.find(p => !p.thought) ?? cp[cp.length - 1]).text;
-      const match = raw.match(/\{[\s\S]*\}/);
-      if (!match) throw new Error('파싱 실패');
-      const item = JSON.parse(match[0]);
-      setSearchResult({
-        id: Math.random().toString(36).slice(2, 11),
-        name: String(item.name || searchQuery),
-        kcal: Number(item.kcal || 0), carb: Number(item.carb || 0),
-        protein: Number(item.protein || 0), fat: Number(item.fat || 0),
-      });
+      const mfdsItems = await searchMfdsFoods(searchQuery);
+      setSearchResults(mfdsItems);
+      if (mfdsItems.length === 0) {
+        const item = await estimateFoodNutrition(searchQuery);
+        setSearchResult(normalizeSearchItem(item));
+      }
     } catch (e) {
       alert('검색 실패: ' + e.message);
     } finally {
@@ -337,14 +315,64 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
     }
   }
 
-  function handleAddSearchResult() {
-    if (!searchResult || !searchModal) return;
-    const item = { ...searchResult, id: Math.random().toString(36).slice(2, 11) };
+  function normalizeSearchItem(item) {
+    return {
+      id: Math.random().toString(36).slice(2, 11),
+      name: String(item.name || searchQuery),
+      kcal: Number(item.kcal || 0),
+      carb: Number(item.carb || 0),
+      protein: Number(item.protein || 0),
+      fat: Number(item.fat || 0),
+      source: item.source || 'ai',
+      matchedName: item.matchedName || null,
+      serving: item.serving || '',
+    };
+  }
+
+  function handleAddSearchItem(food) {
+    if (!food || !searchModal) return;
+    const item = { ...food, id: Math.random().toString(36).slice(2, 11) };
     setSections(prev => prev.map(sec =>
       sec.id === searchModal ? { ...sec, items: [...(sec.items || []), item] } : sec
     ));
     setRecentFoods(prev => pushRecent([item], prev));
-    setSearchResult(null); setSearchQuery(''); setSearchModal(null);
+    setSearchResult(null);
+    setSearchResults([]);
+    setSearchQuery('');
+    setSearchModal(null);
+  }
+
+  function handleAddSearchResult() {
+    handleAddSearchItem(searchResult);
+  }
+
+  async function handleUseAiEstimate() {
+    if (!searchQuery.trim()) return;
+    setEstimatingSearch(true);
+    try {
+      const item = await estimateFoodNutrition(searchQuery);
+      setSearchResult(normalizeSearchItem(item));
+      setSearchResults([]);
+    } catch (e) {
+      alert('AI 추정 실패: ' + e.message);
+    } finally {
+      setEstimatingSearch(false);
+    }
+  }
+
+  function handleOpenSearchModal(secId, value = '') {
+    setSearchModal(secId);
+    setSearchQuery(value);
+    setSearchResult(null);
+    setSearchResults([]);
+  }
+
+  function handleCloseSearchModal() {
+    setSearchModal(null);
+    setSearchResult(null);
+    setSearchResults([]);
+    setSearching(false);
+    setEstimatingSearch(false);
   }
 
   function handleAddRecentFood(secId, food) {
@@ -416,25 +444,8 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
       const isNew      = !initialData?.docId;
       const totalItems = sections.reduce((acc, sec) => acc + (sec.items || []).length, 0);
       let comment      = aiComment;
-      if (totalItems > 0 && (!comment || isNew)) {
-        const GEMINI_KEY = import.meta.env.VITE_GEMINI_KEY;
-        const weightKg = Number(profile?.weight) || 70;
-        const proteinTarget = Math.round(weightKg * 1.8);
-        const prompt = `파워빌딩 운동 중인 사람(체중 ${weightKg}kg)의 하루 식단.
-탄수화물: ${totals.carb}g | 단백질: ${totals.protein}g(목표 ${proteinTarget}g) | 지방: ${totals.fat}g | 총 ${totals.kcal}kcal
-파워빌딩 원칙: 단백질 ${proteinTarget}g/일, 지방 총칼로리의 20~30%, 운동 후 속방성 탄수 섭취.
-실제 수치 기반으로 가장 부족하거나 과한 영양소 1가지만 명시해. 이모지 포함 25자 이내. 예: "단백질이 ${proteinTarget - totals.protein}g 부족해요 💪"
-순수 텍스트만.`;
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,
-          { method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) }
-        );
-        const json = await res.json();
-        if (json.candidates?.[0]) {
-          const cp = json.candidates[0].content.parts;
-          comment = (cp.find(p => !p.thought) ?? cp[cp.length - 1]).text.trim();
-        } else { comment = '식단 기록 완료!'; }
+      if (totalItems > 0) {
+        comment = getDietSummaryComment(totals, profile, goalKcal);
         setAiComment(comment);
       }
       const docData = { type: 'diet', goal: goalKcal, kcal: totals.kcal,
@@ -471,16 +482,16 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
       <header className="flex-none bg-white z-20">
         <div className="flex items-center justify-between h-14 px-4">
           <div className="flex items-center gap-2">
-            <button onClick={handleBackClick} className="flex items-center justify-center w-8 h-8 rounded-full transition-all duration-100 active:scale-[0.85] active:opacity-50">
+            <Pressable pressScale={0.85} onClick={handleBackClick} className="flex items-center justify-center w-8 h-8 rounded-full">
               <IcBack />
-            </button>
+            </Pressable>
             <h1 className="font-pretendard text-[20px] font-semibold text-black tracking-[-0.5px] leading-[36px] whitespace-nowrap m-0">
               식단 메모
             </h1>
           </div>
-          <button onClick={() => { setMoreSheetOpen(true); setEditingGoal(false); }} className="flex items-center justify-center w-8 h-8 rounded-full transition-all duration-100 active:scale-[0.85] active:opacity-50">
+          <Pressable pressScale={0.85} onClick={() => { setMoreSheetOpen(true); setEditingGoal(false); }} className="flex items-center justify-center w-8 h-8 rounded-full">
             <IcMore size={24} />
-          </button>
+          </Pressable>
         </div>
       </header>
 
@@ -594,6 +605,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
                         <p className="font-pretendard font-semibold text-[14px] text-[#495057] tracking-[-0.35px] truncate m-0">{item.name}</p>
                         <p className="font-pretendard text-[11px] text-[#868e96] tracking-[-0.2px] mt-0.5 m-0">
                           탄 {item.carb}g · 단 {item.protein}g · 지 {item.fat}g
+                          {item.source === 'mfds' ? ' · 식약처 DB' : item.source === 'standard' ? ' · 기준값' : item.source === 'ai' ? ' · AI 추정' : ''}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
@@ -633,7 +645,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
                     className="font-pretendard font-normal text-[14px] leading-[20px] tracking-[-0.35px] text-[#171a1d] flex-1 bg-transparent border-none outline-none resize-none placeholder:text-[#adb5bd]"
                   />
                   <button
-                    onClick={() => { setSearchModal(sec.id); setSearchQuery(inputValue); setSearchResult(null); }}
+                    onClick={() => handleOpenSearchModal(sec.id, inputValue)}
                     className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-[#f1f3f5] transition-colors shrink-0"
                     aria-label={`${sec.name} 식품 검색`}
                   >
@@ -660,13 +672,14 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
               {matchedRecentFoods.length > 0 && (
                 <div className="flex gap-2 overflow-x-auto -mx-1 px-1 pb-0.5" style={{ scrollbarWidth: 'none' }}>
                   {matchedRecentFoods.map(food => (
-                    <button
+                    <Pressable
                       key={food.name}
+                      pressScale={0.95}
                       onClick={() => handleAddRecentFood(sec.id, food)}
-                      className="flex-none px-2.5 py-1 bg-[#f1f3f5] rounded-full font-pretendard text-[12px] text-[#495057] tracking-[-0.3px] whitespace-nowrap hover:bg-[#e9ecef] active:scale-95 transition-all"
+                      className="flex-none px-2.5 py-1 bg-[#f1f3f5] rounded-full font-pretendard text-[12px] text-[#495057] tracking-[-0.3px] whitespace-nowrap hover:bg-[#e9ecef]"
                     >
                       + {food.name}
-                    </button>
+                    </Pressable>
                   ))}
                 </div>
               )}
@@ -686,43 +699,80 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
 
       {/* 하단 저장 액션바 */}
       <div className="flex-none bg-white border-t border-[#f1f3f5] px-5 pt-4 pb-10">
-        <button
+        <Pressable
+          pressScale={0.97}
           onClick={handleSaveClick}
           disabled={saving}
-          className="w-full h-[56px] bg-[#3476EE] rounded-2xl font-pretendard font-bold text-[16px] text-white tracking-[-0.4px] disabled:opacity-40 transition-all duration-100 active:scale-[0.97] active:brightness-90"
+          className="w-full h-[56px] bg-[#3476EE] rounded-2xl font-pretendard font-bold text-[16px] text-white tracking-[-0.4px] disabled:opacity-40"
         >
           저장하기
-        </button>
+        </Pressable>
       </div>
 
       {/* 식품 검색 모달 */}
       {searchModal && (
         <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 backdrop-blur-sm"
-             onClick={() => setSearchModal(null)}>
-          <div className="bg-white w-full max-w-[430px] rounded-t-[24px] px-5 pt-5 pb-8 shadow-2xl max-h-[75vh] flex flex-col"
+             onClick={handleCloseSearchModal}>
+          <div className="bg-white w-full max-w-[430px] rounded-t-[24px] px-4 pt-5 pb-8 shadow-2xl max-h-[75vh] flex flex-col"
                onClick={e => e.stopPropagation()}>
             <div className="w-10 h-1 bg-[#dee2e6] rounded-full mx-auto mb-4" />
             <h2 className="font-pretendard font-semibold text-[18px] tracking-[-0.45px] text-[#171a1d] mb-4 m-0">식품 검색</h2>
 
-            <div className="flex gap-2 mb-4">
+            <div className="flex min-w-0 gap-2 mb-4">
               <input
                 ref={searchInputRef}
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleFoodSearch()}
                 placeholder="식품명 + 수량 (예: 닭가슴살 200g)"
-                className="flex-1 bg-[#f8f9fa] rounded-[10px] px-4 py-2.5 font-pretendard text-[14px] text-[#171a1d] outline-none border border-transparent focus:border-[#3476EE] transition-colors placeholder:text-[#adb5bd]"
+                className="flex-1 min-w-0 bg-[#f8f9fa] rounded-[10px] px-4 py-2.5 font-pretendard text-[14px] text-[#171a1d] outline-none border border-transparent focus:border-[#3476EE] transition-colors placeholder:text-[#adb5bd]"
               />
               <button
                 onClick={handleFoodSearch}
                 disabled={searching || !searchQuery.trim()}
-                className="bg-[#3476EE] text-white font-pretendard font-semibold text-[13px] px-4 rounded-[10px] disabled:opacity-40 flex items-center justify-center min-w-[56px]"
+                className="shrink-0 bg-[#3476EE] text-white font-pretendard font-semibold text-[13px] px-4 rounded-[10px] disabled:opacity-40 flex items-center justify-center min-w-[56px]"
               >
                 {searching
                   ? <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
                   : '검색'}
               </button>
             </div>
+
+            {searchResults.length > 0 && (
+              <div className="mb-4 flex-1 overflow-y-auto">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="font-pretendard font-semibold text-[12px] text-[#868e96] uppercase tracking-[0.5px] m-0">검색 결과</p>
+                  <button
+                    onClick={handleUseAiEstimate}
+                    disabled={estimatingSearch}
+                    className="font-pretendard font-semibold text-[12px] text-[#3476EE] disabled:opacity-40"
+                  >
+                    {estimatingSearch ? '추정 중...' : 'AI 추정값 사용'}
+                  </button>
+                </div>
+                <div className="flex flex-col">
+                  {searchResults.map(food => (
+                    <div key={`${food.name}-${food.kcal}-${food.carb}`} className="flex items-center justify-between gap-3 py-3 border-b border-[#f1f3f5] last:border-0">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-pretendard font-semibold text-[14px] text-[#171a1d] m-0 truncate">{food.name}</p>
+                        <p className="font-pretendard text-[12px] text-[#868e96] mt-0.5 m-0">
+                          탄 {food.carb}g · 단 {food.protein}g · 지 {food.fat}g · {food.source === 'standard' ? '기준값' : '식약처 DB'}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="font-pretendard font-bold text-[13px] text-[#3476EE]">{food.kcal} kcal</span>
+                        <button
+                          onClick={() => handleAddSearchItem(normalizeSearchItem(food))}
+                          className="w-8 h-8 bg-[#3476EE] text-white rounded-full flex items-center justify-center font-bold text-[18px] leading-none"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {searchResult && (
               <div className="mb-4 p-3 border border-[#3476EE]/30 rounded-[12px] bg-[#eef4ff]">
@@ -731,6 +781,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
                     <p className="font-pretendard font-semibold text-[14px] text-[#171a1d] m-0 truncate">{searchResult.name}</p>
                     <p className="font-pretendard text-[12px] text-[#868e96] mt-0.5 m-0">
                       탄 {searchResult.carb}g · 단 {searchResult.protein}g · 지 {searchResult.fat}g
+                      {searchResult.source === 'mfds' ? ' · 식약처 DB' : searchResult.source === 'standard' ? ' · 기준값' : searchResult.source === 'ai' ? ' · AI 추정' : ''}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
@@ -744,7 +795,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
               </div>
             )}
 
-            {foodSuggestions.length > 0 ? (
+            {foodSuggestions.length > 0 && searchResults.length === 0 ? (
               <div className="flex-1 overflow-y-auto">
                 <p className="font-pretendard font-semibold text-[12px] text-[#868e96] uppercase tracking-[0.5px] mb-2">최근 식품</p>
                 <div className="flex flex-col">
@@ -759,7 +810,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
                       <div className="flex items-center gap-2 shrink-0">
                         <span className="font-pretendard font-bold text-[13px] text-[#3476EE]">{food.kcal} kcal</span>
                         <button
-                          onClick={() => { handleAddRecentFood(searchModal, food); setSearchModal(null); }}
+                          onClick={() => { handleAddRecentFood(searchModal, food); handleCloseSearchModal(); }}
                           className="w-8 h-8 bg-[#3476EE] text-white rounded-full flex items-center justify-center font-bold text-[18px] leading-none"
                         >
                           +
@@ -769,7 +820,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
                   ))}
                 </div>
               </div>
-            ) : !searchResult && (
+            ) : !searchResult && searchResults.length === 0 && (
               <p className="font-pretendard text-[14px] text-[#adb5bd] text-center py-8">
                 위에서 식품을 검색해보세요
               </p>

@@ -316,7 +316,7 @@ function App() {
     const pIdx = TAB_ORDER.indexOf(panelId);
     const aIdx = TAB_ORDER.indexOf(tab);
     const x = pIdx < aIdx ? -100 : pIdx > aIdx ? 100 : 0;
-    return { transform: `translateX(${x}%)`, pointerEvents: panelId === tab ? 'auto' : 'none' };
+    return { transform: x === 0 ? 'none' : `translateX(${x}%)`, pointerEvents: panelId === tab ? 'auto' : 'none' };
   }
   function tabClass(panelId) {
     return `tab-panel${(panelId === tab || panelId === prevTab) ? '' : ' no-transition'}`;
@@ -397,13 +397,14 @@ function App() {
 
             {/* 메모 상세 — 오른쪽에서 슬라이드 (홈 탭에서만) */}
             {screen === 'memo' && tab === 'home' && (
-              <div className="detail-overlay">
+              <div className="detail-overlay" onAnimationEnd={(e) => { if (e.target === e.currentTarget) e.currentTarget.style.animation = 'none'; }}>
                 <WorkoutMemoScreen
                   key={`memo-${memoKey}`}
                   onBack={() => goBackOrHome()}
                   onSave={handleSaveMemo}
                   initialData={editingLog}
                   uid={user.uid}
+                  profile={profile}
                   onOpenCoachWithMessage={(roomId, message) => {
                     navigateApp({
                       tab: 'home',
@@ -435,7 +436,7 @@ function App() {
 
             {/* 식단 상세 — 오른쪽에서 슬라이드 (홈 탭에서만) */}
             {screen === 'diet-detail' && tab === 'home' && (
-              <div className="detail-overlay">
+              <div className="detail-overlay" onAnimationEnd={(e) => { if (e.target === e.currentTarget) e.currentTarget.style.animation = 'none'; }}>
                 <DietDetailScreen
                   key={`diet-${dietKey}`}
                   onBack={() => goBackOrHome()}
@@ -447,7 +448,7 @@ function App() {
               </div>
             )}
             {/* 바텀 네비 — 탭 패널 외부에 위치, detail 화면에선 숨김 */}
-            {screen === 'home' && (
+            {screen === 'home' && !(tab === 'coach' && coachRoom !== null) && (
               <BottomNav
                 activeId={tab}
                 onChange={(id) => {

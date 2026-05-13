@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { auth, googleProvider } from '../../lib/firebase';
 import { signInWithPopup, signInWithRedirect, getRedirectResult } from 'firebase/auth';
+import Pressable from '../common/Pressable';
 
 
 /* ── 아이콘 ── */
@@ -39,6 +40,12 @@ const isKakaoInAppBrowser = () =>
 
 const isNaverInAppBrowser = () =>
   typeof navigator !== 'undefined' && /NAVER\(inapp|NaverApp|com\.naver\.naver/i.test(navigator.userAgent);
+
+const isSafariOrPWA = () =>
+  typeof navigator !== 'undefined' && (
+    window.navigator.standalone ||
+    /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
+  );
 
 export default function LoginScreen({ onLogin }) {
   const [loading, setLoading] = useState(null); // 'google' | 'kakao' | 'naver'
@@ -115,7 +122,10 @@ export default function LoginScreen({ onLogin }) {
     setLoading('google');
     setError('');
     try {
-      // PWA 서비스워커가 redirect 흐름을 가로채므로 항상 popup 우선
+      if (isSafariOrPWA()) {
+        await signInWithRedirect(auth, googleProvider);
+        return;
+      }
       const result = await signInWithPopup(auth, googleProvider);
       onLogin({
         uid:    result.user.uid,
@@ -126,7 +136,6 @@ export default function LoginScreen({ onLogin }) {
       });
     } catch (e) {
       if (e.code === 'auth/popup-blocked') {
-        // 팝업이 차단된 경우에만 redirect fallback
         await signInWithRedirect(auth, googleProvider);
       } else if (e.code !== 'auth/popup-closed-by-user') {
         setError('Google 로그인에 실패했습니다. 잠시 후 다시 시도해주세요.');
@@ -321,12 +330,13 @@ export default function LoginScreen({ onLogin }) {
             <p className="font-pretendard text-[13px] text-[#646d76] text-center leading-[19px] tracking-[-0.325px] mt-2">
               앱 내 브라우저에서는 로그인이 제한될 수 있어요. 우측 상단 메뉴에서 Safari 또는 Chrome으로 열면 정상 이용할 수 있습니다.
             </p>
-            <button
+            <Pressable
+              pressScale={0.98}
               onClick={handleCopyLink}
-              className="w-full h-[48px] mt-4 rounded-[12px] bg-[#3476EE] text-white font-pretendard font-semibold text-[14px] tracking-[-0.35px] active:scale-[0.98] transition-all"
+              className="w-full h-[48px] mt-4 rounded-[12px] bg-[#3476EE] text-white font-pretendard font-semibold text-[14px] tracking-[-0.35px]"
             >
               {copied ? '링크가 복사되었습니다' : '링크 복사하기'}
-            </button>
+            </Pressable>
           </div>
         ) : (
           <>
@@ -335,11 +345,12 @@ export default function LoginScreen({ onLogin }) {
             )}
 
             {BUTTONS.map(({ id, label, icon, bg, text, border, handler }) => (
-              <button
+              <Pressable
                 key={id}
+                pressScale={0.98}
                 onClick={handler}
                 disabled={!!loading}
-                className="w-full h-[52px] flex items-center justify-center gap-3 rounded-[14px] font-pretendard font-semibold text-[15px] tracking-[-0.375px] transition-all duration-150 active:scale-[0.98] disabled:opacity-60"
+                className="w-full h-[52px] flex items-center justify-center gap-3 rounded-[14px] font-pretendard font-semibold text-[15px] tracking-[-0.375px] disabled:opacity-60"
                 style={{ background: bg, color: text, border: `1.5px solid ${border}` }}
               >
                 {loading === id ? (
@@ -351,7 +362,7 @@ export default function LoginScreen({ onLogin }) {
                     {label}
                   </>
                 )}
-              </button>
+              </Pressable>
             ))}
           </>
         )}

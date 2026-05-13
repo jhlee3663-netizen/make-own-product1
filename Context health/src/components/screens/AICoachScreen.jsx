@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { db } from '../../lib/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { PDF_CONTEXT } from '../../lib/pdfContext';
+import Pressable from '../common/Pressable';
 
 const GEMINI_KEY = import.meta.env.VITE_GEMINI_KEY;
 
@@ -129,10 +130,11 @@ ${cfg.systemFocus} 답변하세요.
 \`\`\`json
 {
   "type": "diet",
-  "title": "단백질 빵빵 아침 식단",
+  "title": "감량용 하루 식단",
   "items": [
-    { "name": "닭가슴살 샐러드", "detail": "300kcal" },
-    { "name": "고구마 1개", "detail": "150kcal" }
+    { "meal": "아침", "name": "그릭요거트 + 바나나", "detail": "320kcal · 탄 45g · 단 22g · 지 6g" },
+    { "meal": "점심", "name": "닭가슴살 현미밥", "detail": "520kcal · 탄 62g · 단 42g · 지 12g" },
+    { "meal": "저녁", "name": "연어 샐러드", "detail": "480kcal · 탄 24g · 단 38g · 지 24g" }
   ]
 }
 \`\`\``;
@@ -235,28 +237,31 @@ function AiBubble({ msg, onQuickReply, onAccept, loading, quickQuestions }) {
                 ))}
                 {sg.items?.length > 3 && <li className="text-caption-m text-typo-alternative ml-3">등 {sg.items.length}개 항목</li>}
               </ul>
-              <button
+              <Pressable
+                pressScale={0.97}
                 onClick={() => {
                   if (accepted) return;
                   setAccepted(true);
                   onAccept({ ...sg, id: Date.now() + Math.random(), timestamp: Date.now() });
                 }}
-                className={`w-full py-2.5 rounded-lg font-pretendard font-bold text-caption-l transition-all duration-100 border ${accepted ? 'bg-ui-2 text-typo-alternative border-ui-3 cursor-default' : 'bg-brand text-white border-brand active:scale-[0.97] active:brightness-90'}`}
+                disabled={accepted}
+                className={`w-full py-2.5 rounded-lg font-pretendard font-bold text-caption-l border ${accepted ? 'bg-ui-2 text-typo-alternative border-ui-3 cursor-default' : 'bg-brand text-white border-brand'}`}
               >
                 {accepted ? '✅ 목표에 추가됨 (홈에서 확인)' : (sg.type === 'workout' ? '이 루틴으로 시작하기 💪' : '이 식단 적용하기 🥗')}
-              </button>
+              </Pressable>
             </div>
           )}
           {msg.showQuickReplies && !loading && (
             <div className="mt-3 flex flex-col gap-2">
               {quickQuestions.map((q) => (
-                <button
+                <Pressable
                   key={q}
+                  pressScale={0.97}
                   onClick={() => onQuickReply(q)}
-                  className="w-full text-center px-4 py-2.5 rounded-xl font-pretendard text-body-s text-typo-normal font-medium border border-ui-3 bg-ui-1 transition-all duration-100 active:scale-[0.97] active:bg-ui-2 active:opacity-70"
+                  className="w-full text-center px-4 py-2.5 rounded-xl font-pretendard text-body-s text-typo-normal font-medium border border-ui-3 bg-ui-1"
                 >
                   {q}
-                </button>
+                </Pressable>
               ))}
             </div>
           )}
@@ -469,14 +474,15 @@ export default function AICoachScreen({ user, profile, roomType = 'powerbuilding
     <div className="flex flex-col h-full" style={{ background: cfg.bg }}>
       {/* 헤더 */}
       <header className="flex-none px-4 pt-5 pb-4 flex items-center gap-2">
-        <button
+        <Pressable
+          pressScale={0.85}
           onClick={onBack}
-          className="w-8 h-8 flex items-center justify-center text-typo-alternative flex-shrink-0 rounded-full transition-all duration-100 active:scale-[0.85] active:opacity-50"
+          className="w-8 h-8 flex items-center justify-center text-typo-alternative flex-shrink-0 rounded-full"
         >
           <svg width="10" height="16" viewBox="0 0 10 16" fill="none">
             <path d="M9 1L1 8l8 7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
-        </button>
+        </Pressable>
         <div className="flex items-center gap-2.5 flex-1">
           <BotAvatar />
           <div>
@@ -498,7 +504,10 @@ export default function AICoachScreen({ user, profile, roomType = 'powerbuilding
       </main>
 
       {/* 입력창 */}
-      <div className="flex-none px-4 pb-[88px] pt-2">
+      <div
+        className="flex-none px-4 pt-2"
+        style={{ paddingBottom: 'max(16px, calc(env(safe-area-inset-bottom) + 12px))' }}
+      >
         <div
           className="flex items-end gap-2 bg-white rounded-[24px] px-4 py-2 min-h-[52px]"
           style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}
@@ -516,16 +525,17 @@ export default function AICoachScreen({ user, profile, roomType = 'powerbuilding
             className="flex-1 bg-transparent resize-none outline-none font-pretendard text-body-s text-typo-normal tracking-[-0.35px] placeholder:text-typo-alternative leading-relaxed max-h-[120px] overflow-y-auto self-center"
             style={{ height: 'auto' }}
           />
-          <button
+          <Pressable
+            pressScale={0.88}
             onClick={() => sendMessage(input)}
             disabled={!input.trim() || loading}
-            className="w-9 h-9 rounded-full bg-brand flex items-center justify-center flex-shrink-0 disabled:opacity-30 transition-all duration-100 active:scale-[0.88] active:brightness-90 mb-0.5"
+            className="w-9 h-9 rounded-full bg-brand flex items-center justify-center flex-shrink-0 disabled:opacity-30 mb-0.5"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
               <path d="M22 2L11 13" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-          </button>
+          </Pressable>
         </div>
       </div>
 

@@ -111,16 +111,18 @@ export const IcAI = ({ active = false }) => {
   );
 };
 
-export const IcSpark = () => {
-  const fill = "url(#spAiG)";
+export const IcSpark = ({ active = false }) => {
+  const fill = active ? "white" : "url(#spAiG)";
   return (
-    <div className="w-6 h-6 flex items-center justify-center flex-shrink-0">
+    <div className={`w-6 h-6 flex items-center justify-center flex-shrink-0 ${active ? 'rounded-[8px] bg-gradient-to-r from-[#228bed] to-[#c509d6]' : ''}`}>
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-        <defs>
-          <linearGradient id="spAiG" x1="0" y1="8" x2="16" y2="8" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#228BED" /><stop offset="1" stopColor="#C509D6" />
-          </linearGradient>
-        </defs>
+        {!active && (
+          <defs>
+            <linearGradient id="spAiG" x1="0" y1="8" x2="16" y2="8" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#228BED" /><stop offset="1" stopColor="#C509D6" />
+            </linearGradient>
+          </defs>
+        )}
         <path d="M3.956 2.061C4.152 1.252 5.302 1.252 5.499 2.061L6.038 4.287C6.108 4.575 6.334 4.801 6.622 4.871L8.848 5.411C9.657 5.607 9.657 6.757 8.848 6.953L6.622 7.493C6.334 7.563 6.108 7.788 6.038 8.077L5.499 10.302C5.302 11.111 4.152 11.111 3.956 10.302L3.416 8.077C3.346 7.788 3.121 7.563 2.832 7.493L0.607 6.953C-0.202 6.757 -0.202 5.607 0.607 5.411L2.832 4.871C3.121 4.801 3.346 4.575 3.416 4.287L3.956 2.061Z" fill={fill} />
         <path d="M10.434 9.828C10.555 9.33 11.263 9.33 11.384 9.828L11.716 11.197C11.759 11.375 11.898 11.514 12.075 11.557L13.445 11.889C13.943 12.01 13.943 12.718 13.445 12.838L12.075 13.17C11.898 13.213 11.759 13.352 11.716 13.53L11.384 14.899C11.263 15.397 10.555 15.397 10.434 14.899L10.102 13.53C10.059 13.352 9.921 13.213 9.743 13.17L8.373 12.838C7.876 12.718 7.876 12.01 8.373 11.889L9.743 11.557C9.921 11.514 10.059 11.375 10.102 11.197L10.434 9.828Z" fill={fill} />
         <path d="M12.779 1.972C12.859 1.646 13.323 1.646 13.402 1.972L13.62 2.871C13.649 2.988 13.74 3.079 13.856 3.107L14.755 3.325C15.082 3.404 15.082 3.869 14.755 3.948L13.856 4.166C13.74 4.194 13.649 4.285 13.62 4.402L13.402 5.3C13.323 5.627 12.859 5.627 12.779 5.3L12.561 4.402C12.533 4.285 12.442 4.194 12.326 4.166L11.427 3.948C11.1 3.869 11.1 3.404 11.427 3.325L12.326 3.107C12.442 3.079 12.533 2.988 12.561 2.871L12.779 1.972Z" fill={fill} />

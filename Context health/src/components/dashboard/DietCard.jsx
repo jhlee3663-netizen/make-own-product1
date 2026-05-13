@@ -1,6 +1,8 @@
 import React from 'react';
 import DonutChart from './DonutChart';
 import { QuoteIcon } from '../icons/Icons';
+import { getDietSummaryComment } from '../../utils/dietFeedback';
+import Pressable from '../common/Pressable';
 
 function getChip(kcal, goal) {
   if (!goal) return { label: '성공 🔥', color: '#3476EE', bg: 'rgba(0,84,209,0.1)' };
@@ -10,16 +12,17 @@ function getChip(kcal, goal) {
   return { label: '성공 🔥', color: '#3476EE', bg: 'rgba(0,84,209,0.1)' };
 }
 
-export default function DietCard({ data, isDeleting, targetKcal }) {
+export default function DietCard({ data, isDeleting, targetKcal, profile }) {
   const dt = data.timestamp ? new Date(data.timestamp.seconds * 1000) : null;
   const ds = dt ? `${String(dt.getFullYear()).slice(2)}. ${dt.getMonth() + 1}. ${dt.getDate()}` : (data.date || "");
   const gid = "qG_" + (data.docId || Math.random().toString(36).substr(2, 9));
   const effectiveGoal = targetKcal || data.goal || 0;
   const chip = getChip(data.kcal || 0, effectiveGoal);
+  const summaryComment = getDietSummaryComment(data, profile, effectiveGoal);
 
   return (
     <div className={`px-4 py-2 transition-all duration-300 ${isDeleting ? 'card-exit-wrapper' : 'card-enter'}`}>
-      <div className="bg-white rounded-[16px] overflow-hidden shadow-[0_0_25px_rgba(3,27,38,0.08)] cursor-pointer border border-transparent hover:border-ui-3 transition-all duration-150 active:scale-[0.985] active:shadow-[0_0_12px_rgba(3,27,38,0.06)]">
+      <Pressable as="div" pressScale={0.985} className="bg-white rounded-[16px] overflow-hidden shadow-[0_0_25px_rgba(3,27,38,0.08)] cursor-pointer border border-transparent hover:border-ui-3">
         <div className="p-4 flex flex-col gap-4">
           <div className="flex flex-col gap-2 pb-4 border-b border-[#f1f3f5]">
             <div className="inline-flex px-2 py-1 rounded-[8px] w-fit" style={{ background: chip.bg }}>
@@ -50,17 +53,17 @@ export default function DietCard({ data, isDeleting, targetKcal }) {
             </div>
           </div>
         </div>
-        {data.aiComment && (
+        {summaryComment && (
           <div className="border-t border-[#f1f3f5] p-4 flex gap-2 items-start bg-white">
             <QuoteIcon gid={gid} />
             <div className="flex-1 mt-0.5 min-w-0">
               <p className="font-pretendard font-medium text-[14px] text-transparent bg-clip-text bg-gradient-to-r from-[#228bed] to-[#c509d6] tracking-[-0.35px] leading-[20px] m-0 truncate">
-                {data.aiComment}
+                {summaryComment}
               </p>
             </div>
           </div>
         )}
-      </div>
+      </Pressable>
     </div>
   );
 }

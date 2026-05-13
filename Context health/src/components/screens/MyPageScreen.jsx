@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { auth } from '../../lib/firebase';
 import { signOut } from 'firebase/auth';
+import Pressable from '../common/Pressable';
 
 const GOALS = ['체중 감량', '근육 증량', '체형 유지', '건강 증진'];
 const ACTIVITY_LEVELS = [
@@ -76,14 +77,15 @@ export default function MyPageScreen({ user, profile, onProfileSave, onNavChange
             <p className="font-pretendard font-bold text-body-l text-typo-strong tracking-[-0.45px] truncate">{user?.name || '사용자'}</p>
             <p className="font-pretendard text-caption-l text-typo-alternative tracking-[-0.325px] truncate">{user?.email || ''}</p>
           </div>
-          <button
+          <Pressable
+            pressScale={0.93}
             onClick={() => setEditing(!editing)}
-            className={`px-3.5 py-1.5 rounded-full font-pretendard font-semibold text-caption-l tracking-[-0.325px] transition-all duration-100 active:scale-[0.93] active:opacity-70 ${
+            className={`px-3.5 py-1.5 rounded-full font-pretendard font-semibold text-caption-l tracking-[-0.325px] ${
               editing ? 'bg-brand text-white' : 'bg-ui-2 text-typo-normal'
             }`}
           >
             {editing ? '취소' : '수정'}
-          </button>
+          </Pressable>
         </div>
       </div>
 
@@ -99,15 +101,16 @@ export default function MyPageScreen({ user, profile, onProfileSave, onNavChange
               <p className="font-pretendard font-medium text-body-s text-typo-normal tracking-[-0.35px] mb-2.5">목표</p>
               <div className="flex flex-wrap gap-2">
                 {GOALS.map((g) => (
-                  <button
+                  <Pressable
                     key={g}
+                    pressScale={0.93}
                     onClick={() => setForm((f) => ({ ...f, goal: g }))}
-                    className={`px-3.5 py-1.5 rounded-full font-pretendard text-caption-l font-semibold tracking-[-0.325px] transition-all duration-100 active:scale-[0.93] active:opacity-70 ${
+                    className={`px-3.5 py-1.5 rounded-full font-pretendard text-caption-l font-semibold tracking-[-0.325px] ${
                       form.goal === g ? 'bg-brand text-white' : 'bg-ui-2 text-typo-normal'
                     }`}
                   >
                     {g}
-                  </button>
+                  </Pressable>
                 ))}
               </div>
             </div>
@@ -130,15 +133,16 @@ export default function MyPageScreen({ user, profile, onProfileSave, onNavChange
               <p className="font-pretendard font-medium text-body-s text-typo-normal tracking-[-0.35px] mb-2.5">성별</p>
               <div className="flex gap-2">
                 {[{ id: 'male', label: '남성' }, { id: 'female', label: '여성' }].map(({ id, label }) => (
-                  <button
+                  <Pressable
                     key={id}
+                    pressScale={0.93}
                     onClick={() => setForm((f) => ({ ...f, gender: id }))}
-                    className={`px-4 py-1.5 rounded-full font-pretendard text-caption-l font-semibold tracking-[-0.325px] transition-all duration-100 active:scale-[0.93] active:opacity-70 ${
+                    className={`px-4 py-1.5 rounded-full font-pretendard text-caption-l font-semibold tracking-[-0.325px] ${
                       form.gender === id ? 'bg-brand text-white' : 'bg-ui-2 text-typo-normal'
                     }`}
                   >
                     {label}
-                  </button>
+                  </Pressable>
                 ))}
               </div>
             </div>
@@ -157,10 +161,12 @@ export default function MyPageScreen({ user, profile, onProfileSave, onNavChange
             {editing && (
               <div className="flex flex-col gap-2">
                 {ACTIVITY_LEVELS.map(({ id, label, desc }) => (
-                  <button
+                  <Pressable
                     key={id}
+                    pressScale={0.985}
+                    as="div"
                     onClick={() => setForm((f) => ({ ...f, activityLevel: id }))}
-                    className={`flex items-center justify-between px-4 py-3 rounded-2xl transition-all duration-100 active:scale-[0.985] active:opacity-70 text-left ${
+                    className={`flex items-center justify-between px-4 py-3 rounded-2xl text-left ${
                       form.activityLevel === id
                         ? 'bg-brand-light border-[1.5px] border-brand'
                         : 'bg-ui-1 border-[1.5px] border-transparent'
@@ -175,7 +181,7 @@ export default function MyPageScreen({ user, profile, onProfileSave, onNavChange
                         <path d="M20 6L9 17L4 12" stroke="#3476EE" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                       </svg>
                     )}
-                  </button>
+                  </Pressable>
                 ))}
               </div>
             )}
@@ -185,12 +191,13 @@ export default function MyPageScreen({ user, profile, onProfileSave, onNavChange
         {/* 저장 버튼 */}
         {editing && (
           <div className="px-5 mt-3">
-            <button
+            <Pressable
+              pressScale={0.97}
               onClick={handleSave}
-              className="w-full h-[52px] bg-brand rounded-2xl font-pretendard font-bold text-body-s text-white tracking-[-0.375px] transition-all duration-100 active:scale-[0.97] active:brightness-90"
+              className="w-full h-[52px] bg-brand rounded-2xl font-pretendard font-bold text-body-s text-white tracking-[-0.375px]"
             >
               저장하기
-            </button>
+            </Pressable>
           </div>
         )}
 

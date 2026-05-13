@@ -1,4 +1,5 @@
 import React, { useRef, useState } from 'react';
+import Pressable from '../common/Pressable';
 
 export const COACH_ROOMS = [
   {
@@ -41,9 +42,9 @@ export const COACH_ROOMS = [
 ];
 
 const QUICK_TIPS = [
-  { icon: '🎯', text: '파워빌딩은 스트렝스가 먼저다?' },
-  { icon: '📅', text: '오늘의 루틴 추천받기' },
-  { icon: '💡', text: '덤벨 컬 효과적으로 하는 법' },
+  { icon: '🎯', text: '파워빌딩은 스트렝스가 먼저다?', roomId: 'powerbuilding' },
+  { icon: '📅', text: '오늘의 루틴 추천받기', roomId: 'routine' },
+  { icon: '💡', text: '덤벨 컬 효과적으로 하는 법', roomId: 'dumbbell' },
 ];
 
 function formatDate(ts) {
@@ -57,6 +58,15 @@ function formatDate(ts) {
   return `${d.getMonth() + 1}.${d.getDate()}`;
 }
 
+function inferRoomFromText(text) {
+  const value = String(text || '').toLowerCase();
+  if (/식단|음식|칼로리|단백질|탄수|지방|다이어트|감량|증량식|간식|아침|점심|저녁/.test(value)) return 'diet';
+  if (/덤벨|아령|홈트|컬|프레스|레이즈/.test(value)) return 'dumbbell';
+  if (/스트레칭|모빌리티|가동성|통증|부상|워밍업|쿨다운|어깨|허리/.test(value)) return 'mobility';
+  if (/루틴|분할|스케줄|주\s*\d|운동\s*순서|프로그램/.test(value)) return 'routine';
+  return 'powerbuilding';
+}
+
 export default function CoachListScreen({ rooms, onOpenRoom, onDeleteRoom }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [inputText, setInputText] = useState('');
@@ -67,17 +77,10 @@ export default function CoachListScreen({ rooms, onOpenRoom, onDeleteRoom }) {
 
   const roomsWithHistory = COACH_ROOMS.filter(r => rooms?.[r.id]?.length > 1);
 
-  const lastActiveRoomId = roomsWithHistory.reduce((acc, r) => {
-    const msgs = rooms[r.id] || [];
-    const lastTs = [...msgs].reverse().find(m => m.timestamp)?.timestamp;
-    if (!acc.ts || (lastTs && lastTs > acc.ts)) return { id: r.id, ts: lastTs };
-    return acc;
-  }, { id: 'powerbuilding', ts: null }).id;
-
   function handleSend() {
     const text = inputText.trim();
     if (!text) return;
-    onOpenRoom(lastActiveRoomId, text);
+    onOpenRoom(inferRoomFromText(text), text);
     setInputText('');
   }
 
@@ -117,65 +120,55 @@ export default function CoachListScreen({ rooms, onOpenRoom, onDeleteRoom }) {
       {/* Sidebar + backdrop */}
       <>
         {roomMenu && (
-          <div className="absolute inset-0 z-[90] flex items-end bg-black/40" onClick={() => { setRoomMenu(null); setConfirmDelete(false); }}>
+          <div className="absolute inset-0 z-[90] flex items-center justify-center bg-black/45 px-6" onClick={() => { setRoomMenu(null); setConfirmDelete(false); }}>
             <div
-              className="w-full bg-white rounded-t-[24px] px-4 pb-8 shadow-2xl"
+              className="w-full max-w-[320px] bg-white rounded-[26px] px-5 pt-5 pb-4 shadow-[0_18px_48px_rgba(0,0,0,0.22)]"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="py-3 flex justify-center">
-                <div className="w-10 h-1 rounded-full bg-ui-3" />
-              </div>
-              <div className="flex items-center gap-3 px-1 pb-4 border-b border-ui-2">
-                <div className="w-11 h-11 rounded-full flex items-center justify-center text-2xl" style={{ background: roomMenu.bg }}>
+              <div className="flex flex-col items-center text-center">
+                <div className="w-12 h-12 rounded-full flex items-center justify-center text-2xl" style={{ background: roomMenu.bg }}>
                   {roomMenu.emoji}
                 </div>
-                <div className="min-w-0">
-                  <p className="font-pretendard font-bold text-body-m text-typo-strong truncate">{roomMenu.name}</p>
-                  <p className="font-pretendard text-caption-l text-typo-alternative mt-0.5">대화 기록 관리</p>
-                </div>
+                <p className="font-pretendard font-bold text-[18px] text-[#171719] tracking-[-0.45px] mt-3">{roomMenu.name}</p>
+                <p className="font-pretendard text-[14px] text-[#868e96] tracking-[-0.35px] mt-1">
+                  {confirmDelete ? '이 대화를 삭제할까요?' : '대화 기록을 관리할 수 있어요'}
+                </p>
               </div>
-              <button
-                onClick={() => { const id = roomMenu.id; setRoomMenu(null); setSidebarOpen(false); onOpenRoom(id); }}
-                className="w-full flex items-center gap-3 py-4 text-left border-b border-ui-2 active:opacity-60"
-              >
-                <span className="w-8 h-8 rounded-full bg-ui-1 flex items-center justify-center text-typo-secondary">
-                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
-                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"/>
-                  </svg>
-                </span>
-                <span className="font-pretendard text-body-s font-medium text-typo-normal">대화 열기</span>
-              </button>
               {confirmDelete ? (
-                <div className="py-4">
-                  <p className="font-pretendard text-body-s font-semibold text-typo-strong">이 대화를 삭제할까요?</p>
-                  <p className="font-pretendard text-caption-l text-typo-alternative mt-1">삭제한 대화 기록은 다시 불러올 수 없습니다.</p>
-                  <div className="flex gap-2 mt-4">
+                <div className="pt-5">
+                  <p className="font-pretendard text-[13px] text-[#868e96] text-center leading-relaxed tracking-[-0.3px]">
+                    삭제한 대화 기록은 다시 불러올 수 없습니다.
+                  </p>
+                  <div className="flex gap-2 mt-5">
                     <button
                       onClick={() => setConfirmDelete(false)}
-                      className="flex-1 h-11 rounded-[12px] bg-ui-1 font-pretendard text-body-s font-semibold text-typo-normal active:opacity-60"
+                      className="flex-1 h-12 rounded-[14px] bg-[#f1f3f5] font-pretendard text-[15px] font-semibold text-[#495057] active:opacity-60"
                     >
                       취소
                     </button>
                     <button
                       onClick={handleDeleteRoom}
-                      className="flex-1 h-11 rounded-[12px] bg-[#e03e52] font-pretendard text-body-s font-semibold text-white active:opacity-80"
+                      className="flex-1 h-12 rounded-[14px] bg-[#e03e52] font-pretendard text-[15px] font-semibold text-white active:opacity-80"
                     >
                       삭제
                     </button>
                   </div>
                 </div>
               ) : (
-                <button
-                  onClick={() => setConfirmDelete(true)}
-                  className="w-full flex items-center gap-3 py-4 text-left active:opacity-60"
-                >
-                  <span className="w-8 h-8 rounded-full bg-[#fff1f3] flex items-center justify-center text-[#e03e52]">
-                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
-                      <path d="M4 7h16M10 11v6M14 11v6M6 7l1 14h10l1-14M9 7V4h6v3" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  </span>
-                  <span className="font-pretendard text-body-s font-medium text-[#e03e52]">대화 삭제</span>
-                </button>
+                <div className="pt-5 flex flex-col gap-2">
+                  <button
+                    onClick={() => { const id = roomMenu.id; setRoomMenu(null); setSidebarOpen(false); onOpenRoom(id); }}
+                    className="w-full h-12 rounded-[14px] bg-[#3476EE] font-pretendard text-[15px] font-semibold text-white active:opacity-80"
+                  >
+                    대화 열기
+                  </button>
+                  <button
+                    onClick={() => setConfirmDelete(true)}
+                    className="w-full h-12 rounded-[14px] bg-[#fff1f3] font-pretendard text-[15px] font-semibold text-[#e03e52] active:opacity-70"
+                  >
+                    대화 삭제
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -206,7 +199,7 @@ export default function CoachListScreen({ rooms, onOpenRoom, onDeleteRoom }) {
                   const msgs = rooms[r.id] || [];
                   const lastMsg = [...msgs].reverse().find(m => m.text);
                   return (
-                    <button
+                    <Pressable
                       key={r.id}
                       onClick={() => handleHistoryClick(r.id)}
                       onPointerDown={() => startLongPress(r)}
@@ -214,7 +207,7 @@ export default function CoachListScreen({ rooms, onOpenRoom, onDeleteRoom }) {
                       onPointerCancel={clearLongPress}
                       onPointerLeave={clearLongPress}
                       onContextMenu={(e) => { e.preventDefault(); setConfirmDelete(false); setRoomMenu(r); }}
-                      className="w-full flex items-center gap-3 px-5 py-4 border-b border-ui-1 text-left active:bg-ui-1 transition-colors"
+                      className="w-full flex items-center gap-3 px-5 py-4 border-b border-ui-1 text-left"
                     >
                       <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-xl" style={{ background: r.bg }}>
                         {r.emoji}
@@ -228,7 +221,7 @@ export default function CoachListScreen({ rooms, onOpenRoom, onDeleteRoom }) {
                           {lastMsg?.text?.split('\n')[0].slice(0, 32) || '대화가 시작되었습니다.'}
                         </p>
                       </div>
-                    </button>
+                    </Pressable>
                   );
                 })
               )}
@@ -268,7 +261,7 @@ export default function CoachListScreen({ rooms, onOpenRoom, onDeleteRoom }) {
             {QUICK_TIPS.map((tip, i) => (
               <button 
                 key={i} 
-                onClick={() => onOpenRoom('powerbuilding', tip.text)}
+                onClick={() => onOpenRoom(tip.roomId, tip.text)}
                 className="w-full bg-white/80 backdrop-blur-md rounded-full py-3 px-5 flex items-center gap-3 shadow-sm border border-white/50 hover:bg-white transition-colors"
               >
                 <span className="text-[17px]">{tip.icon}</span>
@@ -287,10 +280,11 @@ export default function CoachListScreen({ rooms, onOpenRoom, onDeleteRoom }) {
                 const msgs = rooms[r.id] || [];
                 const lastMsg = [...msgs].reverse().find(m => m.text);
                 return (
-                  <button
+                  <Pressable
                     key={r.id}
+                    pressScale={0.98}
                     onClick={() => onOpenRoom(r.id)}
-                    className="w-full bg-[#f8f9fc] rounded-[20px] p-4 flex items-center gap-4 text-left active:scale-[0.98] transition-transform"
+                    className="w-full bg-[#f8f9fc] rounded-[20px] p-4 flex items-center gap-4 text-left"
                   >
                     <div className="w-14 h-14 rounded-full flex items-center justify-center text-[28px] shadow-sm flex-shrink-0" style={{ background: r.bg }}>
                       {r.emoji}
@@ -301,7 +295,7 @@ export default function CoachListScreen({ rooms, onOpenRoom, onDeleteRoom }) {
                         {lastMsg?.text?.split('\n')[0].slice(0, 24) || '최근 대화 없음'}...
                       </p>
                     </div>
-                  </button>
+                  </Pressable>
                 );
               })}
             </div>
@@ -333,12 +327,12 @@ export default function CoachListScreen({ rooms, onOpenRoom, onDeleteRoom }) {
                     {r.desc}
                   </p>
                 </div>
-                <button
+                <Pressable
                   onClick={() => onOpenRoom(r.id)}
-                  className="bg-white px-4 py-2 rounded-full font-pretendard font-bold text-[13px] text-typo-strong shadow-sm border border-[#E5E7EB] active:bg-gray-50 flex-shrink-0 whitespace-nowrap"
+                  className="bg-white px-4 py-2 rounded-full font-pretendard font-bold text-[13px] text-typo-strong shadow-sm border border-[#E5E7EB] flex-shrink-0 whitespace-nowrap"
                 >
                   대화
-                </button>
+                </Pressable>
               </div>
             ))}
           </div>
@@ -357,12 +351,12 @@ export default function CoachListScreen({ rooms, onOpenRoom, onDeleteRoom }) {
             className="flex-1 bg-transparent outline-none font-pretendard text-[14px] text-typo-strong placeholder:text-[#A0A0A5] tracking-[-0.3px]"
           />
           {inputText.trim() ? (
-            <button onClick={handleSend} className="w-8 h-8 rounded-full bg-[#FF5D8F] flex items-center justify-center text-white flex-shrink-0 shadow-sm transition-transform active:scale-95">
+            <Pressable pressScale={0.95} onClick={handleSend} className="w-8 h-8 rounded-full bg-[#FF5D8F] flex items-center justify-center text-white flex-shrink-0 shadow-sm">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                 <path d="M22 2L11 13" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
                 <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
-            </button>
+            </Pressable>
           ) : (
             <button className="flex items-center justify-center text-[#A0A0A5] flex-shrink-0">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">

@@ -3,6 +3,7 @@ import { IcBack, IcMore, IcKeyboard, IcAI, IcUndo, IcRedo, IcSpark, IcPlus } fro
 import WorkoutTaskItem from '../common/WorkoutTaskItem';
 import Button from '../common/Button';
 import ConfirmModal from '../common/ConfirmModal';
+import Pressable from '../common/Pressable';
 import { db } from '../../lib/firebase';
 import {
   collection,
@@ -33,11 +34,11 @@ const HIGHLIGHT_COLORS = [
 ];
 
 const SUMMARY_SET_TYPES = [
-  { pattern: /\(드랍(?:\s*세트?)?\)|드랍\s*세트/gi, label: '드랍', bg: '#fff3e0', color: '#e65100' },
-  { pattern: /\(슈퍼(?:\s*세트?)?\)|슈퍼\s*세트/gi, label: '슈퍼세트', bg: '#f3e5f5', color: '#7b1fa2' },
-  { pattern: /\(컴파운드(?:\s*세트?)?\)|컴파운드\s*세트/gi, label: '컴파운드', bg: '#e3f2fd', color: '#1565c0' },
-  { pattern: /\(강제\s*반복\)|강제\s*반복/gi, label: '강제반복', bg: '#fce4ec', color: '#c62828' },
-  { pattern: /\(저\s*중량\)|저중량/gi, label: '저중량고반복', bg: '#e8f5e9', color: '#2e7d32' },
+  { pattern: /\(드랍(?:\s*세트?)?\)|드랍\s*세트/gi, label: '드랍', color: '#d47800' },
+  { pattern: /\(슈퍼(?:\s*세트?)?\)|슈퍼\s*세트/gi, label: '슈퍼세트', color: '#7b1fa2' },
+  { pattern: /\(컴파운드(?:\s*세트?)?\)|컴파운드\s*세트/gi, label: '컴파운드', color: '#1565c0' },
+  { pattern: /\(강제\s*반복\)|강제\s*반복/gi, label: '강제반복', color: '#c62828' },
+  { pattern: /\(저\s*중량\)|저중량/gi, label: '저중량고반복', color: '#2e7d32' },
 ];
 
 const GEMINI_KEY = import.meta.env.VITE_GEMINI_KEY;
@@ -99,8 +100,19 @@ function SummaryBodyRenderer({ body, note }) {
     }
   }
 
+  const hasUnitChip = (line) => /\d+\s*(lbs?|파운드|칸)/i.test(line);
+  const renderTypeChip = (type) => (
+    <span
+      key={type.label}
+      className="bg-white inline-flex h-6 items-center justify-center px-3 rounded-full text-[11px] font-normal font-pretendard leading-4 tracking-[-0.275px] whitespace-nowrap"
+      style={{ color: type.color }}
+    >
+      {type.label}
+    </span>
+  );
+
   return (
-    <div className="flex flex-col gap-0.5">
+    <div className="flex flex-col gap-1">
       {segments.map((seg, idx) => {
         if (seg.type === 'note-inline') {
           return (
@@ -110,24 +122,34 @@ function SummaryBodyRenderer({ body, note }) {
           );
         }
         if (seg.type === 'group') {
-          const mainType = seg.types[0];
+          const hasKgChip = seg.lines.some(hasUnitChip);
           return (
-            <div key={idx} className="relative rounded-xl px-2.5 pt-2 pb-5"
-              style={{ background: mainType?.bg || '#fff3e0', margin: '4px 0' }}>
+            <div key={idx} className="rounded-[16px] px-2 pt-4 pb-3 my-1 flex flex-col gap-4 bg-[rgba(212,120,0,0.1)]">
               {seg.lines.map((line, li) => (
-                <div key={li} className="text-[13px] font-pretendard text-typo-normal leading-5 py-0.5">{line}</div>
+                <div key={li} className="text-[14px] font-medium font-pretendard text-[#646d76] leading-[22px] tracking-[-0.35px]">{line}</div>
               ))}
-              {mainType && (
-                <span className="absolute bottom-1.5 right-2.5 text-[10px] font-bold font-pretendard"
-                  style={{ color: mainType.color }}>
-                  {mainType.label}
-                </span>
+              {(seg.types.length > 0 || hasKgChip) && (
+                <div className="flex items-start gap-1 flex-wrap">
+                  {seg.types.map(renderTypeChip)}
+                  {hasKgChip && (
+                    <span className="bg-white inline-flex h-6 items-center justify-center px-3 rounded-full text-[11px] font-normal font-pretendard leading-4 tracking-[-0.275px] text-[#48ad00] whitespace-nowrap">
+                      kg 변환 완료
+                    </span>
+                  )}
+                </div>
               )}
             </div>
           );
         }
         return (
-          <div key={idx} className="text-[13px] font-pretendard text-typo-normal leading-5 py-0.5">{seg.line}</div>
+          <div key={idx} className="flex items-center gap-2 py-2">
+            <span className="text-[14px] font-medium font-pretendard text-[#646d76] leading-5 tracking-[-0.35px] flex-1">{seg.line}</span>
+            {hasUnitChip(seg.line) && (
+              <span className="bg-[rgba(72,173,0,0.1)] inline-flex h-6 items-center justify-center px-3 rounded-full text-[11px] font-normal font-pretendard leading-4 tracking-[-0.275px] text-[#48ad00] whitespace-nowrap">
+                kg 변환 완료
+              </span>
+            )}
+          </div>
         );
       })}
       {note && (
@@ -139,7 +161,7 @@ function SummaryBodyRenderer({ body, note }) {
   );
 }
 
-export default function WorkoutMemoScreen({ onBack, onSave, initialData, uid, onOpenCoachWithMessage }) {
+export default function WorkoutMemoScreen({ onBack, onSave, initialData, uid, profile, onOpenCoachWithMessage }) {
   const originalSectionsRef = useRef(null);
   const [showExitModal, setShowExitModal] = useState(false);
 
@@ -400,7 +422,7 @@ export default function WorkoutMemoScreen({ onBack, onSave, initialData, uid, on
 1. 각 세트별 기록은 반드시 '• 세트 N: 무게 횟수' 형태로 작성해줘.
 2. 여러 세트인 경우 쉼표(,) 대신 반드시 줄바꿈(\\n)으로 구분해서 작성해줘.
 3. [가장 중요] 세트 번호(N)는 종목이 바뀌더라도 절대 1부터 다시 시작하지 말고, 이전 종목의 마지막 세트 번호에 이어서 전체 누적으로 계속 카운트해줘.
-4. [가장 중요] 원문에 있는 (드랍), (드랍세트), (슈퍼세트), (컴파운드), (강제반복), (저중량) 같은 세트 타입 표기는 절대 삭제하지 말고 해당 세트의 body 텍스트 안에 그대로 유지해.
+4. [가장 중요] 원문에 있는 (드랍), (드랍세트), (슈퍼세트), (컴파운드), (강제반복), (저중량) 같은 세트 타입 표기와, "양쪽" / "각 사이드" 같이 좌우 양쪽을 뜻하는 표기는 절대 삭제하지 말고 해당 세트의 body 텍스트 안에 그대로 유지해.
 5. 드랍/슈퍼세트 등 세트 타입 표기는 note로 분리하지 마. 우리 앱은 body 안의 텍스트를 감지해 별도 뱃지로 처리한다.
 6. [가장 중요] 세트 기록과 함께 또는 독립적으로 적힌 주관적 느낌·코멘트 (예: "확실히 10회는 빡세다", "가슴&어깨 마사지받음, 확실히 나아짐", "자세가 흔들림", "다음엔 무게 늘려보자") 는 반드시 note 필드로 분리해. 쉼표로 이어진 문장 전체를 하나의 note로 합쳐야 해. 절대 일부만 잘라 넣지 마. kg/회/세트 숫자나 세트 타입 표기가 아닌 주관적 경험·느낌 텍스트만 note로. 없으면 note 필드 생략.
 7. 운동 기록이 전혀 없고 코멘트만 있는 경우(예: "가슴 마사지받음"), body는 빈 문자열로, note에 해당 문장 전체를 넣어.
@@ -816,11 +838,12 @@ JSON 형식으로만 반환해줘:
 1. 각 세트별 기록은 반드시 '• 세트 N: 무게 횟수' 형태로 작성해줘.
 2. 여러 세트인 경우 쉼표(,) 대신 반드시 줄바꿈(\\n)으로 구분해서 작성해줘.
 3. [가장 중요] 세트 번호(N)는 종목이 바뀌더라도 절대 1부터 다시 시작하지 말고, 이전 종목의 마지막 세트 번호에 이어서 전체 누적으로 계속 카운트해줘.
-4. [가장 중요] 원문에 있는 (드랍), (드랍세트), (슈퍼세트), (컴파운드), (강제반복), (저중량) 같은 세트 타입 표기는 절대 삭제하지 말고 해당 세트의 body 텍스트 안에 그대로 유지해.
+4. [가장 중요] 원문에 있는 (드랍), (드랍세트), (슈퍼세트), (컴파운드), (강제반복), (저중량) 같은 세트 타입 표기와, "양쪽" / "각 사이드" 같이 좌우 양쪽을 뜻하는 표기는 절대 삭제하지 말고 해당 세트의 body 텍스트 안에 그대로 유지해.
 5. 드랍/슈퍼세트 등 세트 타입 표기는 note로 분리하지 마. 우리 앱은 body 안의 텍스트를 감지해 별도 뱃지로 처리한다.
 6. [가장 중요] 세트 기록과 함께 또는 독립적으로 적힌 주관적 느낌·코멘트는 반드시 note 필드로 분리해. kg/회/세트 숫자나 세트 타입 표기가 아닌 주관적 경험·느낌 텍스트만 note로. 없으면 note 필드 생략.
 7. 운동 기록이 전혀 없고 코멘트만 있는 경우, body는 빈 문자열로, note에 해당 문장 전체를 넣어.
 8. JSON 이외의 다른 텍스트(마크다운 등)는 절대 포함하지 마.
+9. [중요] 풀업/친업/딥스 계열 종목은 반드시 아래 세 가지 중 하나로 명확히 구분해서 title에 표기해줘: 보조 기구(어시스티드 머신)를 사용한 경우 → "어시스티드 풀업"/"어시스티드 친업"/"어시스티드 딥스", 체중에 무게를 추가한 경우 → "가중 풀업"/"가중 친업"/"가중 딥스", 맨몸인 경우 → "풀업"/"친업"/"딥스".
 사용자 입력:\n${rawText}`;
 
       const sumRes = await fetch(GEMINI_URL, {
@@ -833,14 +856,17 @@ JSON 형식으로만 반환해줘:
 
       const sumParts = sumJson.candidates[0].content.parts;
       const sumText = (sumParts.find(p => !p.thought) ?? sumParts[sumParts.length - 1]).text;
-      const parsed = JSON.parse(sumText.replace(/```json/gi, '').replace(/```/g, '').trim());
+      const cleanedSum = sumText.replace(/```json/gi, '').replace(/```/g, '').trim();
+      const jsonMatch = cleanedSum.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) throw new Error("JSON 배열 파싱 실패: " + cleanedSum.slice(0, 200));
+      const parsed = JSON.parse(jsonMatch[0]);
 
       const structuredSections = parsed.map(s => ({
         part: s.part || "운동 부위",
-        items: (s.items || []).map(it => ({ title: it.title, body: it.body, note: it.note }))
+        items: (s.items || []).map(it => ({ title: it.title, body: it.body, ...(it.note ? { note: it.note } : {}) }))
       }));
       const structuredExercises = structuredSections.flatMap(s => s.items.map(it => ({ name: it.title }))).filter(ex => ex.name);
-      const totalVolume = parseVolume(structuredSections);
+      const totalVolume = parseVolume(structuredSections, profile?.weight);
 
       // 이전 볼륨 조회
       let lastVolume = 0;
@@ -897,7 +923,7 @@ JSON 형식으로만 반환해줘:
       }
     } catch (err) {
       console.error("백그라운드 AI 처리 실패:", err);
-      try { await updateDoc(docRef, { aiStatus: 'done' }); } catch {}
+      try { await updateDoc(docRef, { aiStatus: 'error', aiError: `${err.name}: ${err.message}`.slice(0, 300) }); } catch {}
     }
   }
 
@@ -947,7 +973,7 @@ JSON 형식으로만 반환해줘:
         part: s.part,
         items: s.items.map(it => ({ title: it.title, body: it.body }))
       }));
-      const roughVolume = parseVolume(sections);
+      const roughVolume = parseVolume(sections, profile?.weight);
 
       let docRef;
       if (initialData && initialData.docId) {
@@ -994,17 +1020,17 @@ JSON 형식으로만 반환해줘:
         </div>
         <div className="flex items-center justify-between px-4 h-14">
           <div className="flex items-center gap-2">
-            <button onClick={handleBackClick} className="flex items-center justify-center w-8 h-8 rounded-full bg-transparent transition-all duration-100 active:scale-[0.85] active:opacity-50">
+            <Pressable pressScale={0.85} onClick={handleBackClick} className="flex items-center justify-center w-8 h-8 rounded-full bg-transparent">
               <IcBack />
-            </button>
+            </Pressable>
             <h1 className="font-pretendard text-[20px] font-semibold text-black tracking-[-0.5px] leading-[36px] whitespace-nowrap m-0">
               쇠질 메모
             </h1>
           </div>
           <div className="flex items-center gap-4">
-            <button onClick={() => setMoreSheetOpen(true)} className="flex items-center justify-center w-8 h-8 rounded-full transition-all duration-100 active:scale-[0.85] active:opacity-50">
+            <Pressable pressScale={0.85} onClick={() => setMoreSheetOpen(true)} className="flex items-center justify-center w-8 h-8 rounded-full">
               <IcMore />
-            </button>
+            </Pressable>
           </div>
         </div>
       </header>
@@ -1023,9 +1049,9 @@ JSON 형식으로만 반환해줘:
             </button>
             {!freeMode && (
               <div className="relative">
-                <button onClick={() => setAiMenuOpen(!aiMenuOpen)} className="w-6 h-6 flex items-center justify-center">
+                <Pressable pressScale={0.92} onClick={() => setAiMenuOpen(!aiMenuOpen)} className="w-6 h-6 flex items-center justify-center">
                   <IcAI active={aiMenuOpen} />
-                </button>
+                </Pressable>
                 {aiMenuOpen && (
                   <>
                     <div onClick={() => setAiMenuOpen(false)} className="fixed inset-0 z-[98]" />
@@ -1045,9 +1071,10 @@ JSON 형식으로만 반환해줘:
             )}
           </div>
           <div className="flex items-center gap-3">
-            <button
+            <Pressable
+              pressScale={0.88}
               onClick={() => setWorkoutMode(m => m === 'overload' ? 'deload' : 'overload')}
-              className={`flex items-center gap-1 px-2 py-1 rounded-full font-pretendard font-semibold text-[11px] tracking-[-0.2px] transition-transform duration-100 active:scale-[0.88] ${workoutMode === 'overload' ? 'bg-brand/10 text-brand' : 'bg-[#f07800]/10 text-[#f07800]'}`}
+              className={`flex items-center gap-1 px-2 py-1 rounded-full font-pretendard font-semibold text-[11px] tracking-[-0.2px] ${workoutMode === 'overload' ? 'bg-brand/10 text-brand' : 'bg-[#f07800]/10 text-[#f07800]'}`}
               style={{ WebkitTapHighlightColor: 'transparent' }}
             >
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -1057,15 +1084,17 @@ JSON 형식으로만 반환해줘:
                 }
               </svg>
               {workoutMode === 'overload' ? '과부하' : '디로딩'}
-            </button>
-            <button
-              className={`w-6 h-6 flex-none flex items-center justify-center p-0 leading-none transition-transform duration-100 active:scale-[0.85] ${freeMode || canUndo ? 'text-typo-normal opacity-100' : 'text-[#868E96] opacity-100'}`}
+            </Pressable>
+            <Pressable
+              pressScale={0.85}
+              className={`w-6 h-6 flex-none flex items-center justify-center p-0 leading-none ${freeMode || canUndo ? 'text-typo-normal opacity-100' : 'text-[#868E96] opacity-100'}`}
               onMouseDown={(e) => { e.preventDefault(); handleUndo(); }}
-            ><IcUndo size={18} /></button>
-            <button
-              className={`w-6 h-6 flex-none flex items-center justify-center p-0 leading-none transition-transform duration-100 active:scale-[0.85] ${freeMode || canRedo ? 'text-typo-normal opacity-100' : 'text-[#868E96] opacity-100'}`}
+            ><IcUndo size={18} /></Pressable>
+            <Pressable
+              pressScale={0.85}
+              className={`w-6 h-6 flex-none flex items-center justify-center p-0 leading-none ${freeMode || canRedo ? 'text-typo-normal opacity-100' : 'text-[#868E96] opacity-100'}`}
               onMouseDown={(e) => { e.preventDefault(); handleRedo(); }}
-            ><IcRedo size={18} /></button>
+            ><IcRedo size={18} /></Pressable>
           </div>
         </div>
 
@@ -1219,12 +1248,13 @@ JSON 형식으로만 반환해줘:
                     <div className="w-4 h-4 border-2 border-brand/20 border-t-brand rounded-full animate-spin" />
                   </div>
                 ) : (
-                  <button
+                  <Pressable
+                    pressScale={0.92}
                     onClick={(e) => openSectionPopover(sec.id, e, 'section')}
                     className="flex-none"
                   >
-                    <IcAI active={sectionPopover === sec.id && sectionPopoverSource === 'section'} />
-                  </button>
+                    <IcSpark active={sectionPopover === sec.id && sectionPopoverSource === 'section'} />
+                  </Pressable>
                 )}
               </div>
               {partSuggestions.secId === sec.id && partSuggestions.items.length > 0 && (
@@ -1270,6 +1300,7 @@ JSON 형식으로만 반환해줘:
                 isAI={item.isAI}
                 prevMaxWeight={exerciseStats[item.title]}
                 onAiClick={(e) => openSectionPopover(sec.id, e, 'item', item.id)}
+                aiActive={sectionPopover === sec.id && sectionPopoverSource === 'item' && sectionPopoverItemId === item.id}
                 isConverting={convertingItems.current.has(`${sec.id}_${item.id}`)}
               />
             ))}
@@ -1308,12 +1339,13 @@ JSON 형식으로만 반환해줘:
 
       {/* 하단 저장 액션바 */}
       <div className="flex-none bg-white border-t border-ui-2 px-5 pt-4 pb-10">
-        <button
+        <Pressable
+          pressScale={0.97}
           onClick={handleSave}
-          className="w-full h-[56px] bg-brand rounded-2xl font-pretendard font-bold text-[16px] text-white tracking-[-0.4px] transition-all duration-100 active:scale-[0.97] active:brightness-90"
+          className="w-full h-[56px] bg-brand rounded-2xl font-pretendard font-bold text-[16px] text-white tracking-[-0.4px]"
         >
           저장하기
-        </button>
+        </Pressable>
       </div>
 
       {/* 섹션별 AI 팝오버 (fixed 위치) */}
@@ -1327,7 +1359,9 @@ JSON 형식으로만 반환해줘:
               left: sectionPopoverPos.left ?? 16,
               width: 279,
               background: 'linear-gradient(115deg, #EDECFF 1.7%, #E6DBFD 30.89%, #ECEFFB 64.69%, #EFFBED 100%)',
-              boxShadow: '0 0 8px rgba(141,192,255,0.5), 0 0 32px rgba(215,231,255,0.5)'
+              backgroundSize: '200% 200%',
+              boxShadow: '0 0 8px rgba(141,192,255,0.5), 0 0 32px rgba(215,231,255,0.5)',
+              animation: 'dropdownEnter 0.25s cubic-bezier(0.16,1,0.3,1) forwards, popoverGradientIn 0.7s cubic-bezier(0.05,0.8,0.2,1) forwards'
             }}
           >
             <button
@@ -1370,7 +1404,16 @@ JSON 형식으로만 반환해줘:
                 </svg>
               </button>
             </div>
-            <div className={`w-full min-h-0 flex-1 rounded-2xl p-4 flex flex-col gap-4 bg-gradient-to-br from-[#EDECFF] via-[#ECEFFB] to-[#EFFBED] bg-[length:200%_200%] ${isBsLoading ? 'animate-[bsGradientMove_2.5s_ease_infinite]' : ''}`}>
+            <div
+              className="w-full min-h-0 flex-1 rounded-2xl p-4 flex flex-col gap-4"
+              style={{
+                background: 'linear-gradient(115deg, #EDECFF 1.7%, #E6DBFD 30.89%, #ECEFFB 64.69%, #EFFBED 100%)',
+                backgroundSize: '200% 200%',
+                animation: isBsLoading
+                  ? 'dropdownEnter 0.25s cubic-bezier(0.16,1,0.3,1) forwards, popoverGradientIn 0.7s cubic-bezier(0.05,0.8,0.2,1) forwards, bsGradientMove 2.5s ease 0.7s infinite'
+                  : 'dropdownEnter 0.25s cubic-bezier(0.16,1,0.3,1) forwards, popoverGradientIn 0.7s cubic-bezier(0.05,0.8,0.2,1) forwards'
+              }}
+            >
               {isBsLoading ? (
                 <div className="flex flex-col items-center justify-center min-h-[250px] gap-4">
                   <div className="w-10 h-10 border-[3px] border-brand/20 border-t-brand rounded-full animate-spin" />
@@ -1394,7 +1437,7 @@ JSON 형식으로만 반환해줘:
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-pretendard font-semibold text-[14px] text-typo-strong tracking-[-0.35px]">{sIt.title}</span>
                               {exerciseVolumeDeltas[sIt.title] != null && (
-                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold font-pretendard tracking-[-0.2px] ${exerciseVolumeDeltas[sIt.title] >= 0 ? 'bg-[#e6f9f0] text-[#1a9e5c]' : 'bg-[#ffeef0] text-[#e03e52]'}`}>
+                                <span className={`px-3 py-1 rounded-[12px] text-[11px] font-medium font-pretendard leading-4 tracking-[-0.275px] ${exerciseVolumeDeltas[sIt.title] >= 0 ? 'bg-[rgba(0,150,50,0.1)] text-[#009632]' : 'bg-[#ffeef0] text-[#e03e52]'}`}>
                                   {exerciseVolumeDeltas[sIt.title] > 0 ? '+' : ''}{exerciseVolumeDeltas[sIt.title]}%
                                 </span>
                               )}

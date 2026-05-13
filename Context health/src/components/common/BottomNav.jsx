@@ -1,5 +1,6 @@
 import React from 'react';
 import { IcHome, IcGenerate, IcUser } from '../icons/Icons';
+import Pressable from './Pressable';
 
 export default function BottomNav({ activeId = 'home', onChange }) {
   const tabs = [
@@ -13,10 +14,11 @@ export default function BottomNav({ activeId = 'home', onChange }) {
       {tabs.map(({ id, label, Icon }) => {
         const isActive = activeId === id;
         return (
-          <button
+          <Pressable
             key={id}
+            pressScale={0.88}
             onClick={() => onChange && onChange(id)}
-            className={`flex flex-col items-center gap-0.5 flex-1 py-2 bg-none border-none outline-none select-none transition-all duration-100 active:scale-[0.88] active:opacity-70 ${
+            className={`flex flex-col items-center gap-0.5 flex-1 py-2 bg-none border-none outline-none select-none ${
               isActive ? 'text-brand' : 'text-ui-6'
             }`}
           >
@@ -24,7 +26,7 @@ export default function BottomNav({ activeId = 'home', onChange }) {
             <span className="text-caption-l font-medium leading-normal tracking-[-0.3px]">
               {label}
             </span>
-          </button>
+          </Pressable>
         );
       })}
     </nav>

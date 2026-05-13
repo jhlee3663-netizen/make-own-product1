@@ -1,4 +1,5 @@
 import React from 'react';
+import Pressable from './Pressable';
 
 const VARIANTS = {
   primary: 'bg-brand text-white border-none',
@@ -25,20 +26,21 @@ export default function Button({
   onClick,
   ...props
 }) {
-  const baseStyle = 'flex items-center justify-center cursor-pointer select-none outline-none transition-all duration-100 active:scale-[0.97] active:brightness-95';
+  const baseStyle = 'flex items-center justify-center cursor-pointer select-none outline-none';
   const variantStyle = VARIANTS[variant] || VARIANTS.primary;
   const sizeStyle = SIZES[size] || SIZES.m;
   const widthStyle = fullWidth ? 'w-full' : '';
   const disabledStyle = disabled ? 'opacity-50 cursor-not-allowed bg-ui-4 text-typo-secondary border-none' : '';
 
   return (
-    <button
+    <Pressable
+      pressScale={0.97}
       onClick={onClick}
       disabled={disabled}
       className={`${baseStyle} ${widthStyle} ${disabled ? disabledStyle : variantStyle} ${sizeStyle} ${className}`}
       {...props}
     >
       {children}
-    </button>
+    </Pressable>
   );
 }
