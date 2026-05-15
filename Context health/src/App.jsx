@@ -13,6 +13,7 @@ import AICoachScreen    from './components/screens/AICoachScreen';
 import MyPageScreen     from './components/screens/MyPageScreen';
 import Toast            from './components/common/Toast';
 import BottomNav        from './components/common/BottomNav';
+import { refineDynamicCoachRoomMeta, STATIC_COACH_ROOM_IDS } from './utils/coachRooms';
 
 /* ── 프로필 localStorage 유틸 ── */
 function loadProfile() {
@@ -28,14 +29,33 @@ function loadCoachRooms() {
       if (!raw) return null;
       return JSON.parse(raw).map(m => ({ ...m, timestamp: m.timestamp ? new Date(m.timestamp) : undefined }));
     };
-    return { 
-      powerbuilding: parse('coach_msgs_powerbuilding'), 
-      dumbbell: parse('coach_msgs_dumbbell'),
-      diet: parse('coach_msgs_diet'),
-      mobility: parse('coach_msgs_mobility'),
-      routine: parse('coach_msgs_routine')
-    };
+    const result = {};
+    STATIC_COACH_ROOM_IDS.forEach(roomId => { result[roomId] = parse(`coach_msgs_${roomId}`); });
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i);
+      if (!key?.startsWith('coach_msgs_chat_')) continue;
+      result[key.replace('coach_msgs_', '')] = parse(key);
+    }
+    return result;
   } catch { return {}; }
+}
+
+function loadCoachRoomMeta() {
+  try {
+    const result = {};
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i);
+      if (!key?.startsWith('coach_room_meta_')) continue;
+      const meta = JSON.parse(localStorage.getItem(key));
+      if (meta?.id) result[meta.id] = meta;
+    }
+    return result;
+  } catch { return {}; }
+}
+
+function saveCoachRoomMeta(meta) {
+  if (!meta?.id) return;
+  try { localStorage.setItem(`coach_room_meta_${meta.id}`, JSON.stringify(meta)); } catch {}
 }
 
 /* ── AI 목표 localStorage 유틸 ── */
@@ -64,6 +84,7 @@ function App() {
   const [tab, setTab]         = useState('home');
   const [prevTab, setPrevTab] = useState('home');
   const [screen, setScreen]   = useState('home'); // home | memo | diet-detail
+  const [exitingDetail, setExitingDetail] = useState(false);
 
   const [showToast, setShowToast]       = useState(false);
   const [memoKey, setMemoKey]           = useState(0);
@@ -71,6 +92,7 @@ function App() {
   const [editingLog, setEditingLog]     = useState(null);
   const [editingDietLog, setEditingDietLog] = useState(null);
   const [coachRooms, setCoachRooms]     = useState(loadCoachRooms);
+  const [coachRoomMeta, setCoachRoomMeta] = useState(loadCoachRoomMeta);
   const [coachRoom, setCoachRoom]       = useState(null); // null = 목록 | 'workout' | 'diet'
   const [coachPendingMessage, setCoachPendingMessage] = useState(null);
   const [coachOverlay, setCoachOverlay] = useState(null);
@@ -120,6 +142,18 @@ function App() {
     window.history.replaceState(makeHistoryState(historyIndexRef.current, nextView), '');
   }
 
+  function closeHomeDetail() {
+    replaceApp({ tab: 'home', screen: 'home', coachRoom: null, coachOverlay: null });
+  }
+
+  function closeHomeDetailWithAnimation() {
+    setExitingDetail(true);
+    setTimeout(() => {
+      setExitingDetail(false);
+      closeHomeDetail();
+    }, 340);
+  }
+
   function goBackOrHome(fallbackView = { tab: 'home', screen: 'home', coachRoom: null, coachOverlay: null }) {
     if (isAppHistoryState(window.history.state) && window.history.state.index > 0) {
       window.history.back();
@@ -163,7 +197,16 @@ function App() {
       if (!isAppHistoryState(event.state)) return;
       popRestoringRef.current = true;
       historyIndexRef.current = Number(event.state.index || 0);
-      applyView(event.state.view);
+      const current = latestViewRef.current;
+      const isClosingHomeDetail = current?.tab === 'home' && (current?.screen === 'memo' || current?.screen === 'diet-detail') && !current?.coachOverlay;
+      const nextView = isClosingHomeDetail
+        ? { tab: 'home', screen: 'home', coachRoom: null, coachOverlay: null }
+        : event.state.view;
+      applyView(nextView);
+      if (isClosingHomeDetail) {
+        latestViewRef.current = nextView;
+        window.history.replaceState(makeHistoryState(historyIndexRef.current, nextView), '');
+      }
       window.setTimeout(() => { popRestoringRef.current = false; }, 0);
     };
 
@@ -202,12 +245,19 @@ function App() {
       }
       setCoachRooms(prev => {
         const next = { ...prev };
-        for (const [roomId, msgs] of Object.entries(fsRooms)) {
-          if (msgs) {
-            next[roomId] = msgs;
-            try { localStorage.setItem(`coach_msgs_${roomId}`, JSON.stringify(msgs)); } catch {}
+        const nextMeta = {};
+        for (const [roomId, value] of Object.entries(fsRooms)) {
+          const data = Array.isArray(value) ? { messages: value, meta: null } : value;
+          if (data?.messages) {
+            next[roomId] = data.messages;
+            try { localStorage.setItem(`coach_msgs_${roomId}`, JSON.stringify(data.messages)); } catch {}
+          }
+          if (data?.meta?.id) {
+            nextMeta[roomId] = data.meta;
+            saveCoachRoomMeta(data.meta);
           }
         }
+        if (Object.keys(nextMeta).length) setCoachRoomMeta(prevMeta => ({ ...prevMeta, ...nextMeta }));
         return next;
       });
     }
@@ -244,14 +294,35 @@ function App() {
   }
 
   function handleCoachMessagesChange(roomId, msgs) {
+    let meta = coachRoomMeta[roomId] || null;
+    const latestUserText = [...(msgs || [])].reverse().find(m => m.role === 'user' && m.text)?.text;
+    const refinedMeta = latestUserText ? refineDynamicCoachRoomMeta(meta, latestUserText) : meta;
+    if (refinedMeta && refinedMeta !== meta) {
+      meta = refinedMeta;
+      setCoachRoomMeta(prev => ({ ...prev, [roomId]: refinedMeta }));
+      saveCoachRoomMeta(refinedMeta);
+    }
     setCoachRooms(prev => ({ ...prev, [roomId]: msgs }));
     try { localStorage.setItem(`coach_msgs_${roomId}`, JSON.stringify(msgs)); } catch {}
-    if (user?.uid) saveCoachRoom(user.uid, roomId, msgs).catch(() => {});
+    if (user?.uid) saveCoachRoom(user.uid, roomId, msgs, meta).catch(() => {});
+  }
+
+  function handleStartNewCoachRoom(meta, message) {
+    saveCoachRoomMeta(meta);
+    setCoachRoomMeta(prev => ({ ...prev, [meta.id]: meta }));
+    setCoachPendingMessage(message);
+    navigateApp({ tab: 'coach', screen: 'home', coachRoom: meta.id, coachOverlay: null });
   }
 
   function handleCoachRoomDelete(roomId) {
     setCoachRooms(prev => ({ ...prev, [roomId]: null }));
+    setCoachRoomMeta(prev => {
+      const next = { ...prev };
+      delete next[roomId];
+      return next;
+    });
     try { localStorage.removeItem(`coach_msgs_${roomId}`); } catch {}
+    try { localStorage.removeItem(`coach_room_meta_${roomId}`); } catch {}
     if (coachRoom === roomId) {
       replaceApp({ tab: 'coach', screen: 'home', coachRoom: null, coachOverlay: null });
     }
@@ -366,10 +437,12 @@ function App() {
               {coachRoom === null ? (
                 <CoachListScreen
                   rooms={coachRooms}
+                  roomMeta={coachRoomMeta}
                   onOpenRoom={(roomId, msg) => {
                     if (msg) handleOpenCoachWithMessage(roomId, msg);
                     else navigateApp({ tab: 'coach', screen: 'home', coachRoom: roomId, coachOverlay: null });
                   }}
+                  onStartNewRoom={handleStartNewCoachRoom}
                   onDeleteRoom={handleCoachRoomDelete}
                   onNavChange={handleNavChange}
                 />
@@ -379,7 +452,8 @@ function App() {
                   user={user}
                   profile={profile}
                   onNavChange={handleNavChange}
-                  roomType={coachRoom}
+                  roomType={coachRoomMeta[coachRoom]?.type || coachRoom}
+                  roomMeta={coachRoomMeta[coachRoom]}
                   savedMessages={coachRooms[coachRoom]}
                   onMessagesChange={(msgs) => handleCoachMessagesChange(coachRoom, msgs)}
                   onAcceptSuggestion={handleAcceptSuggestion}
@@ -397,10 +471,10 @@ function App() {
 
             {/* 메모 상세 — 오른쪽에서 슬라이드 (홈 탭에서만) */}
             {screen === 'memo' && tab === 'home' && (
-              <div className="detail-overlay" onAnimationEnd={(e) => { if (e.target === e.currentTarget) e.currentTarget.style.animation = 'none'; }}>
+              <div style={{ position: 'absolute', inset: 0, zIndex: 20, animation: exitingDetail ? 'slideOutToRight 350ms cubic-bezier(0.4,0,1,1) forwards' : 'slideInFromRight 420ms cubic-bezier(0.42,0,0.58,1) both' }}>
                 <WorkoutMemoScreen
                   key={`memo-${memoKey}`}
-                  onBack={() => goBackOrHome()}
+                  onBack={closeHomeDetailWithAnimation}
                   onSave={handleSaveMemo}
                   initialData={editingLog}
                   uid={user.uid}
@@ -423,7 +497,8 @@ function App() {
                   key={`coach-overlay-${coachOverlay.roomId}`}
                   user={user}
                   profile={profile}
-                  roomType={coachOverlay.roomId}
+                  roomType={coachRoomMeta[coachOverlay.roomId]?.type || coachOverlay.roomId}
+                  roomMeta={coachRoomMeta[coachOverlay.roomId]}
                   savedMessages={coachRooms[coachOverlay.roomId]}
                   onMessagesChange={(msgs) => handleCoachMessagesChange(coachOverlay.roomId, msgs)}
                   onAcceptSuggestion={addAiGoal}
@@ -436,10 +511,10 @@ function App() {
 
             {/* 식단 상세 — 오른쪽에서 슬라이드 (홈 탭에서만) */}
             {screen === 'diet-detail' && tab === 'home' && (
-              <div className="detail-overlay" onAnimationEnd={(e) => { if (e.target === e.currentTarget) e.currentTarget.style.animation = 'none'; }}>
+              <div style={{ position: 'absolute', inset: 0, zIndex: 20, animation: exitingDetail ? 'slideOutToRight 350ms cubic-bezier(0.4,0,1,1) forwards' : 'slideInFromRight 420ms cubic-bezier(0.42,0,0.58,1) both' }}>
                 <DietDetailScreen
                   key={`diet-${dietKey}`}
-                  onBack={() => goBackOrHome()}
+                  onBack={closeHomeDetailWithAnimation}
                   onSave={handleSaveDiet}
                   initialData={editingDietLog}
                   uid={user.uid}

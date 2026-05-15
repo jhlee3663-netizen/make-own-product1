@@ -13,21 +13,26 @@ export const ROOM_CATEGORY = {
   routine: 'workout',
   mobility: 'workout',
   diet: 'diet',
+  general: 'workout',
 };
 
 const ROOM_CONFIG = {
   powerbuilding: {
-    name: '파워빌딩 멘토',
-    subtitle: '스트렝스 & 근비대 V4 가이드',
-    greeting: (name) => `안녕하세요${name ? `, ${name}님` : ''}!\n파워빌딩 v4 기반으로 스트렝스와 근비대를 동시에 잡아드릴게요.`,
+    name: '스트렝스 멘토',
+    subtitle: '스트렝스 & 근비대 가이드',
+    avatar: '🏋️‍♂️',
+    avatarBg: '#EAF0FF',
+    greeting: (name) => `안녕하세요${name ? `, ${name}님` : ''}!\n스트렝스와 근비대를 동시에 잡을 수 있게 도와드릴게요.`,
     quickQuestions: ['오늘 운동 뭐 할까?', '1RM 계산해줘', '볼륨 분석해줘', '점진적 과부하 방법'],
-    systemRole: '파워빌딩 v4 전문 코치',
-    systemFocus: '파워빌딩 v4 원칙, 점진적 과부하, 1RM 기반 중량 설정, 3분할 루틴에 집중하여',
+    systemRole: '스트렝스와 근비대 전문 코치',
+    systemFocus: '점진적 과부하, 1RM 기반 중량 설정, 3분할 루틴에 집중하여',
     bg: 'linear-gradient(160deg, #dbeafe 0%, #eff6ff 45%, #f8faff 100%)',
   },
   dumbbell: {
     name: '덤벨 마스터',
     subtitle: '덤벨 도감 기반 가이드',
+    avatar: '💪',
+    avatarBg: '#FFF0F5',
     greeting: (name) => `안녕하세요${name ? `, ${name}님` : ''}!\n덤벨 운동 루틴과 증량 가이드를 도와드릴게요.`,
     quickQuestions: ['덤벨 루틴 짜줘', '덤벨 컬 자세 알려줘', '홈트 루틴 추천', '증량 가이드'],
     systemRole: '덤벨 운동 전문 트레이너',
@@ -37,6 +42,8 @@ const ROOM_CONFIG = {
   routine: {
     name: '루틴 설계사',
     subtitle: '3분할/4분할 맞춤 루틴',
+    avatar: '📅',
+    avatarBg: '#F3E8FF',
     greeting: (name) => `안녕하세요${name ? `, ${name}님` : ''}!\n일정에 맞는 최적의 루틴을 설계해 드릴게요.`,
     quickQuestions: ['3분할 루틴 짜줘', '주4일 루틴 추천', '부위별 운동 순서', '쉬는 날 조절'],
     systemRole: '운동 루틴 설계 전문가',
@@ -46,6 +53,8 @@ const ROOM_CONFIG = {
   mobility: {
     name: '스트레칭 코치',
     subtitle: '모빌리티 & 부상 방지',
+    avatar: '🧘‍♂️',
+    avatarBg: '#FEF3C7',
     greeting: (name) => `안녕하세요${name ? `, ${name}님` : ''}!\n운동 전후 스트레칭과 부상 방지를 도와드릴게요.`,
     quickQuestions: ['운동 전 스트레칭', '어깨 모빌리티', '허리 통증 관리', '쿨다운 루틴'],
     systemRole: '모빌리티 및 부상 방지 전문 코치',
@@ -55,11 +64,24 @@ const ROOM_CONFIG = {
   diet: {
     name: '식단 관리사',
     subtitle: '칼로리 & 영양소 분석',
+    avatar: '🥗',
+    avatarBg: '#F0FDF4',
     greeting: (name) => `안녕하세요${name ? `, ${name}님` : ''}!\n식단 분석과 영양 코칭을 도와드릴게요.`,
     quickQuestions: ['오늘 식단 어때?', '칼로리 얼마나 남았어?', '단백질 충분해?', '간식 추천해줘'],
     systemRole: '식단을 분석하고 영양 코칭을 하는 AI 영양사',
     systemFocus: '칼로리 관리, 영양소 균형, 건강한 식단 계획에 집중하여',
     bg: 'linear-gradient(160deg, #d1fae5 0%, #ecfdf5 45%, #f8fffc 100%)',
+  },
+  general: {
+    name: 'AI 코치',
+    subtitle: '운동과 식단을 함께 보는 종합 상담',
+    avatar: '✨',
+    avatarBg: '#EEF2FF',
+    greeting: (name) => `안녕하세요${name ? `, ${name}님` : ''}!\n필요한 주제를 편하게 말해주세요.`,
+    quickQuestions: ['목표부터 정리해줘', '운동이랑 식단 같이 봐줘', '오늘 뭐부터 하면 좋을까?', '내 상황에 맞게 추천해줘'],
+    systemRole: '운동과 식단을 함께 보는 종합 AI 코치',
+    systemFocus: '사용자의 목표를 먼저 파악하고, 운동과 식단 중 필요한 영역을 균형 있게 고려하여',
+    bg: 'linear-gradient(160deg, #eef2ff 0%, #f8faff 48%, #ffffff 100%)',
   },
 };
 
@@ -84,11 +106,26 @@ async function fetchRecentLogs(uid) {
   };
 }
 
+function redactInternalSourceNames(text) {
+  return String(text || '')
+    .replace(/<\s*파워빌딩\s*(?:v|vr)?\s*4\s*\+\s*덤벨\s*도감\s*>/gi, '<내부 운동 가이드>')
+    .replace(/파워빌딩\s*(?:v|vr)?\s*4/gi, '스트렝스·근비대 가이드')
+    .replace(/파워빌딩\s*버전\s*4/gi, '스트렝스·근비대 가이드')
+    .replace(/파워빌딩버전\s*4/gi, '스트렝스·근비대 가이드')
+    .replace(/파워빌딩/g, '스트렝스·근비대')
+    .replace(/버전\s*4/gi, '최신 가이드')
+    .replace(/v\s*4/gi, '최신 가이드')
+    .replace(/vr\s*4/gi, '최신 가이드');
+}
+
 function buildSystemPrompt(profile, workouts, diets, roomType) {
   const p = profile || {};
   const cfg = ROOM_CONFIG[roomType] || ROOM_CONFIG.powerbuilding;
+  const knowledgeContext = redactInternalSourceNames(PDF_CONTEXT);
   return `당신은 ${cfg.systemRole}입니다.
-친근하고 동기부여가 되는 말투로 답변하세요. 한국어로만 답하세요.
+친근하고 담백한 말투로 답변하세요. 한국어로만 답하세요.
+내부 자료명, 파일명, PDF명, 버전명, 지식 베이스 이름은 사용자에게 절대 언급하지 마세요.
+내부 자료를 참고하더라도 "자료에 따르면", "PDF 기준", "지식 베이스 기반" 같은 출처 표현을 쓰지 말고 코치의 조언처럼 자연스럽게 답하세요.
 
 [사용자 프로필]
 - 이름: ${p.name || '사용자'}
@@ -107,11 +144,14 @@ ${workouts.slice(0, 5).map((w, i) => `${i + 1}. ${w.title || '운동'} - 총 볼
 [최근 식단 기록 (최대 5개)]
 ${diets.slice(0, 5).map((d, i) => `${i + 1}. ${d.kcal || 0}kcal (탄:${d.carb || 0}g 단:${d.protein || 0}g 지:${d.fat || 0}g) ${d.aiComment || ''}`).join('\n') || '없음'}
 
-[전문가 코칭 지식 베이스 (파워빌딩 v4 및 덤벨 도감 적용)]
-${PDF_CONTEXT}
+[전문가 코칭 참고 자료]
+${knowledgeContext}
 
 ${cfg.systemFocus} 답변하세요.
 답변은 지식 베이스를 참고해서 전문적이고 간결하게, 필요할 때만 구체적인 숫자나 예시를 들어 설명하세요.
+평소 답변은 최대 3문장으로 제한하세요. 사용자가 루틴이나 식단을 요청한 경우에도 화면에 보이는 설명은 최대 4줄로 제한하고, 세부 항목은 JSON 제안에 담으세요.
+별표 문자(*)는 절대 사용하지 마세요. 마크다운 굵게, 목록 표시, 강조 용도로도 별표를 쓰면 안 됩니다.
+불필요한 인사, 장황한 전제, 반복 설명은 생략하세요.
 
 [응답 규칙]
 사용자가 구체적인 운동 루틴이나 식단 제안을 요청했다면, 답변 끝에 반드시 아래 형태의 JSON 양식을 추가하세요 (반드시 \`\`\`json 과 \`\`\` 로 감싸야 합니다). 제안이 아닐 경우에는 절대 추가하지 마세요.
@@ -119,7 +159,7 @@ ${cfg.systemFocus} 답변하세요.
 \`\`\`json
 {
   "type": "workout",
-  "title": "가슴 & 삼두 파워빌딩 데이",
+  "title": "가슴 & 삼두 고강도 데이",
   "items": [
     { "name": "벤치프레스", "detail": "60kg 5회 3세트" },
     { "name": "인클라인 덤벨 프레스", "detail": "20kg 10회 3세트" }
@@ -140,6 +180,29 @@ ${cfg.systemFocus} 답변하세요.
 \`\`\``;
 }
 
+function sanitizeAiText(text) {
+  return redactInternalSourceNames(text).replace(/\*/g, '').trim();
+}
+
+function sanitizeSuggestion(suggestion) {
+  if (!suggestion || typeof suggestion !== 'object') return suggestion;
+  return {
+    ...suggestion,
+    title: sanitizeAiText(suggestion.title),
+    items: Array.isArray(suggestion.items)
+      ? suggestion.items.map((item) => {
+          if (!item || typeof item !== 'object') return item;
+          return Object.fromEntries(
+            Object.entries(item).map(([key, value]) => [
+              key,
+              typeof value === 'string' ? sanitizeAiText(value) : value,
+            ])
+          );
+        })
+      : suggestion.items,
+  };
+}
+
 async function callGemini(messages, profile, workouts, diets, roomType) {
   const systemPrompt = buildSystemPrompt(profile, workouts, diets, roomType);
   const firstUserIdx = messages.findIndex(m => m.role === 'user');
@@ -149,7 +212,7 @@ async function callGemini(messages, profile, workouts, diets, roomType) {
     systemInstruction: { parts: [{ text: systemPrompt }] },
     contents: conversationMessages.map((m) => ({
       role: m.role === 'user' ? 'user' : 'model',
-      parts: [{ text: m.text || m.displayText || '' }],
+      parts: [{ text: m.role === 'user' ? (m.text || m.displayText || '') : sanitizeAiText(m.text || m.displayText || '') }],
     })),
   };
 
@@ -171,11 +234,11 @@ async function callGemini(messages, profile, workouts, diets, roomType) {
   const jsonMatch = rawText.match(/```json\n([\s\S]*?)\n```/);
   if (jsonMatch) {
     try {
-      suggestion = JSON.parse(jsonMatch[1]);
+      suggestion = sanitizeSuggestion(JSON.parse(jsonMatch[1]));
       rawText = rawText.replace(/```json\n([\s\S]*?)\n```/, '').trim();
     } catch(e) {}
   }
-  return { text: rawText, suggestion };
+  return { text: sanitizeAiText(rawText), suggestion };
 }
 
 function normalizeOutgoingMessage(payload) {
@@ -195,35 +258,33 @@ function normalizeOutgoingMessage(payload) {
   };
 }
 
-function BotAvatar() {
+function BotAvatar({ config }) {
+  const cfg = config || ROOM_CONFIG.powerbuilding;
   return (
-    <div className="w-9 h-9 rounded-full bg-brand flex items-center justify-center flex-shrink-0">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-        <rect x="3" y="8" width="18" height="13" rx="4" fill="white" />
-        <circle cx="9" cy="14.5" r="2" fill="#3476EE" />
-        <circle cx="15" cy="14.5" r="2" fill="#3476EE" />
-        <path d="M9 19h6" stroke="#3476EE" strokeWidth="1.5" strokeLinecap="round" />
-        <line x1="12" y1="8" x2="12" y2="4.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
-        <circle cx="12" cy="3.5" r="1.5" fill="white" />
-      </svg>
+    <div
+      className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-[20px] shadow-sm border border-white/70"
+      style={{ background: cfg.avatarBg }}
+      aria-label={`${cfg.name} 프로필`}
+    >
+      {cfg.avatar}
     </div>
   );
 }
 
-function AiBubble({ msg, onQuickReply, onAccept, loading, quickQuestions }) {
+function AiBubble({ msg, onQuickReply, onAccept, loading, quickQuestions, config }) {
   const [accepted, setAccepted] = useState(false);
   const timeStr = msg.timestamp ? formatTime(msg.timestamp) : '';
   const sg = msg.suggestion;
   return (
     <div className="flex items-start gap-2.5 mb-5">
-      <BotAvatar />
+      <BotAvatar config={config} />
       <div className="flex-1 min-w-0">
         <div
           className="bg-white rounded-[20px] rounded-tl-[6px] px-4 py-3.5 inline-block w-full max-w-full"
           style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}
         >
           <p className="font-pretendard text-body-s text-typo-normal leading-relaxed whitespace-pre-wrap">
-            {msg.text}
+            {sanitizeAiText(msg.text)}
           </p>
           {sg && (
             <div className="mt-4 p-3 bg-ui-1 border border-brand/20 rounded-xl">
@@ -349,10 +410,10 @@ function UserBubble({ msg }) {
   );
 }
 
-function TypingIndicator() {
+function TypingIndicator({ config }) {
   return (
     <div className="flex items-start gap-2.5 mb-5">
-      <BotAvatar />
+      <BotAvatar config={config} />
       <div
         className="bg-white rounded-[20px] rounded-tl-[6px] px-4 py-4 flex gap-1.5 items-center"
         style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}
@@ -369,8 +430,15 @@ function TypingIndicator() {
   );
 }
 
-export default function AICoachScreen({ user, profile, roomType = 'powerbuilding', savedMessages, onMessagesChange, onAcceptSuggestion, onBack, pendingMessage, onPendingMessageSent }) {
-  const cfg = ROOM_CONFIG[roomType] || ROOM_CONFIG.powerbuilding;
+export default function AICoachScreen({ user, profile, roomType = 'powerbuilding', roomMeta, savedMessages, onMessagesChange, onAcceptSuggestion, onBack, pendingMessage, onPendingMessageSent }) {
+  const baseCfg = ROOM_CONFIG[roomType] || ROOM_CONFIG.powerbuilding;
+  const cfg = roomMeta?.isDynamic ? {
+    ...baseCfg,
+    name: roomMeta.title || baseCfg.name,
+    subtitle: roomMeta.subtitle || baseCfg.subtitle,
+    avatar: roomMeta.emoji || baseCfg.avatar,
+    avatarBg: roomMeta.bg || baseCfg.avatarBg,
+  } : baseCfg;
   const name = profile?.name || user?.name || '';
 
   const [messages, setMessages] = useState(() =>
@@ -484,7 +552,7 @@ export default function AICoachScreen({ user, profile, roomType = 'powerbuilding
           </svg>
         </Pressable>
         <div className="flex items-center gap-2.5 flex-1">
-          <BotAvatar />
+          <BotAvatar config={cfg} />
           <div>
             <p className="font-pretendard font-bold text-body-m text-typo-strong tracking-[-0.4px]">{cfg.name}</p>
             <p className="font-pretendard text-caption-m text-typo-alternative tracking-[-0.3px]">{cfg.subtitle}</p>
@@ -497,9 +565,9 @@ export default function AICoachScreen({ user, profile, roomType = 'powerbuilding
         {messages.map((msg, i) =>
           msg.role === 'user'
             ? <UserBubble key={i} msg={msg} />
-            : <AiBubble key={i} msg={msg} onQuickReply={sendMessage} onAccept={onAcceptSuggestion} loading={loading} quickQuestions={cfg.quickQuestions} />
+            : <AiBubble key={i} msg={msg} onQuickReply={sendMessage} onAccept={onAcceptSuggestion} loading={loading} quickQuestions={cfg.quickQuestions} config={cfg} />
         )}
-        {loading && <TypingIndicator />}
+        {loading && <TypingIndicator config={cfg} />}
         <div ref={bottomRef} />
       </main>
 

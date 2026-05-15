@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { auth, googleProvider } from '../../lib/firebase';
 import { signInWithPopup, signInWithRedirect, getRedirectResult } from 'firebase/auth';
 import Pressable from '../common/Pressable';
@@ -41,18 +41,23 @@ const isKakaoInAppBrowser = () =>
 const isNaverInAppBrowser = () =>
   typeof navigator !== 'undefined' && /NAVER\(inapp|NaverApp|com\.naver\.naver/i.test(navigator.userAgent);
 
-const isSafariOrPWA = () =>
-  typeof navigator !== 'undefined' && (
-    window.navigator.standalone ||
-    /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
-  );
+const isStandalonePWA = () =>
+  typeof window !== 'undefined' && window.navigator.standalone === true;
+
+const isIOS = () =>
+  typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent);
 
 export default function LoginScreen({ onLogin }) {
   const [loading, setLoading] = useState(null); // 'google' | 'kakao' | 'naver'
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
-  const [bubbleStates, setBubbleStates] = useState({}); // id → 'popping' | 'hidden'
+  const [bubbleStates, setBubbleStates] = useState({});
   const isInAppBrowser = isKakaoInAppBrowser() || isNaverInAppBrowser();
+
+  // 최신 onLogin 참조 유지 — useEffect deps에 onLogin을 넣으면 App.jsx 재렌더 시
+  // 함수 참조가 바뀌어 getRedirectResult 등이 중복 호출되는 문제 방지
+  const onLoginRef = useRef(onLogin);
+  onLoginRef.current = onLogin;
 
   function popBubble(id) {
     if (bubbleStates[id]) return;
@@ -65,12 +70,12 @@ export default function LoginScreen({ onLogin }) {
     }, 300);
   }
 
-  /* ── Google redirect 결과 처리 (모바일 redirect 로그인 후 복귀) ── */
+  /* ── Google redirect 결과 처리 (standalone PWA / popup-blocked fallback 후 복귀) ── */
   useEffect(() => {
     getRedirectResult(auth)
       .then(result => {
         if (result?.user) {
-          onLogin({
+          onLoginRef.current({
             uid:    result.user.uid,
             name:   result.user.displayName,
             email:  result.user.email,
@@ -84,50 +89,51 @@ export default function LoginScreen({ onLogin }) {
           setError('Google 로그인에 실패했습니다. 잠시 후 다시 시도해주세요.');
         }
       });
-  }, [onLogin]);
+  }, []); // mount 시 1회만 — onLogin ref로 최신 참조 사용
 
-  /* ── Naver SDK 초기화 및 콜백 처리 ── */
+  /* ── Naver 콜백 처리 (OAuth redirect 후 복귀 시 access_token이 hash에 존재) ── */
   useEffect(() => {
+    if (!window.location.hash.includes('access_token')) return;
     const clientId = import.meta.env.VITE_NAVER_CLIENT_ID;
     if (!clientId || !window.naver) return;
-    // 네이버 OAuth 리다이렉트로 돌아온 경우에만 처리 (기존 세션 자동로그인 방지)
-    if (!window.location.hash.includes('access_token')) return;
 
     const naverLogin = new window.naver.LoginWithNaverId({
       clientId,
       callbackUrl: window.location.origin,
       isPopup: false,
-      loginButton: { color: "green", type: 1, height: 1 },
+      loginButton: { color: 'green', type: 1, height: 1 },
     });
     naverLogin.init();
 
     naverLogin.getLoginStatus((status) => {
       if (!status) return;
-      const user = naverLogin.user;
+      const u = naverLogin.user;
       const userData = {
-        uid:      `naver_${user.id}`,
-        name:     user.name || '네이버 사용자',
-        email:    user.email || '',
-        photo:    user.profile_image || '',
+        uid:      `naver_${u.id}`,
+        name:     u.name || '네이버 사용자',
+        email:    u.email || '',
+        photo:    u.profile_image || '',
         provider: 'naver',
       };
       localStorage.setItem('auth_user', JSON.stringify(userData));
-      onLogin(userData);
+      onLoginRef.current(userData);
       window.history.replaceState({}, document.title, window.location.pathname);
     });
-  }, [onLogin]);
+  }, []); // mount 시 1회만
 
   /* ── Google 로그인 ── */
   async function handleGoogle() {
     setLoading('google');
     setError('');
     try {
-      if (isSafariOrPWA()) {
+      // iOS는 standalone 포함 redirect 시 ITP가 인증 쿠키 차단 → popup 사용
+      // 비iOS standalone PWA(Android 등)만 redirect
+      if (isStandalonePWA() && !isIOS()) {
         await signInWithRedirect(auth, googleProvider);
         return;
       }
       const result = await signInWithPopup(auth, googleProvider);
-      onLogin({
+      onLoginRef.current({
         uid:    result.user.uid,
         name:   result.user.displayName,
         email:  result.user.email,
@@ -135,7 +141,9 @@ export default function LoginScreen({ onLogin }) {
         provider: 'google',
       });
     } catch (e) {
-      if (e.code === 'auth/popup-blocked') {
+      if (e.code === 'auth/popup-blocked' || e.code === 'auth/web-storage-unsupported') {
+        // 팝업 차단 또는 sessionStorage 차단(시크릿 모드 등) → redirect fallback
+        // Firebase redirect는 sessionStorage 대신 indexedDB/localStorage 사용하므로 iOS에서도 시도
         await signInWithRedirect(auth, googleProvider);
       } else if (e.code !== 'auth/popup-closed-by-user') {
         setError('Google 로그인에 실패했습니다. 잠시 후 다시 시도해주세요.');
@@ -151,6 +159,7 @@ export default function LoginScreen({ onLogin }) {
     try {
       const key = import.meta.env.VITE_KAKAO_APP_KEY;
       if (!key) { setError('VITE_KAKAO_APP_KEY가 .env에 없습니다.'); return; }
+      if (!window.Kakao) { setError('카카오 SDK를 불러오지 못했습니다. 페이지를 새로고침 해주세요.'); return; }
       setLoading('kakao');
       setError('');
 
@@ -172,7 +181,7 @@ export default function LoginScreen({ onLogin }) {
                 provider: 'kakao',
               };
               localStorage.setItem('auth_user', JSON.stringify(user));
-              onLogin(user);
+              onLoginRef.current(user);
               setLoading(null);
             },
             fail(err) {
@@ -197,16 +206,15 @@ export default function LoginScreen({ onLogin }) {
   }
 
   /* ── Naver 로그인 ── */
+  // SDK 버튼 방식 대신 직접 OAuth URL redirect
+  // (SDK 버튼은 init() 호출 전까지 DOM에 없어서 버튼 클릭 방식이 불안정함)
   function handleNaver() {
     const clientId = import.meta.env.VITE_NAVER_CLIENT_ID;
     if (!clientId) { setError('VITE_NAVER_CLIENT_ID가 .env에 없습니다.'); return; }
-    
-    const naverBtn = document.getElementById('naverIdLogin_loginButton');
-    if (naverBtn) {
-      naverBtn.click();
-    } else {
-      setError('네이버 로그인 초기화 실패');
-    }
+    setLoading('naver');
+    const state = Math.random().toString(36).substring(2, 15);
+    const redirectUri = encodeURIComponent(window.location.origin);
+    window.location.href = `https://nid.naver.com/oauth2.0/authorize?response_type=token&client_id=${clientId}&redirect_uri=${redirectUri}&state=${state}`;
   }
 
   async function handleCopyLink() {
@@ -377,7 +385,7 @@ export default function LoginScreen({ onLogin }) {
           <p className="font-pretendard text-[13px] text-[#e05a2b] text-center tracking-[-0.325px] -mb-1">{error}</p>
         )}
 
-        {/* 네이버 로그인을 위한 숨겨진 버튼 */}
+        {/* 네이버 SDK 콜백 처리용 컨테이너 (숨김) */}
         <div id="naverIdLogin" style={{ display: 'none' }}></div>
       </div>
     </div>

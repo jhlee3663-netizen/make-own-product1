@@ -1,11 +1,12 @@
 import React, { useRef, useState } from 'react';
 import Pressable from '../common/Pressable';
+import { createDynamicCoachRoomMeta } from '../../utils/coachRooms';
 
 export const COACH_ROOMS = [
   {
     id: 'powerbuilding',
-    name: '파워빌딩 멘토',
-    desc: '스트렝스와 근비대를 동시에, V4 가이드',
+    name: '스트렝스 멘토',
+    desc: '스트렝스와 근비대를 동시에 잡는 가이드',
     emoji: '🏋️‍♂️',
     bg: '#EAF0FF',
     badge: 'NEW',
@@ -42,10 +43,22 @@ export const COACH_ROOMS = [
 ];
 
 const QUICK_TIPS = [
-  { icon: '🎯', text: '파워빌딩은 스트렝스가 먼저다?', roomId: 'powerbuilding' },
+  { icon: '🎯', text: '스트렝스는 중량이 먼저다?', roomId: 'powerbuilding' },
   { icon: '📅', text: '오늘의 루틴 추천받기', roomId: 'routine' },
   { icon: '💡', text: '덤벨 컬 효과적으로 하는 법', roomId: 'dumbbell' },
 ];
+
+function sanitizePreviewText(text) {
+  return String(text || '')
+    .replace(/<\s*파워빌딩\s*(?:v|vr)?\s*4\s*\+\s*덤벨\s*도감\s*>/gi, '<내부 운동 가이드>')
+    .replace(/파워빌딩\s*(?:v|vr)?\s*4/gi, '스트렝스·근비대 가이드')
+    .replace(/파워빌딩\s*버전\s*4/gi, '스트렝스·근비대 가이드')
+    .replace(/파워빌딩버전\s*4/gi, '스트렝스·근비대 가이드')
+    .replace(/파워빌딩/g, '스트렝스·근비대')
+    .replace(/버전\s*4/gi, '최신 가이드')
+    .replace(/v\s*4/gi, '최신 가이드')
+    .replace(/vr\s*4/gi, '최신 가이드');
+}
 
 function formatDate(ts) {
   if (!ts) return '';
@@ -58,16 +71,7 @@ function formatDate(ts) {
   return `${d.getMonth() + 1}.${d.getDate()}`;
 }
 
-function inferRoomFromText(text) {
-  const value = String(text || '').toLowerCase();
-  if (/식단|음식|칼로리|단백질|탄수|지방|다이어트|감량|증량식|간식|아침|점심|저녁/.test(value)) return 'diet';
-  if (/덤벨|아령|홈트|컬|프레스|레이즈/.test(value)) return 'dumbbell';
-  if (/스트레칭|모빌리티|가동성|통증|부상|워밍업|쿨다운|어깨|허리/.test(value)) return 'mobility';
-  if (/루틴|분할|스케줄|주\s*\d|운동\s*순서|프로그램/.test(value)) return 'routine';
-  return 'powerbuilding';
-}
-
-export default function CoachListScreen({ rooms, onOpenRoom, onDeleteRoom }) {
+export default function CoachListScreen({ rooms, roomMeta, onOpenRoom, onStartNewRoom, onDeleteRoom }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [inputText, setInputText] = useState('');
   const [roomMenu, setRoomMenu] = useState(null);
@@ -75,12 +79,25 @@ export default function CoachListScreen({ rooms, onOpenRoom, onDeleteRoom }) {
   const longPressTimer = useRef(null);
   const longPressTriggered = useRef(false);
 
-  const roomsWithHistory = COACH_ROOMS.filter(r => rooms?.[r.id]?.length > 1);
+  const dynamicRooms = Object.values(roomMeta || {})
+    .filter(meta => meta?.isDynamic && rooms?.[meta.id]?.length > 1)
+    .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0))
+    .map(meta => ({
+      id: meta.id,
+      name: meta.title || 'AI 코치와 대화',
+      desc: meta.subtitle || '종합 상담',
+      emoji: meta.emoji || '✨',
+      bg: meta.bg || '#EEF2FF',
+      isDynamic: true,
+    }));
+  const staticRoomsWithHistory = COACH_ROOMS.filter(r => rooms?.[r.id]?.length > 1);
+  const roomsWithHistory = [...dynamicRooms, ...staticRoomsWithHistory];
 
   function handleSend() {
     const text = inputText.trim();
     if (!text) return;
-    onOpenRoom(inferRoomFromText(text), text);
+    const meta = createDynamicCoachRoomMeta(text);
+    onStartNewRoom?.(meta, text);
     setInputText('');
   }
 
@@ -218,7 +235,7 @@ export default function CoachListScreen({ rooms, onOpenRoom, onDeleteRoom }) {
                           <p className="font-pretendard text-caption-m text-typo-alternative flex-shrink-0">{formatDate(lastMsg?.timestamp)}</p>
                         </div>
                         <p className="font-pretendard text-caption-m text-typo-alternative truncate mt-0.5">
-                          {lastMsg?.text?.split('\n')[0].slice(0, 32) || '대화가 시작되었습니다.'}
+                          {sanitizePreviewText(lastMsg?.text).split('\n')[0].slice(0, 32) || '대화가 시작되었습니다.'}
                         </p>
                       </div>
                     </Pressable>
@@ -292,7 +309,7 @@ export default function CoachListScreen({ rooms, onOpenRoom, onDeleteRoom }) {
                     <div className="flex-1 min-w-0 pr-2">
                       <p className="font-pretendard font-bold text-[15px] text-typo-strong truncate">{r.name} <span className="text-typo-alternative text-[12px] font-normal ml-1 border-l border-ui-2 pl-2 tracking-[-0.3px]">{formatDate(lastMsg?.timestamp)}</span></p>
                       <p className="font-pretendard text-[13px] text-typo-alternative mt-1 truncate tracking-[-0.3px]">
-                        {lastMsg?.text?.split('\n')[0].slice(0, 24) || '최근 대화 없음'}...
+                        {sanitizePreviewText(lastMsg?.text).split('\n')[0].slice(0, 24) || '최근 대화 없음'}...
                       </p>
                     </div>
                   </Pressable>

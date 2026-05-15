@@ -7,7 +7,7 @@ import DonutChart from '../dashboard/DonutChart';
 import ConfirmModal from '../common/ConfirmModal';
 import Pressable from '../common/Pressable';
 import { getDietSummaryComment } from '../../utils/dietFeedback';
-import { estimateFoodNutrition, parseFoodMemo, resolveFoodNutrition, searchMfdsFoods } from '../../utils/nutritionLookup';
+import { estimateFoodNutrition, findCustomFood, normalizeFoodKey, parseFoodMemo, resolveFoodNutrition, searchMfdsFoods } from '../../utils/nutritionLookup';
 
 const DEFAULT_SECTIONS = [
   { id: 'breakfast',   name: '아침',     placeholder: '아침에 먹은 식단을 적어주세요\n(예: 고구마 하나 우유 한잔)' },
@@ -89,54 +89,98 @@ function getMealPatternFoods(secId, logs, minCount = 2, maxChips = 8) {
     .map(({ food }) => food);
 }
 
-/* 끼니별 피드백 — 해당 끼니뿐 아니라 하루 누적 탄단지와 다음 식사 방향까지 함께 본다. */
-function getMealTip(items, profile, dayTotals, goalKcal) {
+function getMacroPercents(totals) {
+  const carbKcal = Number(totals.carb || 0) * 4;
+  const proteinKcal = Number(totals.protein || 0) * 4;
+  const fatKcal = Number(totals.fat || 0) * 9;
+  const macroKcal = carbKcal + proteinKcal + fatKcal;
+  if (macroKcal <= 0) return { carbPercent: 0, proteinPercent: 0, fatPercent: 0, carbRatio: 0, proteinRatio: 0, fatRatio: 0 };
+  return {
+    carbPercent: Math.round((carbKcal / macroKcal) * 100),
+    proteinPercent: Math.round((proteinKcal / macroKcal) * 100),
+    fatPercent: Math.round((fatKcal / macroKcal) * 100),
+    carbRatio: carbKcal / macroKcal,
+    proteinRatio: proteinKcal / macroKcal,
+    fatRatio: fatKcal / macroKcal,
+  };
+}
+
+/* 끼니별 피드백 — 해당 끼니의 탄단지와 열량만 평가한다. */
+function getMealTip(items, profile, sectionId, goalKcal) {
   if (!items || items.length === 0) return null;
   const mealTotals = getItemsTotal(items);
-  const k = Number(dayTotals.kcal || 0);
   if (mealTotals.kcal === 0) return '기록은 됐어요. 칼로리와 탄단지를 채우면 다음 식사 피드백이 더 정확해져요';
-  const weight = Number(profile?.weight) || 70;
   const kcalTarget = Number(goalKcal || profile?.targetKcal || 2500);
-  const proteinTarget = Math.round(weight * 1.8);
-  const proteinGap = Math.max(0, proteinTarget - dayTotals.protein);
-  const proteinRatio = dayTotals.protein / proteinTarget;
-  const fatRatio = k > 0 ? (dayTotals.fat * 9) / k : 0;
-  const carbRatio = k > 0 ? (dayTotals.carb * 4) / k : 0;
-  const carbPercent = Math.round(carbRatio * 100);
-  const proteinPercent = Math.round(((dayTotals.protein * 4) / k) * 100);
-  const fatPercent = Math.round(fatRatio * 100);
-  const macroLabel = `현재 탄단지 ${carbPercent}:${proteinPercent}:${fatPercent}`;
+  const mealKcalTarget = {
+    breakfast: 0.22,
+    am_snack: 0.08,
+    lunch: 0.30,
+    pm_snack: 0.08,
+    dinner: 0.27,
+    night_snack: 0.10,
+  }[sectionId] || 0.22;
+  const expectedKcal = kcalTarget * mealKcalTarget;
+  const { carbPercent, proteinPercent, fatPercent, carbRatio, proteinRatio, fatRatio } = getMacroPercents(mealTotals);
+  const macroLabel = `이 끼니 탄단지 ${carbPercent}:${proteinPercent}:${fatPercent}`;
 
-  if (dayTotals.kcal > kcalTarget * 1.1) {
-    return `${macroLabel}, 목표 칼로리를 넘었어요. 다음 식사는 채소와 담백한 단백질 위주로 가볍게 맞춰요`;
+  if (mealTotals.kcal > expectedKcal * 1.45) {
+    if (fatRatio > 0.38) return `${macroLabel}, 열량과 지방이 높은 편이에요. 다음 끼니는 튀김·소스보다 담백하게 가요`;
+    if (carbRatio > 0.68) return `${macroLabel}, 열량과 탄수 비중이 높아요. 다음 끼니는 밥·면 양을 조금 낮춰요`;
+    return `${macroLabel}, 이 끼니 열량이 높은 편이에요. 다음 끼니는 조금 가볍게 맞춰요`;
   }
-  if (proteinRatio < 0.5) {
-    return `${macroLabel}, 단백질 축이 낮아요. 다음 식사는 단백질 ${proteinGap}g 보충하고 탄수·지방은 과하지 않게 가요`;
+  if (mealTotals.kcal < expectedKcal * 0.45) {
+    return `${macroLabel}, 이 끼니는 양이 적은 편이에요. 다음 끼니에서 부족한 열량을 자연스럽게 보완해요`;
   }
-  if (carbRatio > 0.65 && proteinRatio < 0.75) {
-    return `${macroLabel}, 탄수 비중이 높아요. 다음 식사는 단백질을 먼저 넣고 밥·면 양을 조금 낮춰요`;
+  if (carbRatio > 0.68) {
+    return `${macroLabel}, 탄수 비중이 높아요. 다음 끼니는 채소와 단백질을 조금 더 챙겨요`;
   }
-  if (fatRatio > 0.35) {
-    return `${macroLabel}, 지방 비율이 높아요. 다음 식사는 튀김·소스보다 담백한 단백질과 탄수로 맞춰요`;
+  if (fatRatio > 0.40) {
+    return `${macroLabel}, 지방 비율이 높아요. 다음 끼니는 기름진 메뉴나 소스를 줄여요`;
   }
-  if (fatRatio < 0.15 && dayTotals.kcal > kcalTarget * 0.35) {
-    return `${macroLabel}, 지방이 낮은 편이에요. 다음 식사에 견과류나 올리브오일처럼 좋은 지방을 조금 더해요`;
+  if (proteinRatio < 0.14 && mealTotals.protein < 15 && mealTotals.kcal >= expectedKcal * 0.55) {
+    return `${macroLabel}, 단백질이 낮은 편이에요. 다음 끼니에 살코기·두부·달걀 중 하나를 더해요`;
   }
-  if (proteinRatio >= 0.75 && fatRatio >= 0.18 && fatRatio <= 0.32 && carbRatio >= 0.35 && carbRatio <= 0.6) {
-    return `${macroLabel}, 균형이 좋아요. 다음 식사도 이 흐름이면 훌륭해요`;
+  if (fatRatio < 0.12 && mealTotals.kcal >= expectedKcal * 0.65) {
+    return `${macroLabel}, 지방이 낮은 편이에요. 견과류나 생선처럼 좋은 지방을 조금 더해도 좋아요`;
   }
-  return `${macroLabel}, 전체 흐름은 괜찮아요. 다음 식사에서 부족한 쪽만 살짝 보완하면 돼요`;
+  if (proteinRatio >= 0.16 && fatRatio >= 0.15 && fatRatio <= 0.35 && carbRatio >= 0.35 && carbRatio <= 0.62) {
+    return `${macroLabel}, 이 끼니 균형이 좋아요. 다음 끼니도 비슷한 흐름이면 충분해요`;
+  }
+  return `${macroLabel}, 이 끼니는 무난해요. 다음 끼니에서 부족한 쪽만 살짝 보완해요`;
 }
 
 const RECENT_KEY = 'diet_recent_foods';
+const CUSTOM_FOODS_KEY = 'diet_custom_foods';
 
 function loadRecentFoods() {
   try { return JSON.parse(localStorage.getItem(RECENT_KEY)) || []; } catch { return []; }
 }
 
+function loadCustomFoods() {
+  try { return JSON.parse(localStorage.getItem(CUSTOM_FOODS_KEY)) || []; } catch { return []; }
+}
+
+function saveCustomFoods(foods) {
+  try { localStorage.setItem(CUSTOM_FOODS_KEY, JSON.stringify(foods)); } catch {}
+}
+
+function applyCustomFood(food, customFoods) {
+  const custom = findCustomFood(customFoods, food?.name);
+  if (!custom) return food;
+  return {
+    ...food,
+    kcal: custom.kcal,
+    carb: custom.carb,
+    protein: custom.protein,
+    fat: custom.fat,
+    source: 'custom',
+    matchedName: '내가 수정한 기준',
+  };
+}
+
 function pushRecent(newItems, current) {
-  const norm = newItems.map(({ name, kcal, carb, protein, fat }) => ({ name, kcal, carb, protein, fat }));
-  const merged = [...norm, ...current.filter(r => !norm.some(n => n.name === r.name))].slice(0, 15);
+  const norm = newItems.map(({ name, kcal, carb, protein, fat, source, matchedName }) => ({ name, kcal, carb, protein, fat, source, matchedName }));
+  const merged = [...norm, ...current.filter(r => !norm.some(n => normalizeFoodKey(n.name) === normalizeFoodKey(r.name)))].slice(0, 15);
   try { localStorage.setItem(RECENT_KEY, JSON.stringify(merged)); } catch {}
   return merged;
 }
@@ -162,6 +206,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
   const [editTarget, setEditTarget]   = useState(null);
   const [editForm, setEditForm]       = useState({ name: '', kcal: '', carb: '', protein: '', fat: '' });
   const [recentFoods, setRecentFoods] = useState(loadRecentFoods);
+  const [customFoods, setCustomFoods] = useState(loadCustomFoods);
   const [savedFoods, setSavedFoods]   = useState([]);
   const [allDietLogs, setAllDietLogs] = useState([]);
   const [searchModal, setSearchModal] = useState(null); // secId | null
@@ -261,7 +306,27 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
 
   const chipType = getChipType(totals.kcal, goalKcal);
   const chip     = chipType ? CHIP[chipType] : null;
-  const foodSuggestions = useMemo(() => mergeFoodLists(recentFoods, savedFoods), [recentFoods, savedFoods]);
+  const foodSuggestions = useMemo(() => mergeFoodLists(customFoods, recentFoods, savedFoods), [customFoods, recentFoods, savedFoods]);
+
+  function upsertCustomFood(food) {
+    const custom = {
+      key: normalizeFoodKey(food.name),
+      name: String(food.name || '').trim(),
+      kcal: Number(food.kcal || 0),
+      carb: Number(food.carb || 0),
+      protein: Number(food.protein || 0),
+      fat: Number(food.fat || 0),
+      source: 'custom',
+      matchedName: '내가 수정한 기준',
+      updatedAt: Date.now(),
+    };
+    if (!custom.key || !custom.name) return null;
+    const next = [custom, ...customFoods.filter(food => food.key !== custom.key)].slice(0, 80);
+    setCustomFoods(next);
+    saveCustomFoods(next);
+    setRecentFoods(prev => pushRecent([custom], prev));
+    return custom;
+  }
 
   /* AI 텍스트 분석 */
   async function handleAIAnalyze(secId) {
@@ -271,7 +336,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
     setAnalyzingVersion(v => v + 1);
     try {
       const parsedFoods = await parseFoodMemo(text);
-      const resolvedFoods = await Promise.all(parsedFoods.map(resolveFoodNutrition));
+      const resolvedFoods = await Promise.all(parsedFoods.map(food => resolveFoodNutrition(food, customFoods)));
       const newItems = resolvedFoods.map(item => ({
         id:      Math.random().toString(36).slice(2, 11),
         name:    String(item.name    || ''),
@@ -302,8 +367,14 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
     setSearchResult(null);
     setSearchResults([]);
     try {
+      const custom = findCustomFood(customFoods, searchQuery);
+      if (custom) {
+        setSearchResult(normalizeSearchItem(custom));
+        setSearchResults([]);
+        return;
+      }
       const mfdsItems = await searchMfdsFoods(searchQuery);
-      setSearchResults(mfdsItems);
+      setSearchResults(mfdsItems.map(food => applyCustomFood(food, customFoods)));
       if (mfdsItems.length === 0) {
         const item = await estimateFoodNutrition(searchQuery);
         setSearchResult(normalizeSearchItem(item));
@@ -316,22 +387,23 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
   }
 
   function normalizeSearchItem(item) {
+    const customApplied = applyCustomFood(item, customFoods);
     return {
       id: Math.random().toString(36).slice(2, 11),
-      name: String(item.name || searchQuery),
-      kcal: Number(item.kcal || 0),
-      carb: Number(item.carb || 0),
-      protein: Number(item.protein || 0),
-      fat: Number(item.fat || 0),
-      source: item.source || 'ai',
-      matchedName: item.matchedName || null,
-      serving: item.serving || '',
+      name: String(customApplied.name || searchQuery),
+      kcal: Number(customApplied.kcal || 0),
+      carb: Number(customApplied.carb || 0),
+      protein: Number(customApplied.protein || 0),
+      fat: Number(customApplied.fat || 0),
+      source: customApplied.source || 'ai',
+      matchedName: customApplied.matchedName || null,
+      serving: customApplied.serving || '',
     };
   }
 
   function handleAddSearchItem(food) {
     if (!food || !searchModal) return;
-    const item = { ...food, id: Math.random().toString(36).slice(2, 11) };
+    const item = { ...applyCustomFood(food, customFoods), id: Math.random().toString(36).slice(2, 11) };
     setSections(prev => prev.map(sec =>
       sec.id === searchModal ? { ...sec, items: [...(sec.items || []), item] } : sec
     ));
@@ -376,7 +448,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
   }
 
   function handleAddRecentFood(secId, food) {
-    const item = { ...food, id: Math.random().toString(36).slice(2, 11) };
+    const item = { ...applyCustomFood(food, customFoods), id: Math.random().toString(36).slice(2, 11) };
     setSections(prev => prev.map(sec =>
       sec.id === secId ? { ...sec, items: [...(sec.items || []), item] } : sec
     ));
@@ -397,13 +469,21 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
   function handleSaveEdit() {
     if (!editTarget) return;
     const { secId, itemId } = editTarget;
+    const editedFood = {
+      name: editForm.name,
+      kcal: Number(editForm.kcal || 0),
+      carb: Number(editForm.carb || 0),
+      protein: Number(editForm.protein || 0),
+      fat: Number(editForm.fat || 0),
+      source: 'custom',
+      matchedName: '내가 수정한 기준',
+    };
+    upsertCustomFood(editedFood);
     setSections(prev => prev.map(sec =>
       sec.id === secId
         ? { ...sec, items: (sec.items || []).map(item =>
             item.id === itemId
-              ? { ...item, name: editForm.name,
-                  kcal: Number(editForm.kcal || 0), carb: Number(editForm.carb || 0),
-                  protein: Number(editForm.protein || 0), fat: Number(editForm.fat || 0) }
+              ? { ...item, ...editedFood }
               : item
           )}
         : sec
@@ -471,12 +551,16 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
     <div className="flex flex-col h-full bg-[#f8f9fa] overflow-hidden">
       <ConfirmModal
         isOpen={showExitModal}
-        title="작성 중인 기록이 있습니다"
-        subtitle="현재까지 작성한 내용을 저장하지 않고 나가시겠습니까?"
-        confirmText="나가기"
+        title="식단 기록을 저장할까요?"
+        subtitle="저장하지 않고 나가면 현재까지 작성한 내용은 사라집니다."
+        confirmText="저장하고 나가기"
         cancelText="계속 작성"
-        confirmVariant="danger"
-        onConfirm={onBack}
+        tertiaryText="그냥 나가기"
+        onConfirm={() => {
+          setShowExitModal(false);
+          handleSaveClick();
+        }}
+        onTertiary={onBack}
         onCancel={() => setShowExitModal(false)}
       />
       <header className="flex-none bg-white z-20">
@@ -574,7 +658,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
           const secItems = sec.items || [];
           const secTotals = getItemsTotal(secItems);
           const secKcal  = secTotals.kcal;
-          const tip      = getMealTip(secItems, profile, totals, goalKcal);
+          const tip      = getMealTip(secItems, profile, sec.id, goalKcal);
           const inputValue = aiInputs[sec.id] || '';
           const matchedRecentFoods = inputValue.trim()
             ? getRecentMatches(inputValue, foodSuggestions)
@@ -595,6 +679,11 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
                   )}
                 </div>
               </div>
+              {secKcal > 0 && (
+                <p className="font-pretendard font-medium text-[12px] leading-[16px] tracking-[-0.3px] text-[#3476EE]/40 m-0 -mt-1">
+                  총 탄 {secTotals.carb}g · 단 {secTotals.protein}g · 지 {secTotals.fat}g
+                </p>
+              )}
 
               {/* 기록 항목 */}
               {secItems.length > 0 && (
@@ -605,7 +694,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
                         <p className="font-pretendard font-semibold text-[14px] text-[#495057] tracking-[-0.35px] truncate m-0">{item.name}</p>
                         <p className="font-pretendard text-[11px] text-[#868e96] tracking-[-0.2px] mt-0.5 m-0">
                           탄 {item.carb}g · 단 {item.protein}g · 지 {item.fat}g
-                          {item.source === 'mfds' ? ' · 식약처 DB' : item.source === 'standard' ? ' · 기준값' : item.source === 'ai' ? ' · AI 추정' : ''}
+                          {item.source === 'custom' ? ' · 내 기준' : item.source === 'mfds' ? ' · 식약처 DB' : item.source === 'standard' ? ' · 기준값' : item.source === 'ai' ? ' · AI 추정' : ''}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
@@ -756,7 +845,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
                       <div className="flex-1 min-w-0">
                         <p className="font-pretendard font-semibold text-[14px] text-[#171a1d] m-0 truncate">{food.name}</p>
                         <p className="font-pretendard text-[12px] text-[#868e96] mt-0.5 m-0">
-                          탄 {food.carb}g · 단 {food.protein}g · 지 {food.fat}g · {food.source === 'standard' ? '기준값' : '식약처 DB'}
+                          탄 {food.carb}g · 단 {food.protein}g · 지 {food.fat}g · {food.source === 'custom' ? '내 기준' : food.source === 'standard' ? '기준값' : '식약처 DB'}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
@@ -781,7 +870,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
                     <p className="font-pretendard font-semibold text-[14px] text-[#171a1d] m-0 truncate">{searchResult.name}</p>
                     <p className="font-pretendard text-[12px] text-[#868e96] mt-0.5 m-0">
                       탄 {searchResult.carb}g · 단 {searchResult.protein}g · 지 {searchResult.fat}g
-                      {searchResult.source === 'mfds' ? ' · 식약처 DB' : searchResult.source === 'standard' ? ' · 기준값' : searchResult.source === 'ai' ? ' · AI 추정' : ''}
+                      {searchResult.source === 'custom' ? ' · 내 기준' : searchResult.source === 'mfds' ? ' · 식약처 DB' : searchResult.source === 'standard' ? ' · 기준값' : searchResult.source === 'ai' ? ' · AI 추정' : ''}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
@@ -804,7 +893,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
                       <div className="flex-1 min-w-0">
                         <p className="font-pretendard font-semibold text-[14px] text-[#171a1d] m-0 truncate">{food.name}</p>
                         <p className="font-pretendard text-[12px] text-[#868e96] m-0">
-                          탄 {food.carb}g · 단 {food.protein}g · 지 {food.fat}g
+                          탄 {food.carb}g · 단 {food.protein}g · 지 {food.fat}g{food.source === 'custom' ? ' · 내 기준' : ''}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">

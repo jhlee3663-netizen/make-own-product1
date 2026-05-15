@@ -43,6 +43,26 @@ const SUMMARY_SET_TYPES = [
 
 const GEMINI_KEY = import.meta.env.VITE_GEMINI_KEY;
 
+function groupBySupersets(items) {
+  const groups = [];
+  let i = 0;
+  while (i < items.length) {
+    const sg = items[i].supersetGroup;
+    if (!sg) {
+      groups.push({ isSuperset: false, items: [items[i]] });
+      i++;
+    } else {
+      const group = [];
+      while (i < items.length && items[i].supersetGroup === sg) {
+        group.push(items[i]);
+        i++;
+      }
+      groups.push({ isSuperset: true, supersetGroup: sg, items: group });
+    }
+  }
+  return groups;
+}
+
 const createEmptyWorkoutSections = () => [
   { id: 1, part: "", items: [] }
 ];
@@ -252,7 +272,7 @@ export default function WorkoutMemoScreen({ onBack, onSave, initialData, uid, pr
       return initialData.sections.map((s, i) => ({
         id: i + 1,
         part: s.part || "",
-        items: (s.items || []).map((it, j) => ({ id: j + 1, title: it.title || "", body: it.body || "" }))
+        items: (s.items || []).map((it, j) => ({ id: j + 1, title: it.title || "", body: it.body || "", supersetGroup: it.supersetGroup ?? null }))
       }));
     }
     return createEmptyWorkoutSections();
@@ -417,16 +437,24 @@ export default function WorkoutMemoScreen({ onBack, onSave, initialData, uid, pr
     try {
       const rawText = sections.map(s => `부위: ${s.part}\n${s.items.map(i => `- 종목: ${i.title}\n  기록: ${i.body}`).join('\n')}`).join('\n\n');
       const prompt = `다음 사용자의 거친 운동 메모 데이터를 보기 좋게 정리해서 JSON 배열로 반환해줘.
-응답 형식: [{ "part": "운동부위", "items": [{ "title": "운동종목", "body": "• 세트 1: 20kg 15회\\n• 세트 2: 40kg 20회", "note": "느낀점(선택)" }] }]
+응답 형식: [{ "part": "운동부위", "items": [{ "title": "운동종목", "body": "• 세트 1: 20kg 15회\\n• 세트 2: 40kg 20회", "note": "느낀점(선택)", "supersetGroup": null }] }]
 중요 규칙:
 1. 각 세트별 기록은 반드시 '• 세트 N: 무게 횟수' 형태로 작성해줘.
 2. 여러 세트인 경우 쉼표(,) 대신 반드시 줄바꿈(\\n)으로 구분해서 작성해줘.
 3. [가장 중요] 세트 번호(N)는 종목이 바뀌더라도 절대 1부터 다시 시작하지 말고, 이전 종목의 마지막 세트 번호에 이어서 전체 누적으로 계속 카운트해줘.
 4. [가장 중요] 원문에 있는 (드랍), (드랍세트), (슈퍼세트), (컴파운드), (강제반복), (저중량) 같은 세트 타입 표기와, "양쪽" / "각 사이드" 같이 좌우 양쪽을 뜻하는 표기는 절대 삭제하지 말고 해당 세트의 body 텍스트 안에 그대로 유지해.
 5. 드랍/슈퍼세트 등 세트 타입 표기는 note로 분리하지 마. 우리 앱은 body 안의 텍스트를 감지해 별도 뱃지로 처리한다.
-6. [가장 중요] 세트 기록과 함께 또는 독립적으로 적힌 주관적 느낌·코멘트 (예: "확실히 10회는 빡세다", "가슴&어깨 마사지받음, 확실히 나아짐", "자세가 흔들림", "다음엔 무게 늘려보자") 는 반드시 note 필드로 분리해. 쉼표로 이어진 문장 전체를 하나의 note로 합쳐야 해. 절대 일부만 잘라 넣지 마. kg/회/세트 숫자나 세트 타입 표기가 아닌 주관적 경험·느낌 텍스트만 note로. 없으면 note 필드 생략.
-7. 운동 기록이 전혀 없고 코멘트만 있는 경우(예: "가슴 마사지받음"), body는 빈 문자열로, note에 해당 문장 전체를 넣어.
-8. JSON 이외의 다른 텍스트(마크다운 등)는 절대 포함하지 마.
+6. [가장 중요] 슈퍼세트 처리 규칙:
+   - 종목명 사이에 '+' 기호가 있거나, 명시적으로 (슈퍼세트)라고 적힌 경우 슈퍼세트로 판단해.
+   - 슈퍼세트를 구성하는 각 종목은 별도의 item으로 분리해. 각 item의 body 모든 세트 라인 끝에 (슈퍼세트) 태그를 붙여줘.
+   - 같은 슈퍼세트 묶음에 속하는 item들은 동일한 supersetGroup 정수(1부터 시작)를 부여해. 슈퍼세트가 아닌 item은 supersetGroup을 null로.
+   - 슈퍼세트가 여러 개면 각각 다른 번호(1, 2, 3...)를 부여해.
+   - 예시 — "킥백 + 레터럴레이즈 1set 킥백 8kg 10 + 레터럴 7kg 12" 입력 시:
+     item1: title "덤벨킥백", supersetGroup 1, body "• 세트 1: 8kg 10회 (슈퍼세트)"
+     item2: title "레터럴레이즈", supersetGroup 1, body "• 세트 1: 7kg 12회 (슈퍼세트)"
+7. [가장 중요] 세트 기록과 함께 또는 독립적으로 적힌 주관적 느낌·코멘트 (예: "확실히 10회는 빡세다", "가슴&어깨 마사지받음, 확실히 나아짐", "자세가 흔들림", "다음엔 무게 늘려보자") 는 반드시 note 필드로 분리해. 쉼표로 이어진 문장 전체를 하나의 note로 합쳐야 해. 절대 일부만 잘라 넣지 마. kg/회/세트 숫자나 세트 타입 표기가 아닌 주관적 경험·느낌 텍스트만 note로. 없으면 note 필드 생략.
+8. 운동 기록이 전혀 없고 코멘트만 있는 경우(예: "가슴 마사지받음"), body는 빈 문자열로, note에 해당 문장 전체를 넣어.
+9. JSON 이외의 다른 텍스트(마크다운 등)는 절대 포함하지 마.
 
 사용자 입력:
 ${rawText}`;
@@ -451,6 +479,7 @@ ${rawText}`;
           title: it.title,
           body: it.body,
           note: it.note,
+          supersetGroup: it.supersetGroup ?? null,
         }))
       }));
       setParsedSections(mappedSections);
@@ -971,7 +1000,7 @@ JSON 형식으로만 반환해줘:
       const originalText = sections.flatMap(s => s.items.map(it => it.body)).filter(Boolean).join("\n");
       const sectionsData = sections.map(s => ({
         part: s.part,
-        items: s.items.map(it => ({ title: it.title, body: it.body }))
+        items: s.items.map(it => ({ title: it.title, body: it.body, supersetGroup: it.supersetGroup ?? null }))
       }));
       const roughVolume = parseVolume(sections, profile?.weight);
 
@@ -1039,17 +1068,17 @@ JSON 형식으로만 반환해줘:
       <main className="flex-1 overflow-y-auto">
 
         {/* 툴바 */}
-        <div className="flex items-center justify-between bg-white px-6 py-3 border-b border-ui-2">
+        <div className="flex h-16 items-center justify-between bg-white px-6 border-b border-ui-2">
           <div className="flex items-center gap-4">
             <button
               onClick={() => { setFreeMode(p => !p); setShowColorPicker(null); }}
-              className="w-6 h-6 flex items-center justify-center rounded transition-colors"
+              className="w-10 h-10 flex items-center justify-center rounded transition-colors"
             >
               <IcKeyboard active={freeMode} />
             </button>
             {!freeMode && (
               <div className="relative">
-                <Pressable pressScale={0.92} onClick={() => setAiMenuOpen(!aiMenuOpen)} className="w-6 h-6 flex items-center justify-center">
+                <Pressable pressScale={0.92} onClick={() => setAiMenuOpen(!aiMenuOpen)} className="w-10 h-10 flex items-center justify-center">
                   <IcAI active={aiMenuOpen} />
                 </Pressable>
                 {aiMenuOpen && (
@@ -1070,11 +1099,11 @@ JSON 형식으로만 반환해줘:
               </div>
             )}
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex h-10 items-center gap-3">
             <Pressable
               pressScale={0.88}
               onClick={() => setWorkoutMode(m => m === 'overload' ? 'deload' : 'overload')}
-              className={`flex items-center gap-1 px-2 py-1 rounded-full font-pretendard font-semibold text-[11px] tracking-[-0.2px] ${workoutMode === 'overload' ? 'bg-brand/10 text-brand' : 'bg-[#f07800]/10 text-[#f07800]'}`}
+              className={`h-8 flex items-center gap-1 px-3 rounded-full font-pretendard font-semibold text-[11px] tracking-[-0.2px] leading-none ${workoutMode === 'overload' ? 'bg-brand/10 text-brand' : 'bg-[#f07800]/10 text-[#f07800]'}`}
               style={{ WebkitTapHighlightColor: 'transparent' }}
             >
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -1087,12 +1116,12 @@ JSON 형식으로만 반환해줘:
             </Pressable>
             <Pressable
               pressScale={0.85}
-              className={`w-6 h-6 flex-none flex items-center justify-center p-0 leading-none ${freeMode || canUndo ? 'text-typo-normal opacity-100' : 'text-[#868E96] opacity-100'}`}
+              className={`w-10 h-10 flex-none flex items-center justify-center p-0 leading-none ${freeMode || canUndo ? 'text-typo-normal opacity-100' : 'text-[#868E96] opacity-100'}`}
               onMouseDown={(e) => { e.preventDefault(); handleUndo(); }}
             ><IcUndo size={18} /></Pressable>
             <Pressable
               pressScale={0.85}
-              className={`w-6 h-6 flex-none flex items-center justify-center p-0 leading-none ${freeMode || canRedo ? 'text-typo-normal opacity-100' : 'text-[#868E96] opacity-100'}`}
+              className={`w-10 h-10 flex-none flex items-center justify-center p-0 leading-none ${freeMode || canRedo ? 'text-typo-normal opacity-100' : 'text-[#868E96] opacity-100'}`}
               onMouseDown={(e) => { e.preventDefault(); handleRedo(); }}
             ><IcRedo size={18} /></Pressable>
           </div>
@@ -1289,21 +1318,47 @@ JSON 형식으로만 반환해줘:
             )}
 
             {/* 종목 항목들 */}
-            {sec.items.map(item => (
-              <WorkoutTaskItem
-                key={item.id}
-                title={item.title}
-                body={item.body}
-                onTitleChange={(val) => updateItem(sec.id, item.id, "title", val)}
-                onBodyChange={(val) => updateItem(sec.id, item.id, "body", val)}
-                onBodyBlur={(val) => handleBodyBlur(sec.id, item.id, val)}
-                isAI={item.isAI}
-                prevMaxWeight={exerciseStats[item.title]}
-                onAiClick={(e) => openSectionPopover(sec.id, e, 'item', item.id)}
-                aiActive={sectionPopover === sec.id && sectionPopoverSource === 'item' && sectionPopoverItemId === item.id}
-                isConverting={convertingItems.current.has(`${sec.id}_${item.id}`)}
-              />
-            ))}
+            {groupBySupersets(sec.items).map((group, gIdx) =>
+              group.isSuperset ? (
+                <React.Fragment key={`ss-${group.supersetGroup}-${gIdx}`}>
+                  <div className="flex items-center gap-3 px-4 pt-2 pb-0.5">
+                    <div className="flex-1 h-px bg-[rgba(0,141,207,0.22)]" />
+                    <span className="text-[10px] font-pretendard text-[#008dcf] font-semibold tracking-[-0.25px]">슈퍼세트</span>
+                    <div className="flex-1 h-px bg-[rgba(0,141,207,0.22)]" />
+                  </div>
+                  {group.items.map((item, itemIdx) => (
+                    <WorkoutTaskItem
+                      key={item.id}
+                      title={item.title}
+                      body={item.body}
+                      onTitleChange={(val) => updateItem(sec.id, item.id, "title", val)}
+                      onBodyChange={(val) => updateItem(sec.id, item.id, "body", val)}
+                      onBodyBlur={(val) => handleBodyBlur(sec.id, item.id, val)}
+                      isAI={item.isAI}
+                      prevMaxWeight={exerciseStats[item.title]}
+                      onAiClick={(e) => openSectionPopover(sec.id, e, 'item', item.id)}
+                      aiActive={sectionPopover === sec.id && sectionPopoverSource === 'item' && sectionPopoverItemId === item.id}
+                      isConverting={convertingItems.current.has(`${sec.id}_${item.id}`)}
+                      suppressSupersetBadge={itemIdx < group.items.length - 1}
+                    />
+                  ))}
+                </React.Fragment>
+              ) : group.items.map(item => (
+                <WorkoutTaskItem
+                  key={item.id}
+                  title={item.title}
+                  body={item.body}
+                  onTitleChange={(val) => updateItem(sec.id, item.id, "title", val)}
+                  onBodyChange={(val) => updateItem(sec.id, item.id, "body", val)}
+                  onBodyBlur={(val) => handleBodyBlur(sec.id, item.id, val)}
+                  isAI={item.isAI}
+                  prevMaxWeight={exerciseStats[item.title]}
+                  onAiClick={(e) => openSectionPopover(sec.id, e, 'item', item.id)}
+                  aiActive={sectionPopover === sec.id && sectionPopoverSource === 'item' && sectionPopoverItemId === item.id}
+                  isConverting={convertingItems.current.has(`${sec.id}_${item.id}`)}
+                />
+              ))
+            )}
 
             {/* [+] 항목 추가 */}
             <div className="p-2">
@@ -1432,19 +1487,42 @@ JSON 형식으로만 반환해줘:
                         {sIndex === 0 && <span className="text-body-s font-normal text-typo-secondary tracking-[-0.35px] leading-lh-2xs font-pretendard">{new Date().toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit' }).replace(/\.$/, '')}</span>}
                       </div>
                       <div className="relative w-full -mt-2 flex flex-col gap-4 pr-1">
-                        {sSec.items.map((sIt) => (
-                          <div key={sIt.id} className="flex flex-col gap-1.5">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-pretendard font-semibold text-[14px] text-typo-strong tracking-[-0.35px]">{sIt.title}</span>
-                              {exerciseVolumeDeltas[sIt.title] != null && (
-                                <span className={`px-3 py-1 rounded-[12px] text-[11px] font-medium font-pretendard leading-4 tracking-[-0.275px] ${exerciseVolumeDeltas[sIt.title] >= 0 ? 'bg-[rgba(0,150,50,0.1)] text-[#009632]' : 'bg-[#ffeef0] text-[#e03e52]'}`}>
-                                  {exerciseVolumeDeltas[sIt.title] > 0 ? '+' : ''}{exerciseVolumeDeltas[sIt.title]}%
-                                </span>
-                              )}
+                        {groupBySupersets(sSec.items).map((group, gIdx) =>
+                          group.isSuperset ? (
+                            <React.Fragment key={`ss-${group.supersetGroup}-${gIdx}`}>
+                              <div className="flex items-center gap-3">
+                                <div className="flex-1 h-px bg-[rgba(0,141,207,0.22)]" />
+                                <span className="text-[10px] font-pretendard text-[#008dcf] font-semibold tracking-[-0.25px]">슈퍼세트</span>
+                                <div className="flex-1 h-px bg-[rgba(0,141,207,0.22)]" />
+                              </div>
+                              {group.items.map((sIt) => (
+                                <div key={sIt.id} className="flex flex-col gap-1.5">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-pretendard font-semibold text-[14px] text-typo-strong tracking-[-0.35px]">{sIt.title}</span>
+                                    {exerciseVolumeDeltas[sIt.title] != null && (
+                                      <span className={`px-3 py-1 rounded-[12px] text-[11px] font-medium font-pretendard leading-4 tracking-[-0.275px] ${exerciseVolumeDeltas[sIt.title] >= 0 ? 'bg-[rgba(0,150,50,0.1)] text-[#009632]' : 'bg-[#ffeef0] text-[#e03e52]'}`}>
+                                        {exerciseVolumeDeltas[sIt.title] > 0 ? '+' : ''}{exerciseVolumeDeltas[sIt.title]}%
+                                      </span>
+                                    )}
+                                  </div>
+                                  <SummaryBodyRenderer body={sIt.body} note={sIt.note} />
+                                </div>
+                              ))}
+                            </React.Fragment>
+                          ) : group.items.map(sIt => (
+                            <div key={sIt.id} className="flex flex-col gap-1.5">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-pretendard font-semibold text-[14px] text-typo-strong tracking-[-0.35px]">{sIt.title}</span>
+                                {exerciseVolumeDeltas[sIt.title] != null && (
+                                  <span className={`px-3 py-1 rounded-[12px] text-[11px] font-medium font-pretendard leading-4 tracking-[-0.275px] ${exerciseVolumeDeltas[sIt.title] >= 0 ? 'bg-[rgba(0,150,50,0.1)] text-[#009632]' : 'bg-[#ffeef0] text-[#e03e52]'}`}>
+                                    {exerciseVolumeDeltas[sIt.title] > 0 ? '+' : ''}{exerciseVolumeDeltas[sIt.title]}%
+                                  </span>
+                                )}
+                              </div>
+                              <SummaryBodyRenderer body={sIt.body} note={sIt.note} />
                             </div>
-                            <SummaryBodyRenderer body={sIt.body} note={sIt.note} />
-                          </div>
-                        ))}
+                          ))
+                        )}
                       </div>
                     </React.Fragment>
                   ))}
@@ -1460,6 +1538,7 @@ JSON 형식으로만 반환해줘:
                         id: Date.now() + si * 1000 + ii,
                         title: it.title || '',
                         body: it.note ? `${it.body || ''}\n\n💬 ${it.note}` : (it.body || ''),
+                      supersetGroup: it.supersetGroup ?? null,
                       }))
                     })));
                     setBsOpen(false);

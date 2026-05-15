@@ -22,11 +22,11 @@ function clamp(value, min, max) {
 }
 
 const BODY_SET_TYPES = [
-  { pattern: /\(드랍(?:\s*세트?)?\)|드랍\s*세트/i, label: '드랍', color: '#d47800' },
-  { pattern: /\(슈퍼(?:\s*세트?)?\)|슈퍼\s*세트/i, label: '슈퍼세트', color: '#7b1fa2' },
-  { pattern: /\(컴파운드(?:\s*세트?)?\)|컴파운드\s*세트/i, label: '컴파운드', color: '#1565c0' },
-  { pattern: /\(강제\s*반복\)|강제\s*반복/i, label: '강제반복', color: '#c62828' },
-  { pattern: /\(저\s*중량\)|저중량/i, label: '저중량고반복', color: '#2e7d32' },
+  { pattern: /\(드랍(?:\s*세트?)?\)|드랍\s*세트/i, label: '드랍', color: '#d47800', bg: 'rgba(212,120,0,0.09)' },
+  { pattern: /\(슈퍼(?:\s*세트?)?\)|슈퍼\s*세트/i, label: '슈퍼세트', color: '#008dcf', bg: 'rgba(0,141,207,0.1)' },
+  { pattern: /\(컴파운드(?:\s*세트?)?\)|컴파운드\s*세트/i, label: '컴파운드', color: '#1565c0', bg: 'rgba(21,101,192,0.08)' },
+  { pattern: /\(강제\s*반복\)|강제\s*반복/i, label: '강제반복', color: '#c62828', bg: 'rgba(198,40,40,0.08)' },
+  { pattern: /\(저\s*중량\)|저중량/i, label: '저중량고반복', color: '#2e7d32', bg: 'rgba(46,125,50,0.08)' },
 ];
 
 function buildBodySegments(body) {
@@ -66,7 +66,7 @@ function buildBodySegments(body) {
   return segments;
 }
 
-const WorkoutTaskItem = ({ title, body, onTitleChange, onBodyChange, onBodyBlur, isAI = false, prevMaxWeight, onAiClick, aiActive = false, isConverting }) => {
+const WorkoutTaskItem = ({ title, body, onTitleChange, onBodyChange, onBodyBlur, isAI = false, prevMaxWeight, onAiClick, aiActive = false, isConverting, suppressSupersetBadge = false }) => {
   const currentMax = useMemo(() => parseMaxWeightFromText(body), [body]);
   const delta = prevMaxWeight != null && currentMax != null ? currentMax - prevMaxWeight : null;
   const [suggestions, setSuggestions] = useState([]);
@@ -247,14 +247,18 @@ const WorkoutTaskItem = ({ title, body, onTitleChange, onBodyChange, onBodyBlur,
               }
               if (seg.type === 'group') {
                 const hasUnitChip = seg.lines.some(line => detectUnitType(line));
+                const visibleTypes = suppressSupersetBadge
+                  ? seg.types.filter(t => t.label !== '슈퍼세트')
+                  : seg.types;
+                const hasBadges = visibleTypes.length > 0 || hasUnitChip;
                 return (
-                  <div key={idx} className="rounded-[16px] px-2 pt-4 pb-3 my-1 flex flex-col gap-4 bg-[rgba(212,120,0,0.1)]">
+                  <div key={idx} className={`rounded-[16px] px-2 ${hasBadges ? 'pt-4 pb-3' : 'py-3'} my-1 flex flex-col gap-4`} style={{ background: seg.types[0]?.bg ?? 'rgba(212,120,0,0.09)' }}>
                     {seg.lines.map((line, li) => (
                       <div key={li} className="text-[14px] font-medium font-pretendard text-[#646d76] leading-[22px] tracking-[-0.35px]">{line}</div>
                     ))}
-                    {(seg.types.length > 0 || hasUnitChip) && (
+                    {(visibleTypes.length > 0 || hasUnitChip) && (
                       <div className="flex items-start gap-1 flex-wrap">
-                        {seg.types.map(renderTypeChip)}
+                        {visibleTypes.map(renderTypeChip)}
                         {hasUnitChip && renderKgChip(seg.lines.find(line => detectUnitType(line)), `g_${idx}_kg`, 'group')}
                       </div>
                     )}

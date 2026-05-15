@@ -10,6 +10,8 @@ export default function ConfirmModal({
   confirmText = '확인',
   cancelText = '취소',
   confirmVariant = 'primary',
+  tertiaryText,
+  onTertiary,
 }) {
   const [render, setRender] = useState(isOpen);
   const cancelButtonRef = useRef(null);
@@ -60,6 +62,15 @@ export default function ConfirmModal({
           <p id="confirm-modal-subtitle" className="font-pretendard text-[15px] font-normal text-[#6B7684] leading-[22px] mb-6 whitespace-pre-wrap">
             {subtitle}
           </p>
+        )}
+        {tertiaryText && (
+          <Pressable
+            pressScale={0.97}
+            onClick={onTertiary}
+            className="w-full h-12 mb-2 bg-[#F2F4F6] text-[#4E5968] font-pretendard font-medium text-[16px] rounded-[12px] outline-none focus-visible:ring-2 focus-visible:ring-[#3182F6]/30"
+          >
+            {tertiaryText}
+          </Pressable>
         )}
         <div className="flex w-full gap-2 mt-1">
           <Pressable

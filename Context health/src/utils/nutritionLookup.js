@@ -11,6 +11,21 @@ function compact(value) {
   return String(value || '').replace(/\s+/g, '').toLowerCase();
 }
 
+export function normalizeFoodKey(value) {
+  return compact(value)
+    .replace(/[()（）]/g, '')
+    .replace(/그램/g, 'g')
+    .replace(/피스|pcs?/g, 'ps')
+    .replace(/한스푼/g, '1스푼')
+    .replace(/한숟가락/g, '1숟가락');
+}
+
+export function findCustomFood(customFoods, text) {
+  const key = normalizeFoodKey(text);
+  if (!key) return null;
+  return (customFoods || []).find(food => food?.key === key || normalizeFoodKey(food?.name) === key) || null;
+}
+
 function pick(row, keys) {
   for (const key of keys) {
     if (row?.[key] !== undefined && row?.[key] !== null && row?.[key] !== '') return row[key];
@@ -29,6 +44,14 @@ function extractGramAmount(text, fallback = 100) {
   return fallback;
 }
 
+function extractCountAmount(text, fallback = 1) {
+  const value = String(text || '').toLowerCase();
+  const countMatch = value.match(/(\d+(?:\.\d+)?)\s*(?:개|피스|pcs?|ps|조각|점|줄)/);
+  if (countMatch) return Math.max(1, Math.round(Number(countMatch[1])));
+  if (/반\s*(?:개|피스|인분)/.test(value)) return 0.5;
+  return fallback;
+}
+
 function scaleByGram(base, grams) {
   const ratio = grams / 100;
   return {
@@ -41,6 +64,46 @@ function scaleByGram(base, grams) {
 
 function getStandardFood(query, amountText = query) {
   const normalized = compact(query);
+  const fullText = `${query} ${amountText || ''}`;
+
+  if (/초밥|스시|sushi/.test(normalized)) {
+    const pieces = extractCountAmount(fullText, /모듬|세트|1\s*인분|일인분/.test(normalized) ? 10 : 1);
+    const macros = {
+      kcal: Math.round(48 * pieces),
+      carb: Math.round(7.8 * pieces),
+      protein: Math.round(3.0 * pieces),
+      fat: Math.round(1.0 * pieces),
+    };
+    return {
+      name: `초밥 ${pieces}피스`,
+      rawName: '초밥',
+      serving: `${pieces}피스`,
+      ...macros,
+      source: 'standard',
+      matchedName: '초밥 1피스 평균 기준',
+      score: 220,
+    };
+  }
+
+  if (/우동|udon/.test(normalized)) {
+    const portion = /반|0\.5|1\/2/.test(fullText) ? 0.5 : 1;
+    const macros = {
+      kcal: Math.round(420 * portion),
+      carb: Math.round(78 * portion),
+      protein: Math.round(12 * portion),
+      fat: Math.round(6 * portion),
+    };
+    return {
+      name: portion === 0.5 ? '우동 반개' : '우동 1인분',
+      rawName: '우동',
+      serving: portion === 0.5 ? '0.5인분' : '1인분',
+      ...macros,
+      source: 'standard',
+      matchedName: '우동 1인분 평균 기준',
+      score: 210,
+    };
+  }
+
   if (!/(^|[^가-힣])(밥|쌀밥|흰쌀밥|백미밥|공기밥)([^가-힣]|$)/.test(` ${normalized} `)) return null;
   if (/(국밥|김밥|볶음밥|덮밥|비빔밥|주먹밥|초밥|밥버거|밥맛)/.test(normalized)) return null;
 
@@ -192,7 +255,18 @@ export async function estimateFoodNutrition(text) {
   };
 }
 
-export async function resolveFoodNutrition(food) {
+export async function resolveFoodNutrition(food, customFoods = []) {
+  const foodText = `${food.name}${food.amount ? ` ${food.amount}` : ''}`.trim();
+  const customFood = findCustomFood(customFoods, foodText) || findCustomFood(customFoods, food.query || food.name);
+  if (customFood) {
+    return {
+      ...customFood,
+      name: customFood.name || foodText,
+      source: 'custom',
+      matchedName: '내가 수정한 기준',
+    };
+  }
+
   const standardFood = getStandardFood(`${food.name} ${food.amount || ''}`, food.amount);
   if (standardFood) return standardFood;
 

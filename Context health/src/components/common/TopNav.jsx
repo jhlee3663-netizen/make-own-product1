@@ -1,12 +1,13 @@
 import React from 'react';
 import Pressable from './Pressable';
 
-export default function TopNav({ title = "할 일" }) {
+export default function TopNav({ title = "할 일", onTodoClick }) {
   return (
     <div className="h-[60px] px-4 flex justify-between items-center bg-white border-b border-ui-3 flex-none">
       <img src="./logo.png" alt="로고" className="w-10 h-10 rounded-lg object-cover" />
       <Pressable
         pressScale={0.93}
+        onClick={onTodoClick}
         className="flex items-center gap-1 text-typo-alternative text-body-m font-semibold tracking-[-0.4px] bg-none border-none outline-none select-none rounded-lg px-1.5 py-1"
       >
         {title}

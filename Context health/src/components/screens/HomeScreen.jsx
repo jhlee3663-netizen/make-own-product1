@@ -18,6 +18,7 @@ import MainTab from '../common/MainTab';
 import Toast from '../common/Toast';
 import ConfirmModal from '../common/ConfirmModal';
 import Pressable from '../common/Pressable';
+import StatusSheet from '../common/StatusSheet';
 
 const DIET_SECTION_BY_MEAL = {
   '아침': 'breakfast',
@@ -55,6 +56,58 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
   const [mainTab, setMainTab] = useState("workout");
   const [fabOpen, setFabOpen] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  const [routineOpen, setRoutineOpen] = useState(false);
+  const [pullDistance, setPullDistance] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [rippleKey, setRippleKey] = useState(0);
+  const mainRef = useRef(null);
+  const pullStartY = useRef(0);
+  const isPulling = useRef(false);
+  const isRefreshingRef = useRef(false);
+
+  const PULL_THRESHOLD = 52;
+  const MAX_PULL = 76;
+
+  useEffect(() => {
+    const el = mainRef.current;
+    if (!el) return;
+    const onMove = (e) => {
+      if (!pullStartY.current || isRefreshingRef.current) return;
+      if (el.scrollTop > 0) { isPulling.current = false; return; }
+      const delta = e.touches[0].clientY - pullStartY.current;
+      if (delta > 0) {
+        isPulling.current = true;
+        e.preventDefault();
+        setPullDistance(Math.min(MAX_PULL, delta * 0.45));
+      }
+    };
+    el.addEventListener('touchmove', onMove, { passive: false });
+    return () => el.removeEventListener('touchmove', onMove);
+  }, []);
+
+  function handleTouchStart(e) {
+    if (mainRef.current?.scrollTop === 0) {
+      pullStartY.current = e.touches[0].clientY;
+    }
+  }
+
+  function handleTouchEnd() {
+    if (!isPulling.current) return;
+    isPulling.current = false;
+    pullStartY.current = 0;
+    if (pullDistance >= PULL_THRESHOLD) {
+      setIsRefreshing(true);
+      isRefreshingRef.current = true;
+      setPullDistance(0);
+      setTimeout(() => {
+        setRippleKey(k => k + 1);
+        setIsRefreshing(false);
+        isRefreshingRef.current = false;
+      }, 1200);
+    } else {
+      setPullDistance(0);
+    }
+  }
   const [workoutLogs, setWorkoutLogs] = useState([]);
   const [dietLogs, setDietLogs] = useState([]);
   const [coachingInsight, setCoachingInsight] = useState(null);
@@ -253,7 +306,7 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
 
       {/* 헤더 */}
       <header className="z-20 flex-none flex flex-col">
-        <TopNav title="할 일" />
+        <TopNav title="내 상태" onTodoClick={() => setRoutineOpen(true)} />
         <MainTab 
           tabs={[{ id: 'workout', label: '쇠질' }, { id: 'diet', label: '식단' }]} 
           activeId={mainTab} 
@@ -261,8 +314,48 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
         />
       </header>
 
+      {/* Pull-to-refresh 파동 효과 */}
+      {rippleKey > 0 && (
+        <div
+          key={rippleKey}
+          className="absolute rounded-full pointer-events-none"
+          style={{
+            width: 1400,
+            height: 1400,
+            top: -570,
+            left: '50%',
+            marginLeft: -700,
+            background: 'radial-gradient(circle, rgba(52,118,238,0.13) 0%, transparent 70%)',
+            animation: 'pullRefreshRipple 0.85s cubic-bezier(0.2, 0.8, 0.2, 1) forwards',
+            zIndex: 10,
+          }}
+        />
+      )}
+
+      {/* Pull-to-refresh 인디케이터 */}
+      <div
+        className="flex-none flex justify-center items-center overflow-hidden"
+        style={{
+          height: isRefreshing ? 56 : pullDistance,
+          transition: pullDistance === 0 ? 'height 0.45s cubic-bezier(.2,.8,.2,1)' : 'none',
+        }}
+      >
+        <div
+          className={`w-6 h-6 border-2 border-ui-3 border-t-brand rounded-full ${isRefreshing ? 'animate-spin' : ''}`}
+          style={{
+            opacity: isRefreshing ? 1 : Math.min(1, pullDistance / PULL_THRESHOLD),
+            transform: isRefreshing ? undefined : `rotate(${pullDistance * 4}deg)`,
+          }}
+        />
+      </div>
+
       {/* 콘텐츠 */}
-      <main className="flex-1 overflow-y-auto pb-[120px]">
+      <main
+        ref={mainRef}
+        className="flex-1 overflow-y-auto pb-[120px]"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
       {/* AI 코칭 인사이트 카드 — 해당 탭에서만 노출 */}
         {coachingInsight && coachingInsight.category === mainTab && (
           <div className="mx-4 mt-4 mb-1 bg-white rounded-2xl border border-ui-2 shadow-card overflow-hidden">
@@ -336,6 +429,15 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
       )}
 
       <Toast show={toast.show} message={toast.message} />
+
+      {routineOpen && (
+        <StatusSheet
+          onClose={() => setRoutineOpen(false)}
+          workoutLogs={workoutLogs}
+          dietLogs={dietLogs}
+          profile={profile}
+        />
+      )}
     </div>
   );
 }
