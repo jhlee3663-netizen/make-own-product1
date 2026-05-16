@@ -123,11 +123,17 @@ permissions.deny 배열에 아래 패턴들을 추가해줘.
 
 1. https://vercel.com/dashboard 로 이동
 2. 우측 상단 **Add New...** → **Project** 클릭
-3. 화면에서 **"Create Empty Project"** 옵션 찾아서 클릭
-   > 💡 "Skip Git setup and instantly access Web Analytics, Speed Insights, and other Vercel products." 라고 적힌 옵션이에요. **Import Git Repository 흐름은 건너뛰는** 옵션.
+3. **화면을 맨 아래까지 스크롤** → **"Create Empty Project"** 옵션 클릭
+   > 💡 "Skip Git setup and instantly access Web Analytics, Speed Insights, and other Vercel products." 라고 적힌 옵션이에요.
 4. 프로젝트 이름 입력 (예: `2nd-ai-builder-lee-jonghyuk` 또는 원하는 이름) → **Create**
 
-> 🟢 **GitHub 연동은 안 해도 돼요!** GitHub Actions가 알아서 배포를 처리하니까 Vercel 쪽에서 GitHub 연결은 필요 없어요. 그래서 *Create Empty Project*로 가는 게 더 깔끔합니다.
+> 🚫 **위쪽의 Import Git Repository로 가지 마세요!** 반드시 맨 아래 **"Create Empty Project"** 로 만들어야 해요.
+>
+> **🤔 왜 GitHub 연동 안 해도 되나요?**
+> 이 베프디 레포에는 운영진이 미리 박아둔 **GitHub Actions 워크플로우** (`.github/workflows/deploy.yml`)가 있어요.
+> 이 워크플로우가 코드를 push 할 때마다 **자동으로 실행**되어서, Vercel CLI로 본인 Vercel 계정에 **알아서 배포**해줍니다.
+>
+> 즉, *Vercel 쪽에서 GitHub 연결을 따로 안 해도* GitHub Actions가 그 역할을 대신해줘요. **Create Empty Project로 가면 더 깔끔하게 셋업됩니다.**
 
 ### ② ID 두 개 얻기 (📌 두 ID는 서로 다른 곳에 있어요!)
 
