@@ -1,2 +1,159 @@
-# 2nd-ai-builder-lee-jonghyuk
-이종혁 (AI Builder 2기)
+# 이종혁 님의 작업 레포 🚀
+
+> 🤖 **AI Builder 2기** · BF.D AI 챌린지
+
+이 곳은 **이종혁 님 전용 작업 공간**입니다. 챌린지 기간 동안 작성하신 모든 코드와 결과물이 여기에 쌓입니다.
+
+---
+
+## ⚡ 빠른 시작
+
+작업 시작 전, **4단계 셋업**을 한 번만 진행해주세요 (총 약 15분, 평생 1번).
+
+| 단계 | 할 일 | 소요 시간 |
+|---|---|---|
+| 1️⃣ | Vercel 가입 + 토큰 발급 | 5분 |
+| 2️⃣ | Vercel 빈 프로젝트 만들기 | 3분 |
+| 3️⃣ | 이 레포에 시크릿 3개 등록 | 5분 |
+| 4️⃣ | Claude Code 보안 설정 (선택) | 2분 |
+
+---
+
+## 1️⃣ Vercel 가입 + 토큰 발급
+
+1. https://vercel.com 접속
+2. **Continue with GitHub** 클릭 → 본인 GitHub 계정으로 로그인 (Vercel 첫 가입이 됨)
+3. 우측 상단 본인 프로필 사진 → **Settings**
+4. 왼쪽 메뉴 **Tokens** 클릭
+5. **Create Token** 버튼
+   - Token Name: `BF-D-challenge`
+   - Scope: **Full Account**
+   - Expiration: **No Expiration** (만료 없음)
+6. **CREATE TOKEN** 클릭 후 나타나는 토큰을 **즉시 복사**
+
+> 📋 **메모장에 임시로 붙여놓으세요.** 이 화면을 떠나면 토큰을 다시 볼 수 없어요!
+
+---
+
+## 2️⃣ Vercel 빈 프로젝트 만들기
+
+1. https://vercel.com/dashboard 로 이동
+2. 우측 상단 **Add New...** → **Project** 클릭
+3. **Import Git Repository** 화면에서:
+   - 본인 GitHub 옆 "**Adjust GitHub App Permissions**" 클릭
+   - **BF-D-challenge** 조직에 권한 허용
+4. 목록에서 이 레포 (`2nd-ai-builder-lee-jonghyuk`) 옆 **Import** 클릭
+5. 화면 그대로 두고 **Deploy** 클릭 (지금은 실패해도 OK — 토큰 등록 전이니까!)
+6. 배포 페이지에서 **Settings** 탭 → **General** 으로 이동
+7. 아래 두 값을 복사 (메모장에):
+   - **Project ID** (예: `prj_xxxxxxxxx`)
+   - **Team ID** *또는* **Account ID**
+     - Team ID가 없으면 → 우측 상단 프로필 사진 → Settings → **Your ID** 가 Account ID 입니다
+
+---
+
+## 3️⃣ 이 레포에 시크릿 3개 등록
+
+1. 이 GitHub 레포 페이지 상단 **Settings** 탭 클릭
+2. 왼쪽 메뉴 **Secrets and variables** → **Actions**
+3. **New repository secret** 버튼 클릭해서 아래 **3개 모두** 등록:
+
+| Name (이름) | Value (값) |
+|---|---|
+| `VERCEL_TOKEN` | 1️⃣번에서 복사한 토큰 |
+| `VERCEL_ORG_ID` | 2️⃣번에서 복사한 Team/Account ID |
+| `VERCEL_PROJECT_ID` | 2️⃣번에서 복사한 Project ID |
+
+---
+
+## 4️⃣ Claude Code 보안 설정 (선택, 강력 추천)
+
+실수로 API 키나 비밀번호 같은 민감 정보에 접근하지 못하도록 차단합니다.
+
+**Claude Code를 열고, 아래 메시지를 그대로 복사해서 보내주세요:**
+
+```
+내 Claude Code에 최소 보안 설정을 적용해줘.
+
+~/.claude/settings.json 파일을 읽어서, 기존 설정을 모두 유지하면서
+permissions.deny 배열에 아래 패턴들을 추가해줘.
+파일이 없으면 새로 만들고, 이미 있는 패턴은 중복 추가하지 마.
+
+### 민감 파일 접근 차단
+- Read(.env)
+- Read(.env.*)
+- Read(*.pem)
+- Read(*.key)
+- Read(*.cert)
+- Read(credentials.json)
+- Read(service-account*.json)
+
+### 환경 변수 노출 차단
+- Bash(env)
+- Bash(printenv)
+- Bash(*SECRET*)
+- Bash(*PASSWORD*)
+- Bash(*TOKEN*)
+- Bash(*CREDENTIAL*)
+
+### 파괴적 명령 차단
+- Bash(rm -rf /*)
+- Bash(git push --force*)
+- Bash(git reset --hard*)
+```
+
+> 💡 Claude Code가 알아서 파일을 만들거나 수정해서 보안 설정을 적용해줍니다.
+
+---
+
+## ✅ 셋업 완료 확인
+
+1. 이 레포에 아무 파일이나 변경 후 push (또는 GitHub 웹에서 README를 살짝 수정 후 commit)
+2. 상단 **Actions** 탭 클릭
+3. 최신 워크플로우 실행이 ✅ 녹색 체크면 성공!
+4. Vercel 대시보드 → 본인 프로젝트 → 최신 배포 URL 확인 🎉
+
+---
+
+## 💻 매일 작업 흐름
+
+```
+1. 코드 작성 (Claude Code 또는 본인 도구)
+2. git add . && git commit + git push
+3. GitHub Actions가 자동으로 Vercel 배포 ✨
+4. 배포 URL 공유!
+```
+
+> 🔄 **미러링이나 PAT 같은 거 필요 없어요.** 이 레포에 바로 작업하시면 됩니다.
+
+---
+
+## 🆘 안 될 때
+
+- ❌ Actions 워크플로우 실패 → 상단 **Actions** 탭에서 빨간 ❌ 클릭해서 로그 확인
+- ❌ "Vercel 시크릿이 아직 등록되지 않았어요" 경고 → 3️⃣번 시크릿 등록 다시 확인
+- ❌ Vercel 배포 실패 → Vercel 대시보드 → Deployments → 로그 확인
+- 그래도 안 되면 → **운영자에게 문의** 🙋
+
+---
+
+## 🔐 보안 약속
+
+- ❌ `.env`, `*.key`, `credentials.json` 같은 민감 파일은 **절대 git에 커밋하지 마세요**
+  → `.gitignore`에 이미 등록되어 있어 자동 무시됩니다
+- ✅ API 키, 토큰, 비밀번호는 모두:
+  - **GitHub Secrets** (Settings → Secrets and variables → Actions)
+  - 또는 **Vercel Environment Variables** (Vercel 프로젝트 Settings → Environment Variables)
+  - 에 등록하세요
+
+---
+
+## 📂 폴더 구조
+
+```
+2nd-ai-builder-lee-jonghyuk/
+├── .github/workflows/    ← 자동 배포 설정 (건드리지 마세요)
+├── .gitignore            ← 민감 파일 자동 제외
+├── README.md             ← 이 파일
+└── (여기부터 본인 작업물)
+```
