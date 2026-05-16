@@ -23,7 +23,7 @@
 
 1. https://vercel.com 접속
 2. **Continue with GitHub** 클릭 → 본인 GitHub 계정으로 로그인 (Vercel 첫 가입이 됨)
-3. 우측 상단 본인 프로필 사진 → **Settings**
+3. **좌측 사이드바 하단의 본인 프로필 사진** → **Settings**
 4. 왼쪽 메뉴 **Tokens** 클릭
 5. **Create Token** 버튼
    - Token Name: `BF-D-challenge`
@@ -48,7 +48,7 @@
 7. 아래 두 값을 복사 (메모장에):
    - **Project ID** (예: `prj_xxxxxxxxx`)
    - **Team ID** *또는* **Account ID**
-     - Team ID가 없으면 → 우측 상단 프로필 사진 → Settings → **Your ID** 가 Account ID 입니다
+     - Team ID가 없으면 → **좌측 사이드바 하단 프로필 사진** → Settings → **Your ID** 가 Account ID 입니다
 
 ---
 
