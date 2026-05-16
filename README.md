@@ -119,15 +119,15 @@ permissions.deny 배열에 아래 패턴들을 추가해줘.
 
 ## 3️⃣ Vercel 빈 프로젝트 만들기 + ID 두 개 얻기
 
-### ① 프로젝트 생성
+### ① 빈 프로젝트 생성 (Git 연동 ❌)
 
 1. https://vercel.com/dashboard 로 이동
 2. 우측 상단 **Add New...** → **Project** 클릭
-3. **Import Git Repository** 화면에서:
-   - 본인 GitHub 옆 "**Adjust GitHub App Permissions**" 클릭
-   - **BF-D-challenge** 조직에 권한 허용
-4. 목록에서 이 레포 (`2nd-ai-builder-lee-jonghyuk`) 옆 **Import** 클릭
-5. 화면 그대로 두고 **Deploy** 클릭 (지금은 실패해도 OK — 토큰 등록 전이니까!)
+3. 화면에서 **"Create Empty Project"** 옵션 찾아서 클릭
+   > 💡 "Skip Git setup and instantly access Web Analytics, Speed Insights, and other Vercel products." 라고 적힌 옵션이에요. **Import Git Repository 흐름은 건너뛰는** 옵션.
+4. 프로젝트 이름 입력 (예: `2nd-ai-builder-lee-jonghyuk` 또는 원하는 이름) → **Create**
+
+> 🟢 **GitHub 연동은 안 해도 돼요!** GitHub Actions가 알아서 배포를 처리하니까 Vercel 쪽에서 GitHub 연결은 필요 없어요. 그래서 *Create Empty Project*로 가는 게 더 깔끔합니다.
 
 ### ② ID 두 개 얻기 (📌 두 ID는 서로 다른 곳에 있어요!)
 
