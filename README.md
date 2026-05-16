@@ -21,15 +21,15 @@
 
 ## 1️⃣ Vercel 가입 + 토큰 발급
 
-1. https://vercel.com 접속
-2. **Continue with GitHub** 클릭 → 본인 GitHub 계정으로 로그인 (Vercel 첫 가입이 됨)
-3. **좌측 사이드바 하단의 본인 프로필 사진** → **Settings**
-4. 왼쪽 메뉴 **Tokens** 클릭
-5. **Create Token** 버튼
+1. https://vercel.com 접속 → **Continue with GitHub** 으로 가입/로그인
+2. 가입 후, **토큰 발급 페이지로 이동** — 아래 두 가지 방법 중 편한 거 선택:
+   - 🚀 **빠른 방법 (추천)**: 이 링크 바로 클릭 → https://vercel.com/account/settings/tokens
+   - 🐢 메뉴로 찾아가기: **좌측 사이드바 하단의 본인 프로필 사진** → **Settings** → 왼쪽 메뉴 **Tokens**
+3. **Create Token** 버튼 클릭
    - Token Name: `BF-D-challenge`
    - Scope: **Full Account**
    - Expiration: **No Expiration** (만료 없음)
-6. **CREATE TOKEN** 클릭 후 나타나는 토큰을 **즉시 복사**
+4. **CREATE TOKEN** 클릭 후 나타나는 토큰을 **즉시 복사**
 
 > 📋 **메모장에 임시로 붙여놓으세요.** 이 화면을 떠나면 토큰을 다시 볼 수 없어요!
 
