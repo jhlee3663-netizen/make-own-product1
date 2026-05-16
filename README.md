@@ -108,7 +108,9 @@ permissions.deny 배열에 아래 패턴들을 추가해줘.
 
 ---
 
-## 3️⃣ Vercel 빈 프로젝트 만들기
+## 3️⃣ Vercel 빈 프로젝트 만들기 + ID 두 개 얻기
+
+### ① 프로젝트 생성
 
 1. https://vercel.com/dashboard 로 이동
 2. 우측 상단 **Add New...** → **Project** 클릭
@@ -117,11 +119,22 @@ permissions.deny 배열에 아래 패턴들을 추가해줘.
    - **BF-D-challenge** 조직에 권한 허용
 4. 목록에서 이 레포 (`2nd-ai-builder-lee-jonghyuk`) 옆 **Import** 클릭
 5. 화면 그대로 두고 **Deploy** 클릭 (지금은 실패해도 OK — 토큰 등록 전이니까!)
-6. 배포 페이지에서 **Settings** 탭 → **General** 으로 이동
-7. 아래 두 값을 복사 (메모장에):
-   - **Project ID** (예: `prj_xxxxxxxxx`)
-   - **Team ID** *또는* **Account ID**
-     - Team ID가 없으면 → **좌측 사이드바 하단 프로필 사진** → Settings → **Your ID** 가 Account ID 입니다
+
+### ② ID 두 개 얻기 (📌 두 ID는 서로 다른 곳에 있어요!)
+
+**🅰️ Project ID** — 방금 만든 프로젝트 설정에서:
+
+1. 방금 만든 프로젝트 페이지 상단 **Settings** 탭 클릭
+2. **General** 메뉴에서 **Project ID** (예: `prj_xxxxxxxxx`) 값을 메모장에 복사
+
+**🅱️ Account ID (= ORG_ID)** — 본인 계정 설정에서 (프로젝트 설정 X):
+
+> ⚠️ Project 설정에는 Project ID만 있고, Account ID는 **계정 설정**에 따로 있어요.
+
+1. **좌측 사이드바 하단의 본인 프로필 사진** → **Settings** 클릭 (= 계정 설정 페이지로 이동)
+2. **General** 탭에서 **Your ID** 값을 메모장에 복사
+   - 개인 (Hobby) 계정의 **Your ID 가 곧 Account ID (= ORG_ID)** 입니다
+   - 만약 Team 계정이라면 Team ID를 대신 사용하세요
 
 ---
 
@@ -134,8 +147,8 @@ permissions.deny 배열에 아래 패턴들을 추가해줘.
 | Name (이름) | Value (값) |
 |---|---|
 | `VERCEL_TOKEN` | 2️⃣번에서 복사한 토큰 |
-| `VERCEL_ORG_ID` | 3️⃣번에서 복사한 Team/Account ID |
-| `VERCEL_PROJECT_ID` | 3️⃣번에서 복사한 Project ID |
+| `VERCEL_ORG_ID` | 3️⃣-🅱️번에서 복사한 Account ID (Your ID 또는 Team ID) |
+| `VERCEL_PROJECT_ID` | 3️⃣-🅰️번에서 복사한 Project ID |
 
 ---
 
