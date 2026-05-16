@@ -6,6 +6,15 @@
 
 ---
 
+> 🔄 **1기 참가자세요?** 1기 때 셋업한 환경(GitHub PAT, 개인 레포, Vercel 프로젝트 등)이 2기와 충돌할 수 있어요.
+>
+> - 🅰️ **1기 작업을 이어서 2기에 하실 분** → 1기 개인 레포의 작업물을 이 레포로 옮겨야 합니다
+> - 🅱️ **2기에 새 주제로 시작하실 분** → 1기 PAT/Vercel만 정리하면 OK
+>
+> 👉 자세한 내용은 [**노션 가이드의 "🔄 1기 → 2기 전환 안내"** 섹션](https://www.notion.so/3626c22d8c0681f2bf9acc886d47e947) 먼저 확인해주세요.
+
+---
+
 ## ⚡ 빠른 시작
 
 작업 시작 전, **4단계 셋업**을 한 번만 진행해주세요 (총 약 15분, 평생 1번).
@@ -132,8 +141,8 @@ permissions.deny 배열에 아래 패턴들을 추가해줘.
 > ⚠️ Project 설정에는 Project ID만 있고, Account ID는 **계정 설정**에 따로 있어요.
 
 1. **좌측 사이드바 하단의 본인 프로필 사진** → **Settings** 클릭 (= 계정 설정 페이지로 이동)
-2. **General** 탭에서 **Your ID** 값을 메모장에 복사
-   - 개인 (Hobby) 계정의 **Your ID 가 곧 Account ID (= ORG_ID)** 입니다
+2. **General** 탭에서 **User ID** 값을 메모장에 복사
+   - 개인 (Hobby) 계정의 **User ID 가 곧 Account ID (= ORG_ID)** 입니다
    - 만약 Team 계정이라면 Team ID를 대신 사용하세요
 
 ---
@@ -147,7 +156,7 @@ permissions.deny 배열에 아래 패턴들을 추가해줘.
 | Name (이름) | Value (값) |
 |---|---|
 | `VERCEL_TOKEN` | 2️⃣번에서 복사한 토큰 |
-| `VERCEL_ORG_ID` | 3️⃣-🅱️번에서 복사한 Account ID (Your ID 또는 Team ID) |
+| `VERCEL_ORG_ID` | 3️⃣-🅱️번에서 복사한 Account ID (User ID 또는 Team ID) |
 | `VERCEL_PROJECT_ID` | 3️⃣-🅰️번에서 복사한 Project ID |
 
 ---
