@@ -7,7 +7,7 @@ import DonutChart from '../dashboard/DonutChart';
 import ConfirmModal from '../common/ConfirmModal';
 import Pressable from '../common/Pressable';
 import { getDietSummaryComment } from '../../utils/dietFeedback';
-import { estimateFoodNutrition, findCustomFood, normalizeFoodKey, parseFoodMemo, resolveFoodNutrition, searchMfdsFoods } from '../../utils/nutritionLookup';
+import { estimateFoodNutrition, estimateMealNutrition, findCustomFood, normalizeFoodKey, searchMfdsFoods } from '../../utils/nutritionLookup';
 
 const DEFAULT_SECTIONS = [
   { id: 'breakfast',   name: '아침',     placeholder: '아침에 먹은 식단을 적어주세요\n(예: 고구마 하나 우유 한잔)' },
@@ -178,6 +178,19 @@ function applyCustomFood(food, customFoods) {
   };
 }
 
+function getNutritionSourceLabel(source) {
+  if (source === 'custom') return '내 기준값';
+  if (source === 'mfds') return 'DB 참고값';
+  if (source === 'standard') return '기준 참고값';
+  if (source === 'ai') return 'AI 추정값';
+  return '';
+}
+
+function formatNutritionSource(source) {
+  const label = getNutritionSourceLabel(source);
+  return label ? ` · ${label}` : '';
+}
+
 function pushRecent(newItems, current) {
   const norm = newItems.map(({ name, kcal, carb, protein, fat, source, matchedName }) => ({ name, kcal, carb, protein, fat, source, matchedName }));
   const merged = [...norm, ...current.filter(r => !norm.some(n => normalizeFoodKey(n.name) === normalizeFoodKey(r.name)))].slice(0, 15);
@@ -335,9 +348,8 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
     analyzingIds.current.add(secId);
     setAnalyzingVersion(v => v + 1);
     try {
-      const parsedFoods = await parseFoodMemo(text);
-      const resolvedFoods = await Promise.all(parsedFoods.map(food => resolveFoodNutrition(food, customFoods)));
-      const newItems = resolvedFoods.map(item => ({
+      const estimatedFoods = await estimateMealNutrition(text, customFoods);
+      const newItems = estimatedFoods.map(item => ({
         id:      Math.random().toString(36).slice(2, 11),
         name:    String(item.name    || ''),
         kcal:    Number(item.kcal    || 0),
@@ -694,7 +706,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
                         <p className="font-pretendard font-semibold text-[14px] text-[#495057] tracking-[-0.35px] truncate m-0">{item.name}</p>
                         <p className="font-pretendard text-[11px] text-[#868e96] tracking-[-0.2px] mt-0.5 m-0">
                           탄 {item.carb}g · 단 {item.protein}g · 지 {item.fat}g
-                          {item.source === 'custom' ? ' · 내 기준' : item.source === 'mfds' ? ' · 식약처 DB' : item.source === 'standard' ? ' · 기준값' : item.source === 'ai' ? ' · AI 추정' : ''}
+                          {formatNutritionSource(item.source)}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
@@ -845,7 +857,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
                       <div className="flex-1 min-w-0">
                         <p className="font-pretendard font-semibold text-[14px] text-[#171a1d] m-0 truncate">{food.name}</p>
                         <p className="font-pretendard text-[12px] text-[#868e96] mt-0.5 m-0">
-                          탄 {food.carb}g · 단 {food.protein}g · 지 {food.fat}g · {food.source === 'custom' ? '내 기준' : food.source === 'standard' ? '기준값' : '식약처 DB'}
+                          탄 {food.carb}g · 단 {food.protein}g · 지 {food.fat}{formatNutritionSource(food.source || 'mfds')}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
@@ -870,7 +882,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
                     <p className="font-pretendard font-semibold text-[14px] text-[#171a1d] m-0 truncate">{searchResult.name}</p>
                     <p className="font-pretendard text-[12px] text-[#868e96] mt-0.5 m-0">
                       탄 {searchResult.carb}g · 단 {searchResult.protein}g · 지 {searchResult.fat}g
-                      {searchResult.source === 'custom' ? ' · 내 기준' : searchResult.source === 'mfds' ? ' · 식약처 DB' : searchResult.source === 'standard' ? ' · 기준값' : searchResult.source === 'ai' ? ' · AI 추정' : ''}
+                      {formatNutritionSource(searchResult.source)}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
@@ -893,7 +905,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
                       <div className="flex-1 min-w-0">
                         <p className="font-pretendard font-semibold text-[14px] text-[#171a1d] m-0 truncate">{food.name}</p>
                         <p className="font-pretendard text-[12px] text-[#868e96] m-0">
-                          탄 {food.carb}g · 단 {food.protein}g · 지 {food.fat}g{food.source === 'custom' ? ' · 내 기준' : ''}
+                          탄 {food.carb}g · 단 {food.protein}g · 지 {food.fat}g{formatNutritionSource(food.source)}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">

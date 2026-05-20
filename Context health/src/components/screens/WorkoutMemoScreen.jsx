@@ -15,8 +15,8 @@ import {
   where,
   getDocs
 } from 'firebase/firestore';
-import { parseVolume } from '../../utils/utils';
-import { filterBodyParts } from '../../utils/exerciseData';
+import { parseVolume, sumReps } from '../../utils/utils';
+import { filterBodyParts, BODYWEIGHT_BASES } from '../../utils/exerciseData';
 import {
   Bold, Italic, Underline, Strikethrough,
   AlignLeft, AlignCenter, AlignRight,
@@ -282,6 +282,7 @@ export default function WorkoutMemoScreen({ onBack, onSave, initialData, uid, pr
   const [isBsLoading, setIsBsLoading] = useState(false);
   const [parsedSections, setParsedSections] = useState([]);
   const [exerciseStats, setExerciseStats] = useState({});
+  const [exerciseRepStats, setExerciseRepStats] = useState({});
 
   // 섹션별 AI 팝오버
   const [sectionPopover, setSectionPopover] = useState(null); // secId
@@ -303,6 +304,7 @@ export default function WorkoutMemoScreen({ onBack, onSave, initialData, uid, pr
 
   // 글 정리 후 종목별 볼륨 증감
   const [exerciseVolumeDeltas, setExerciseVolumeDeltas] = useState({});
+  const [exerciseRepDeltas, setExerciseRepDeltas] = useState({});
 
   // 섹션별 AI 루틴 근거
   const [sectionAiTheories, setSectionAiTheories] = useState({});
@@ -371,6 +373,15 @@ export default function WorkoutMemoScreen({ onBack, onSave, initialData, uid, pr
 
   const fetchTimers = useRef({});
 
+  function normalizeExerciseName(name) {
+    return (name || '').replace(/\s+/g, '').toLowerCase();
+  }
+
+  function isBodyweightExercise(title) {
+    const base = (title || '').replace(/^(어시스티드|가중)\s*/u, '').trim();
+    return BODYWEIGHT_BASES.has(base);
+  }
+
   function parseMaxWeight(text) {
     if (!text) return null;
     const matches = [...text.matchAll(/(\d+(?:\.\d+)?)\s*kg/gi)];
@@ -392,6 +403,8 @@ export default function WorkoutMemoScreen({ onBack, onSave, initialData, uid, pr
 
   async function fetchPrevWeight(exerciseName) {
     if (!exerciseName?.trim() || !uid) return;
+    const normalizedName = normalizeExerciseName(exerciseName);
+    const isBW = isBodyweightExercise(exerciseName);
     const q = query(collection(db, "logs"), where("uid", "==", uid));
     const snap = await getDocs(q);
     const sorted = snap.docs
@@ -401,17 +414,29 @@ export default function WorkoutMemoScreen({ onBack, onSave, initialData, uid, pr
       if (initialData && d.id === initialData.docId) continue;
       for (const sec of (d.sections || [])) {
         for (const item of (sec.items || [])) {
-          if (item.title === exerciseName && item.body) {
-            const w = parseMaxWeight(item.body);
-            if (w !== null) {
-              setExerciseStats(prev => ({ ...prev, [exerciseName]: w }));
-              return;
+          if (normalizeExerciseName(item.title) === normalizedName && item.body) {
+            if (isBW) {
+              const reps = sumReps(item.body);
+              if (reps > 0) {
+                setExerciseRepStats(prev => ({ ...prev, [exerciseName]: reps }));
+                return;
+              }
+            } else {
+              const w = parseMaxWeight(item.body);
+              if (w !== null) {
+                setExerciseStats(prev => ({ ...prev, [exerciseName]: w }));
+                return;
+              }
             }
           }
         }
       }
     }
-    setExerciseStats(prev => ({ ...prev, [exerciseName]: null }));
+    if (isBW) {
+      setExerciseRepStats(prev => ({ ...prev, [exerciseName]: null }));
+    } else {
+      setExerciseStats(prev => ({ ...prev, [exerciseName]: null }));
+    }
   }
 
   function scheduleFetchPrevWeight(title) {
@@ -434,6 +459,7 @@ export default function WorkoutMemoScreen({ onBack, onSave, initialData, uid, pr
     setBsOpen(true);
     setIsBsLoading(true);
     setExerciseVolumeDeltas({});
+    setExerciseRepDeltas({});
     try {
       const rawText = sections.map(s => `부위: ${s.part}\n${s.items.map(i => `- 종목: ${i.title}\n  기록: ${i.body}`).join('\n')}`).join('\n\n');
       const prompt = `다음 사용자의 거친 운동 메모 데이터를 보기 좋게 정리해서 JSON 배열로 반환해줘.
@@ -492,25 +518,45 @@ ${rawText}`;
           const sorted = snap.docs.map(d => ({ id: d.id, ...d.data() }))
             .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
           const deltas = {};
+          const repDeltas = {};
           for (const sec of parsed) {
             for (const item of (sec.items || [])) {
               if (!item.title || deltas[item.title] !== undefined) continue;
-              const curVol = parseVolumeFromBody(item.body);
-              if (curVol <= 0) continue;
-              for (const d of sorted) {
-                if (initialData && d.id === initialData.docId) continue;
-                const prevItem = (d.sections || []).flatMap(s => s.items || []).find(it => it.title === item.title);
-                if (prevItem?.body) {
-                  const prevVol = parseVolumeFromBody(prevItem.body);
-                  if (prevVol > 0) {
-                    deltas[item.title] = parseFloat(((curVol - prevVol) / prevVol * 100).toFixed(1));
-                    break;
+              const normalizedTitle = normalizeExerciseName(item.title);
+              const isBW = isBodyweightExercise(item.title);
+              if (isBW) {
+                const curReps = sumReps(item.body || '');
+                if (curReps <= 0) continue;
+                for (const d of sorted) {
+                  if (initialData && d.id === initialData.docId) continue;
+                  const prevItem = (d.sections || []).flatMap(s => s.items || []).find(it => normalizeExerciseName(it.title) === normalizedTitle);
+                  if (prevItem?.body) {
+                    const prevReps = sumReps(prevItem.body);
+                    if (prevReps > 0) {
+                      repDeltas[item.title] = curReps - prevReps;
+                      break;
+                    }
+                  }
+                }
+              } else {
+                const curVol = parseVolumeFromBody(item.body);
+                if (curVol <= 0) continue;
+                for (const d of sorted) {
+                  if (initialData && d.id === initialData.docId) continue;
+                  const prevItem = (d.sections || []).flatMap(s => s.items || []).find(it => normalizeExerciseName(it.title) === normalizedTitle);
+                  if (prevItem?.body) {
+                    const prevVol = parseVolumeFromBody(prevItem.body);
+                    if (prevVol > 0) {
+                      deltas[item.title] = parseFloat(((curVol - prevVol) / prevVol * 100).toFixed(1));
+                      break;
+                    }
                   }
                 }
               }
             }
           }
           setExerciseVolumeDeltas(deltas);
+          setExerciseRepDeltas(repDeltas);
         } catch {}
       }
     } catch (e) {
@@ -1336,6 +1382,7 @@ JSON 형식으로만 반환해줘:
                       onBodyBlur={(val) => handleBodyBlur(sec.id, item.id, val)}
                       isAI={item.isAI}
                       prevMaxWeight={exerciseStats[item.title]}
+                      prevMaxReps={exerciseRepStats[item.title]}
                       onAiClick={(e) => openSectionPopover(sec.id, e, 'item', item.id)}
                       aiActive={sectionPopover === sec.id && sectionPopoverSource === 'item' && sectionPopoverItemId === item.id}
                       isConverting={convertingItems.current.has(`${sec.id}_${item.id}`)}
@@ -1353,6 +1400,7 @@ JSON 형식으로만 반환해줘:
                   onBodyBlur={(val) => handleBodyBlur(sec.id, item.id, val)}
                   isAI={item.isAI}
                   prevMaxWeight={exerciseStats[item.title]}
+                  prevMaxReps={exerciseRepStats[item.title]}
                   onAiClick={(e) => openSectionPopover(sec.id, e, 'item', item.id)}
                   aiActive={sectionPopover === sec.id && sectionPopoverSource === 'item' && sectionPopoverItemId === item.id}
                   isConverting={convertingItems.current.has(`${sec.id}_${item.id}`)}
@@ -1504,6 +1552,11 @@ JSON 형식으로만 반환해줘:
                                         {exerciseVolumeDeltas[sIt.title] > 0 ? '+' : ''}{exerciseVolumeDeltas[sIt.title]}%
                                       </span>
                                     )}
+                                    {exerciseRepDeltas[sIt.title] != null && (
+                                      <span className={`px-3 py-1 rounded-[12px] text-[11px] font-medium font-pretendard leading-4 tracking-[-0.275px] ${exerciseRepDeltas[sIt.title] >= 0 ? 'bg-[rgba(0,150,50,0.1)] text-[#009632]' : 'bg-[#ffeef0] text-[#e03e52]'}`}>
+                                        {exerciseRepDeltas[sIt.title] > 0 ? '+' : ''}{exerciseRepDeltas[sIt.title]}회
+                                      </span>
+                                    )}
                                   </div>
                                   <SummaryBodyRenderer body={sIt.body} note={sIt.note} />
                                 </div>
@@ -1516,6 +1569,11 @@ JSON 형식으로만 반환해줘:
                                 {exerciseVolumeDeltas[sIt.title] != null && (
                                   <span className={`px-3 py-1 rounded-[12px] text-[11px] font-medium font-pretendard leading-4 tracking-[-0.275px] ${exerciseVolumeDeltas[sIt.title] >= 0 ? 'bg-[rgba(0,150,50,0.1)] text-[#009632]' : 'bg-[#ffeef0] text-[#e03e52]'}`}>
                                     {exerciseVolumeDeltas[sIt.title] > 0 ? '+' : ''}{exerciseVolumeDeltas[sIt.title]}%
+                                  </span>
+                                )}
+                                {exerciseRepDeltas[sIt.title] != null && (
+                                  <span className={`px-3 py-1 rounded-[12px] text-[11px] font-medium font-pretendard leading-4 tracking-[-0.275px] ${exerciseRepDeltas[sIt.title] >= 0 ? 'bg-[rgba(0,150,50,0.1)] text-[#009632]' : 'bg-[#ffeef0] text-[#e03e52]'}`}>
+                                    {exerciseRepDeltas[sIt.title] > 0 ? '+' : ''}{exerciseRepDeltas[sIt.title]}회
                                   </span>
                                 )}
                               </div>

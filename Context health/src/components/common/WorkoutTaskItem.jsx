@@ -11,6 +11,14 @@ function parseMaxWeightFromText(text) {
   return Math.max(...matches.map(m => parseFloat(m[1])));
 }
 
+function parseTotalRepsFromText(text) {
+  if (!text) return null;
+  let reps = 0;
+  for (const m of text.matchAll(/(?:(\d+)\s*회|[x×]\s*(\d+))/gi))
+    reps += parseInt(m[1] || m[2]);
+  return reps > 0 ? reps : null;
+}
+
 function detectUnitType(line) {
   if (/\d+\s*(lbs?|파운드)/i.test(line)) return 'lb';
   if (/\d+\s*칸/i.test(line)) return 'slot';
@@ -66,9 +74,11 @@ function buildBodySegments(body) {
   return segments;
 }
 
-const WorkoutTaskItem = ({ title, body, onTitleChange, onBodyChange, onBodyBlur, isAI = false, prevMaxWeight, onAiClick, aiActive = false, isConverting, suppressSupersetBadge = false }) => {
+const WorkoutTaskItem = ({ title, body, onTitleChange, onBodyChange, onBodyBlur, isAI = false, prevMaxWeight, prevMaxReps, onAiClick, aiActive = false, isConverting, suppressSupersetBadge = false }) => {
   const currentMax = useMemo(() => parseMaxWeightFromText(body), [body]);
   const delta = prevMaxWeight != null && currentMax != null ? currentMax - prevMaxWeight : null;
+  const currentReps = useMemo(() => parseTotalRepsFromText(body), [body]);
+  const repsDelta = prevMaxReps != null && currentReps != null ? currentReps - prevMaxReps : null;
   const [suggestions, setSuggestions] = useState([]);
   const [editingBody, setEditingBody] = useState(false);
   const [editingTitle, setEditingTitle] = useState(!title);
@@ -196,6 +206,13 @@ const WorkoutTaskItem = ({ title, body, onTitleChange, onBodyChange, onBodyBlur,
               delta >= 0 ? 'bg-[rgba(0,150,50,0.1)] text-[#009632]' : 'bg-[#ffeef0] text-[#e03e52]'
             }`}>
               저번대비 {delta >= 0 ? '+' : ''}{delta}kg
+            </span>
+          )}
+          {repsDelta !== null && (
+            <span className={`flex-none px-3 py-1 rounded-[12px] text-[11px] font-medium font-pretendard leading-4 tracking-[-0.275px] ${
+              repsDelta >= 0 ? 'bg-[rgba(0,150,50,0.1)] text-[#009632]' : 'bg-[#ffeef0] text-[#e03e52]'
+            }`}>
+              저번대비 {repsDelta >= 0 ? '+' : ''}{repsDelta}회
             </span>
           )}
         </div>

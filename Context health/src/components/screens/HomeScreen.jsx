@@ -165,7 +165,10 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
   }
 
   async function handleRetryAI(data) {
-    if (!data?.docId || !data?.originalText) return;
+    if (!data?.docId) return;
+    const rawText = data.originalText ||
+      (data.sections || []).flatMap(s => (s.items || []).map(it => it.body)).filter(Boolean).join('\n');
+    if (!rawText) return;
     const GEMINI_KEY = import.meta.env.VITE_GEMINI_KEY;
     const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`;
     const docRef = doc(db, 'logs', data.docId);
@@ -180,7 +183,7 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
 3. [가장 중요] 세트 번호(N)는 종목이 바뀌더라도 절대 1부터 다시 시작하지 말고, 이전 종목의 마지막 세트 번호에 이어서 전체 누적으로 계속 카운트해줘.
 4. "양쪽" / "각 사이드" 같이 좌우 양쪽을 뜻하는 표기는 절대 삭제하지 말고 해당 세트의 body 텍스트 안에 그대로 유지해.
 8. JSON 이외의 다른 텍스트(마크다운 등)는 절대 포함하지 마.
-사용자 입력:\n${data.originalText}`;
+사용자 입력:\n${rawText}`;
       const res = await fetch(GEMINI_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
       const json = await res.json();
       if (json.error || !json.candidates?.[0]) throw new Error(json.error?.message || 'AI 응답 없음');

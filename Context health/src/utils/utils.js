@@ -6,7 +6,7 @@ function isBodyweightBase(title) {
   return BODYWEIGHT_BASES.has(base);
 }
 
-function sumReps(body) {
+export function sumReps(body) {
   let reps = 0;
   for (const m of body.matchAll(/(?:(\d+)\s*회|[x×]\s*(\d+))/gi))
     reps += parseInt(m[1] || m[2]);

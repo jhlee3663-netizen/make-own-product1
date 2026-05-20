@@ -46,9 +46,9 @@ function extractGramAmount(text, fallback = 100) {
 
 function extractCountAmount(text, fallback = 1) {
   const value = String(text || '').toLowerCase();
-  const countMatch = value.match(/(\d+(?:\.\d+)?)\s*(?:개|피스|pcs?|ps|조각|점|줄)/);
+  const countMatch = value.match(/(\d+(?:\.\d+)?)\s*(?:개|피스|pieces?|pcs?|ps|p|조각|점|줄)/);
   if (countMatch) return Math.max(1, Math.round(Number(countMatch[1])));
-  if (/반\s*(?:개|피스|인분)/.test(value)) return 0.5;
+  if (/반\s*(?:개|피스|ps|인분)/.test(value)) return 0.5;
   return fallback;
 }
 
@@ -67,7 +67,7 @@ function getStandardFood(query, amountText = query) {
   const fullText = `${query} ${amountText || ''}`;
 
   if (/초밥|스시|sushi/.test(normalized)) {
-    const pieces = extractCountAmount(fullText, /모듬|세트|1\s*인분|일인분/.test(normalized) ? 10 : 1);
+    const pieces = extractCountAmount(fullText, /모듬|세트|1\s*인분|일인분|한\s*접시/.test(fullText) ? 10 : 1);
     const macros = {
       kcal: Math.round(48 * pieces),
       carb: Math.round(7.8 * pieces),
@@ -253,6 +253,53 @@ export async function estimateFoodNutrition(text) {
     fat: toNumber(item.fat),
     source: 'ai',
   };
+}
+
+export async function estimateMealNutrition(text, customFoods = []) {
+  const prompt = `다음 식단 메모를 실제로 먹은 음식 항목 단위로 나누고, 각 항목의 섭취량 기준 영양성분을 추정해 순수 JSON 배열만 반환해라.
+식약처 DB 검색용 기준량이 아니라, 사용자가 적은 수량을 반드시 반영해라.
+"10ps", "10pcs", "10피스", "10개"처럼 개수 단위가 있으면 절대 1개로 줄이지 마라.
+"1인분", "반공기", "200g", "2개", "한 줌", "한 스쿱" 같은 표현을 음식명 또는 amount에 보존하고 계산에 반영해라.
+한국에서 통용되는 일반 영양성분 기준을 우선하고, 외식/배달/양념 음식은 칼로리와 지방을 낮게 잡지 말고 평균보다 약간 보수적으로 잡아라.
+밥/쌀밥은 100g당 약 166kcal, 탄수화물 37g, 단백질 3g, 지방 0g 기준으로 수량에 맞춰 계산해라.
+형식: [{"name":"음식명(수량포함)","amount":"수량","query":"검색용 핵심 음식명","kcal":숫자,"carb":숫자,"protein":숫자,"fat":숫자}]
+모든 수치는 정수. 설명 없이 JSON만.
+메모: "${text}"`;
+
+  const items = await callGeminiJson(prompt, /\[[\s\S]*\]/);
+  return items.map(item => {
+    const name = String(item.name || item.query || text).trim();
+    const amount = String(item.amount || '').trim();
+    const query = String(item.query || name).trim();
+    const customFood =
+      findCustomFood(customFoods, name) ||
+      findCustomFood(customFoods, `${query} ${amount}`.trim()) ||
+      findCustomFood(customFoods, query);
+
+    if (customFood) {
+      return {
+        ...customFood,
+        name: customFood.name || name,
+        source: 'custom',
+        matchedName: '내가 수정한 기준',
+      };
+    }
+
+    const standardFood = getStandardFood(`${query} ${amount}`.trim() || name, amount);
+    if (standardFood) return standardFood;
+
+    return {
+      name,
+      rawName: query,
+      serving: amount,
+      kcal: toNumber(item.kcal),
+      carb: toNumber(item.carb || item.carbohydrate),
+      protein: toNumber(item.protein),
+      fat: toNumber(item.fat),
+      source: 'ai',
+      matchedName: 'AI 수량 추정',
+    };
+  }).filter(item => item.name);
 }
 
 export async function resolveFoodNutrition(food, customFoods = []) {
