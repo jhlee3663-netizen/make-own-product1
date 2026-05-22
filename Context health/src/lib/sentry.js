@@ -3,6 +3,14 @@ import * as Sentry from '@sentry/react';
 const dsn = import.meta.env.VITE_SENTRY_DSN;
 
 export function initSentry() {
+  if (typeof window !== 'undefined') {
+    window.__throwSentryTestError = () => {
+      const error = new Error('Sentry test error');
+      Sentry.captureException(error);
+      throw error;
+    };
+  }
+
   if (!dsn) return;
 
   Sentry.init({
@@ -21,12 +29,6 @@ export function initSentry() {
     replaysOnErrorSampleRate: 1,
     sendDefaultPii: false,
   });
-
-  if (typeof window !== 'undefined') {
-    window.__throwSentryTestError = () => {
-      throw new Error('Sentry test error');
-    };
-  }
 }
 
 export function setSentryUser(user) {
