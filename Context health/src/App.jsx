@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './lib/firebase';
+import { setSentryUser } from './lib/sentry';
 import { loadUserData, saveUserData, loadAllCoachRooms, saveCoachRoom, deleteCoachRoom } from './lib/userStore';
 
 import LoginScreen      from './components/screens/LoginScreen';
@@ -180,6 +181,10 @@ function App() {
     });
     return () => unsub();
   }, []);
+
+  useEffect(() => {
+    if (user !== undefined) setSentryUser(user);
+  }, [user]);
 
   useEffect(() => {
     latestViewRef.current = currentView();

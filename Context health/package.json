@@ -11,6 +11,7 @@
     "deploy": "npx firebase-tools deploy --only hosting"
   },
   "dependencies": {
+    "@sentry/react": "^10.53.1",
     "firebase": "^10.8.0",
     "framer-motion": "^12.38.0",
     "lucide-react": "^0.344.0",
