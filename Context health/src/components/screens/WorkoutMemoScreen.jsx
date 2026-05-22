@@ -1086,13 +1086,6 @@ JSON 형식으로만 반환해줘:
       />
       {/* 상단 네비게이션 */}
       <header className="flex-none bg-white/90 backdrop-blur-[32px] border-b border-ui-3/50">
-        <div className="flex items-center justify-between h-9 px-4">
-          <span className="font-pretendard text-body-s font-medium text-black/60">9:41</span>
-          <svg width="60" height="12" viewBox="0 0 60 12" fill="none" className="mt-2">
-            <rect x=".5" y=".5" width="21" height="11" rx="3.5" stroke="black" strokeOpacity=".35" />
-            <rect x="2" y="2" width="16" height="8" rx="2" fill="black" />
-          </svg>
-        </div>
         <div className="flex items-center justify-between px-4 h-14">
           <div className="flex items-center gap-2">
             <Pressable pressScale={0.85} onClick={handleBackClick} className="flex items-center justify-center w-8 h-8 rounded-full bg-transparent">
@@ -1114,7 +1107,7 @@ JSON 형식으로만 반환해줘:
       <main className="flex-1 overflow-y-auto">
 
         {/* 툴바 */}
-        <div className="flex h-16 items-center justify-between bg-white px-6 border-b border-ui-2">
+        <div className="flex h-16 items-center justify-between bg-white px-4 border-b border-ui-2">
           <div className="flex items-center gap-4">
             <button
               onClick={() => { setFreeMode(p => !p); setShowColorPicker(null); }}
@@ -1145,7 +1138,7 @@ JSON 형식으로만 반환해줘:
               </div>
             )}
           </div>
-          <div className="flex h-10 items-center gap-3">
+          <div className="flex h-10 items-center gap-4">
             <Pressable
               pressScale={0.88}
               onClick={() => setWorkoutMode(m => m === 'overload' ? 'deload' : 'overload')}
