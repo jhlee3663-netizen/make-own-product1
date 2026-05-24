@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { auth } from '../../lib/firebase';
+import { auth, db } from '../../lib/firebase';
 import { signOut } from 'firebase/auth';
+import { clearIndexedDbPersistence, terminate } from 'firebase/firestore';
 import Pressable from '../common/Pressable';
 
 const GOALS = ['체중 감량', '근육 증량', '체형 유지', '건강 증진'];
@@ -57,6 +58,10 @@ export default function MyPageScreen({ user, profile, onProfileSave, onNavChange
   async function handleLogout() {
     localStorage.removeItem('auth_user');
     try { await signOut(auth); } catch {}
+    try {
+      await terminate(db);
+      await clearIndexedDbPersistence(db);
+    } catch {}
     window.location.reload();
   }
 

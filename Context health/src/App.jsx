@@ -167,7 +167,7 @@ function App() {
   useEffect(() => {
     const saved = localStorage.getItem('auth_user');
     if (saved) {
-      try { setUser(JSON.parse(saved)); return; } catch {}
+      try { setUser(JSON.parse(saved)); } catch {}
     }
     const unsub = onAuthStateChanged(auth, (fu) => {
       if (fu) {
@@ -175,6 +175,7 @@ function App() {
         localStorage.setItem('auth_user', JSON.stringify(u));
         setUser(u);
       } else {
+        localStorage.removeItem('auth_user');
         setUser(null);
         setUserDataReady(true);
       }
