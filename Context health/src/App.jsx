@@ -237,6 +237,9 @@ function App() {
       if (userData?.profile) {
         saveProfile(userData.profile);
         setProfile(userData.profile);
+      } else {
+        localStorage.removeItem('user_profile');
+        setProfile(null);
       }
       if (userData?.onboardingDone || userData?.profile) {
         localStorage.setItem('onboarding_completed', '1');

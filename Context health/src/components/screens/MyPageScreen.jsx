@@ -57,6 +57,15 @@ export default function MyPageScreen({ user, profile, onProfileSave, onNavChange
 
   async function handleLogout() {
     localStorage.removeItem('auth_user');
+    localStorage.removeItem('user_profile');
+    localStorage.removeItem('onboarding_completed');
+    localStorage.removeItem('ai_goals');
+    const keysToRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k?.startsWith('coach_msgs_') || k?.startsWith('coach_room_meta_')) keysToRemove.push(k);
+    }
+    keysToRemove.forEach(k => localStorage.removeItem(k));
     try { await signOut(auth); } catch {}
     try {
       await terminate(db);
