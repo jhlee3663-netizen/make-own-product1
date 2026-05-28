@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { auth, googleProvider } from '../../lib/firebase';
-import { signInWithPopup, signInWithRedirect, getRedirectResult } from 'firebase/auth';
+import { signInWithPopup, signInWithRedirect, getRedirectResult, signInAnonymously } from 'firebase/auth';
 import Pressable from '../common/Pressable';
 
 
@@ -105,19 +105,24 @@ export default function LoginScreen({ onLogin }) {
     });
     naverLogin.init();
 
-    naverLogin.getLoginStatus((status) => {
+    naverLogin.getLoginStatus(async (status) => {
       if (!status) return;
       const u = naverLogin.user;
-      const userData = {
-        uid:      `naver_${u.id}`,
-        name:     u.name || '네이버 사용자',
-        email:    u.email || '',
-        photo:    u.profile_image || '',
-        provider: 'naver',
-      };
-      localStorage.setItem('auth_user', JSON.stringify(userData));
-      onLoginRef.current(userData);
-      window.history.replaceState({}, document.title, window.location.pathname);
+      try {
+        const cred = await signInAnonymously(auth);
+        const userData = {
+          uid:      cred.user.uid,
+          name:     u.name || '네이버 사용자',
+          email:    u.email || '',
+          photo:    u.profile_image || '',
+          provider: 'naver',
+        };
+        localStorage.setItem('auth_user', JSON.stringify(userData));
+        onLoginRef.current(userData);
+        window.history.replaceState({}, document.title, window.location.pathname);
+      } catch {
+        setError('로그인에 실패했습니다. 다시 시도해주세요.');
+      }
     });
   }, []); // mount 시 1회만
 
@@ -173,16 +178,21 @@ export default function LoginScreen({ onLogin }) {
             url: '/v2/user/me',
             success(res) {
               const profile = res.kakao_account?.profile;
-              const user = {
-                uid:      `kakao_${res.id}`,
-                name:     profile?.nickname || '카카오 사용자',
-                email:    res.kakao_account?.email || '',
-                photo:    profile?.profile_image_url || '',
-                provider: 'kakao',
-              };
-              localStorage.setItem('auth_user', JSON.stringify(user));
-              onLoginRef.current(user);
-              setLoading(null);
+              signInAnonymously(auth).then((cred) => {
+                const user = {
+                  uid:      cred.user.uid,
+                  name:     profile?.nickname || '카카오 사용자',
+                  email:    res.kakao_account?.email || '',
+                  photo:    profile?.profile_image_url || '',
+                  provider: 'kakao',
+                };
+                localStorage.setItem('auth_user', JSON.stringify(user));
+                onLoginRef.current(user);
+                setLoading(null);
+              }).catch(() => {
+                setError('로그인에 실패했습니다. 다시 시도해주세요.');
+                setLoading(null);
+              });
             },
             fail(err) {
               setError('프로필 조회 실패: ' + JSON.stringify(err));
