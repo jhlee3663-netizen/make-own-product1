@@ -52,6 +52,93 @@ function extractCountAmount(text, fallback = 1) {
   return fallback;
 }
 
+function getAmountHint(text) {
+  const value = String(text || '').toLowerCase();
+  const gramMatch = value.match(/(\d+(?:\.\d+)?)\s*(kg|g|그램)/);
+  const countMatch = value.match(/(\d+(?:\.\d+)?)\s*(개|피스|pieces?|pcs?|ps|p|조각|점|줄|봉|팩|회)/);
+  const portionMatch = value.match(/(\d+(?:\.\d+)?)\s*(인분|회\s*제공량|회분)/);
+  return {
+    text: value,
+    grams: gramMatch
+      ? Math.round(Number(gramMatch[1]) * (gramMatch[2] === 'kg' ? 1000 : 1))
+      : null,
+    count: countMatch ? Number(countMatch[1]) : null,
+    countUnit: countMatch ? countMatch[2] : null,
+    portions: portionMatch ? Number(portionMatch[1]) : null,
+    hasHalf: /반\s*(?:개|피스|ps|인분|공기|봉|팩)/.test(value),
+  };
+}
+
+function getServingGram(serving) {
+  const value = String(serving || '').toLowerCase();
+  const kgMatch = value.match(/(\d+(?:\.\d+)?)\s*kg/);
+  if (kgMatch) return Math.round(Number(kgMatch[1]) * 1000);
+  const gramMatch = value.match(/(\d+(?:\.\d+)?)\s*(?:g|그램)/);
+  return gramMatch ? Math.round(Number(gramMatch[1])) : null;
+}
+
+function getServingCount(serving) {
+  const value = String(serving || '').toLowerCase();
+  const countMatch = value.match(/(\d+(?:\.\d+)?)\s*(?:개|피스|pieces?|pcs?|ps|p|조각|점|줄|봉|팩|회|인분)/);
+  if (countMatch) return Number(countMatch[1]);
+  if (/1\s*회\s*제공량|총\s*내용량|1\s*봉|1\s*팩/.test(value)) return 1;
+  return null;
+}
+
+function scaleNutritionItem(item, ratio, matchedSuffix) {
+  const scaled = {
+    ...item,
+    kcal: Math.round(Number(item.kcal || 0) * ratio),
+    carb: Math.round(Number(item.carb || 0) * ratio),
+    protein: Math.round(Number(item.protein || 0) * ratio),
+    fat: Math.round(Number(item.fat || 0) * ratio),
+  };
+  return reconcileNutrition({
+    ...scaled,
+    matchedName: matchedSuffix
+      ? `${item.matchedName || item.name} · ${matchedSuffix}`
+      : item.matchedName,
+  });
+}
+
+function adjustNutritionForAmount(item, amountText) {
+  const amount = getAmountHint(amountText);
+  const servingText = `${item.serving || ''} ${item.name || ''}`;
+  const servingGram = getServingGram(servingText);
+  const servingCount = getServingCount(servingText);
+
+  if (amount.grams && servingGram) {
+    const ratio = amount.grams / servingGram;
+    if (ratio > 0 && Math.abs(ratio - 1) > 0.05) {
+      return scaleNutritionItem(item, ratio, `${amount.grams}g 환산`);
+    }
+  }
+
+  if (amount.count && servingCount) {
+    const ratio = amount.count / servingCount;
+    if (ratio > 0 && Math.abs(ratio - 1) > 0.05) {
+      return scaleNutritionItem(item, ratio, `${amount.count}${amount.countUnit || '개'} 환산`);
+    }
+  }
+
+  if (amount.portions && servingCount && /인분|회/.test(servingText)) {
+    const ratio = amount.portions / servingCount;
+    if (ratio > 0 && Math.abs(ratio - 1) > 0.05) {
+      return scaleNutritionItem(item, ratio, `${amount.portions}인분 환산`);
+    }
+  }
+
+  return item;
+}
+
+function isAmountCompatibleWithMfds(item, amountText) {
+  const amount = getAmountHint(amountText);
+  const servingText = `${item.serving || ''} ${item.name || ''}`;
+  if (amount.count && !getServingCount(servingText)) return false;
+  if (amount.grams && !getServingGram(servingText)) return false;
+  return true;
+}
+
 function scaleByGram(base, grams) {
   const ratio = grams / 100;
   return {
@@ -60,6 +147,42 @@ function scaleByGram(base, grams) {
     protein: Math.round(base.protein * ratio),
     fat: Math.round(base.fat * ratio),
   };
+}
+
+function macroKcalOf(item) {
+  return Math.round(Number(item.carb || 0) * 4 + Number(item.protein || 0) * 4 + Number(item.fat || 0) * 9);
+}
+
+function reconcileNutrition(item) {
+  const kcal = toNumber(item.kcal);
+  const macroKcal = macroKcalOf(item);
+  if (!kcal || !macroKcal || item.source === 'custom') return { ...item, kcal };
+
+  const gap = Math.abs(kcal - macroKcal);
+  const gapRatio = gap / Math.max(kcal, macroKcal);
+  if (gap < 35 || gapRatio < 0.08) return { ...item, kcal };
+
+  return {
+    ...item,
+    kcal: macroKcal,
+    calorieAdjusted: true,
+    matchedName: item.matchedName ? `${item.matchedName} · kcal 보정` : '탄단지 기준 kcal 보정',
+  };
+}
+
+function makeStandardFood({ name, rawName, serving, kcal, carb, protein, fat, matchedName, score = 210 }) {
+  return reconcileNutrition({
+    name,
+    rawName,
+    serving,
+    kcal,
+    carb,
+    protein,
+    fat,
+    source: 'standard',
+    matchedName,
+    score,
+  });
 }
 
 function getStandardFood(query, amountText = query) {
@@ -74,15 +197,14 @@ function getStandardFood(query, amountText = query) {
       protein: Math.round(3.0 * pieces),
       fat: Math.round(1.0 * pieces),
     };
-    return {
+    return makeStandardFood({
       name: `초밥 ${pieces}피스`,
       rawName: '초밥',
       serving: `${pieces}피스`,
       ...macros,
-      source: 'standard',
       matchedName: '초밥 1피스 평균 기준',
       score: 220,
-    };
+    });
   }
 
   if (/우동|udon/.test(normalized)) {
@@ -93,15 +215,58 @@ function getStandardFood(query, amountText = query) {
       protein: Math.round(12 * portion),
       fat: Math.round(6 * portion),
     };
-    return {
+    return makeStandardFood({
       name: portion === 0.5 ? '우동 반개' : '우동 1인분',
       rawName: '우동',
       serving: portion === 0.5 ? '0.5인분' : '1인분',
       ...macros,
-      source: 'standard',
       matchedName: '우동 1인분 평균 기준',
       score: 210,
+    });
+  }
+
+  if (/카레|커리|curry/.test(normalized)) {
+    const portion = /반|0\.5|1\/2/.test(fullText) ? 0.5 : 1;
+    const hasMeat = /고기|소고기|돼지고기|닭|비프|포크|치킨/.test(fullText);
+    const base = hasMeat
+      ? { kcal: 285, carb: 28, protein: 13, fat: 13 }
+      : { kcal: 235, carb: 31, protein: 6, fat: 9 };
+    const macros = {
+      kcal: Math.round(base.kcal * portion),
+      carb: Math.round(base.carb * portion),
+      protein: Math.round(base.protein * portion),
+      fat: Math.round(base.fat * portion),
     };
+    return makeStandardFood({
+      name: hasMeat ? '카레 고기 포함 1인분' : '카레 1인분',
+      rawName: '카레',
+      serving: portion === 0.5 ? '0.5인분' : '1인분',
+      ...macros,
+      matchedName: hasMeat ? '카레 고기 포함 평균 기준' : '카레 소스 평균 기준',
+      score: 215,
+    });
+  }
+
+  if (/소시지|소세지|sausage|핫바|프랑크/.test(normalized)) {
+    const count = extractCountAmount(fullText, 1);
+    const isLong = /긴|롱|프랑크|핫바/.test(fullText);
+    const base = isLong
+      ? { kcal: 190, carb: 4, protein: 8, fat: 16 }
+      : { kcal: 120, carb: 3, protein: 6, fat: 10 };
+    const macros = {
+      kcal: Math.round(base.kcal * count),
+      carb: Math.round(base.carb * count),
+      protein: Math.round(base.protein * count),
+      fat: Math.round(base.fat * count),
+    };
+    return makeStandardFood({
+      name: `${isLong ? '긴 소시지' : '소시지'} ${count}개`,
+      rawName: '소시지',
+      serving: `${count}개`,
+      ...macros,
+      matchedName: isLong ? '긴 소시지 1개 평균 기준' : '소시지 1개 평균 기준',
+      score: 215,
+    });
   }
 
   if (!/(^|[^가-힣])(밥|쌀밥|흰쌀밥|백미밥|공기밥)([^가-힣]|$)/.test(` ${normalized} `)) return null;
@@ -109,15 +274,14 @@ function getStandardFood(query, amountText = query) {
 
   const grams = extractGramAmount(`${query} ${amountText}`, 210);
   const macros = scaleByGram({ kcal: 166, carb: 37.3, protein: 3.4, fat: 0.3 }, grams);
-  return {
+  return makeStandardFood({
     name: `밥 ${grams}g`,
     rawName: '쌀밥',
     serving: `${grams}g`,
     ...macros,
-    source: 'standard',
     matchedName: '쌀밥 100g 기준',
     score: 200,
-  };
+  });
 }
 
 function extractJson(raw, fallbackPattern) {
@@ -126,29 +290,49 @@ function extractJson(raw, fallbackPattern) {
   return JSON.parse(match[0]);
 }
 
+const geminiCache = new Map();
+
 async function callGeminiJson(prompt, pattern) {
   const key = import.meta.env.VITE_GEMINI_KEY;
   if (!key) throw new Error('Gemini 키 없음');
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
-    }
-  );
+
+  if (geminiCache.has(prompt)) return geminiCache.get(prompt);
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 25000);
+  let res;
+  try {
+    res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { thinkingConfig: { thinkingBudget: 0 } },
+        }),
+        signal: controller.signal,
+      }
+    );
+  } finally {
+    clearTimeout(timer);
+  }
   const json = await res.json();
   const cp = json.candidates?.[0]?.content?.parts;
   if (!cp) throw new Error('AI 응답 없음');
   const raw = (cp.find(p => !p.thought) ?? cp[cp.length - 1]).text;
-  return extractJson(raw, pattern);
+  const result = extractJson(raw, pattern);
+  geminiCache.set(prompt, result);
+  return result;
 }
 
 export async function parseFoodMemo(text) {
   const prompt = `다음 식단 메모를 음식 항목 단위로만 분리해 순수 JSON 배열만 반환해라.
 영양성분은 추정하지 마라. 음식명과 수량만 정리해라.
+브랜드명이나 제품명이 명확한 가공식품은 query에 제품명을 줄이지 말고 최대한 그대로 보존해라.
 형식: [{"name":"음식명","amount":"수량 또는 1인분","query":"검색용 핵심 음식명"}]
 예: "뼈찜 1인분, 공기밥 반공기" -> [{"name":"뼈찜","amount":"1인분","query":"뼈찜"},{"name":"공기밥","amount":"반공기","query":"밥"}]
+예: "투데이넛 너트한줌 프리미엄" -> [{"name":"투데이넛 너트한줌 프리미엄","amount":"1개","query":"투데이넛 너트한줌 프리미엄"}]
 메모: "${text}"`;
   try {
     const items = await callGeminiJson(prompt, /\[[\s\S]*\]/);
@@ -230,6 +414,8 @@ export async function searchMfdsFoods(query) {
     .map(row => normalizeMfdsRow(row, query))
     .filter(item => item.name && (item.kcal || item.carb || item.protein || item.fat))
     .map(item => ({ ...item, score: scoreMfdsRow(item, query) }))
+    .filter(item => isAmountCompatibleWithMfds(item, query))
+    .map(item => adjustNutritionForAmount(item, query))
     .sort((a, b) => b.score - a.score);
 }
 
@@ -245,61 +431,20 @@ export async function estimateFoodNutrition(text) {
 형식: {"name":"음식명(수량포함)","kcal":숫자,"carb":숫자,"protein":숫자,"fat":숫자}
 모든 수치는 정수. 설명 없이 JSON만.`;
   const item = await callGeminiJson(prompt, /\{[\s\S]*\}/);
-  return {
+  return reconcileNutrition({
     name: String(item.name || text),
     kcal: toNumber(item.kcal),
     carb: toNumber(item.carb || item.carbohydrate),
     protein: toNumber(item.protein),
     fat: toNumber(item.fat),
     source: 'ai',
-  };
+  });
 }
 
 export async function estimateMealNutrition(text, customFoods = []) {
-  const prompt = `다음 식단 메모를 실제로 먹은 음식 항목 단위로 나누고, 각 항목의 섭취량 기준 영양성분을 추정해 순수 JSON 배열만 반환해라.
-식약처 DB 검색용 기준량이 아니라, 사용자가 적은 수량을 반드시 반영해라.
-"10ps", "10pcs", "10피스", "10개"처럼 개수 단위가 있으면 절대 1개로 줄이지 마라.
-"1인분", "반공기", "200g", "2개", "한 줌", "한 스쿱" 같은 표현을 음식명 또는 amount에 보존하고 계산에 반영해라.
-한국에서 통용되는 일반 영양성분 기준을 우선하고, 외식/배달/양념 음식은 칼로리와 지방을 낮게 잡지 말고 평균보다 약간 보수적으로 잡아라.
-밥/쌀밥은 100g당 약 166kcal, 탄수화물 37g, 단백질 3g, 지방 0g 기준으로 수량에 맞춰 계산해라.
-형식: [{"name":"음식명(수량포함)","amount":"수량","query":"검색용 핵심 음식명","kcal":숫자,"carb":숫자,"protein":숫자,"fat":숫자}]
-모든 수치는 정수. 설명 없이 JSON만.
-메모: "${text}"`;
-
-  const items = await callGeminiJson(prompt, /\[[\s\S]*\]/);
-  return items.map(item => {
-    const name = String(item.name || item.query || text).trim();
-    const amount = String(item.amount || '').trim();
-    const query = String(item.query || name).trim();
-    const customFood =
-      findCustomFood(customFoods, name) ||
-      findCustomFood(customFoods, `${query} ${amount}`.trim()) ||
-      findCustomFood(customFoods, query);
-
-    if (customFood) {
-      return {
-        ...customFood,
-        name: customFood.name || name,
-        source: 'custom',
-        matchedName: '내가 수정한 기준',
-      };
-    }
-
-    const standardFood = getStandardFood(`${query} ${amount}`.trim() || name, amount);
-    if (standardFood) return standardFood;
-
-    return {
-      name,
-      rawName: query,
-      serving: amount,
-      kcal: toNumber(item.kcal),
-      carb: toNumber(item.carb || item.carbohydrate),
-      protein: toNumber(item.protein),
-      fat: toNumber(item.fat),
-      source: 'ai',
-      matchedName: 'AI 수량 추정',
-    };
-  }).filter(item => item.name);
+  const foods = await parseFoodMemo(text);
+  const resolved = await Promise.all(foods.map(food => resolveFoodNutrition(food, customFoods)));
+  return resolved.filter(item => item.name);
 }
 
 export async function resolveFoodNutrition(food, customFoods = []) {
@@ -318,15 +463,19 @@ export async function resolveFoodNutrition(food, customFoods = []) {
   if (standardFood) return standardFood;
 
   try {
-    const mfdsItems = await searchMfdsFoods(food.query || food.name);
+    const mfdsItems = await searchMfdsFoods(foodText);
+    if (mfdsItems.length === 0 && food.query && food.query !== foodText) {
+      mfdsItems.push(...await searchMfdsFoods(food.query));
+    }
     const best = mfdsItems[0];
     const second = mfdsItems[1];
     const isConfident = best && best.score >= 60 && (!second || best.score - second.score >= 15 || best.score >= 90);
-    if (isConfident) {
+    if (isConfident && isAmountCompatibleWithMfds(best, foodText)) {
+      const adjusted = adjustNutritionForAmount(best, foodText);
       return {
-        ...best,
+        ...adjusted,
         name: `${food.name}${food.amount ? ` ${food.amount}` : ''}`,
-        matchedName: best.name,
+        matchedName: adjusted.matchedName || best.name,
       };
     }
   } catch (e) {

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { db } from '../../lib/firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
 import { PDF_CONTEXT } from '../../lib/pdfContext';
 import Pressable from '../common/Pressable';
 
@@ -95,7 +95,7 @@ function formatTime(date) {
 
 async function fetchRecentLogs(uid) {
   if (!uid) return { workouts: [], diets: [] };
-  const q = query(collection(db, 'logs'), where('uid', '==', uid));
+  const q = query(collection(db, 'logs'), where('uid', '==', uid), orderBy('timestamp', 'desc'), limit(30));
   const snap = await getDocs(q);
   const all = snap.docs
     .map(d => d.data())

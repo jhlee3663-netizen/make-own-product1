@@ -5,6 +5,7 @@ import { initSentry, Sentry } from './lib/sentry.js'
 import './index.css'
 
 initSentry()
+document.getElementById('boot-loader')?.remove()
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { db } from '../../lib/firebase';
-import { collection, addDoc, updateDoc, doc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, serverTimestamp, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
 import { IcBack, IcMore, IcSpark, QuoteIcon, IcPencil } from '../icons/Icons';
 import { AutoTextarea } from '../common/AutoTextarea';
 import DonutChart from '../dashboard/DonutChart';
@@ -259,7 +259,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
     let cancelled = false;
     async function loadSavedFoods() {
       try {
-        const q = query(collection(db, 'logs'), where('uid', '==', uid), where('type', '==', 'diet'));
+        const q = query(collection(db, 'logs'), where('uid', '==', uid), where('type', '==', 'diet'), orderBy('timestamp', 'desc'), limit(100));
         const snap = await getDocs(q);
         const logs = snap.docs
           .map(d => d.data())
@@ -546,7 +546,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
       if (isNew) {
         await addDoc(collection(db, 'logs'), { ...docData, uid, timestamp: serverTimestamp() });
       } else {
-        await updateDoc(doc(db, 'logs', initialData.docId), { ...docData, timestamp: serverTimestamp() });
+        await updateDoc(doc(db, 'logs', initialData.docId), { ...docData });
       }
       onSave();
     } catch (e) {

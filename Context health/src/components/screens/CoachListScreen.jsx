@@ -247,7 +247,7 @@ export default function CoachListScreen({ rooms, roomMeta, onOpenRoom, onStartNe
       </>
 
       {/* 스크롤 가능한 메인 바디 */}
-      <main className="flex-1 overflow-y-auto pb-4">
+      <main className="flex-1 overflow-y-auto" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 150px)' }}>
         
         {/* 상단 파스텔 헤더 (이미지 구현) */}
         <div 
@@ -357,28 +357,40 @@ export default function CoachListScreen({ rooms, roomMeta, onOpenRoom, onStartNe
 
       </main>
 
-      {/* 하단 입력바 (알약 모양) */}
-      <div className="flex-none px-5 py-3 bg-white border-t border-ui-2 shadow-[0_-4px_20px_rgba(0,0,0,0.03)] z-10 pb-[90px]">
-        <div className="w-full h-[52px] bg-[#F7F7FA] border border-[#EEEEF2] rounded-full flex items-center px-5 gap-3">
-          <input
+      {/* 하단 입력바 (플로팅 — absolute로 콘텐츠 위에 띄움) */}
+      <div
+        className="absolute left-0 right-0 bottom-0 px-4"
+        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 82px)', paddingTop: '12px' }}
+      >
+        <div
+          className="w-full bg-white rounded-[26px] px-4 py-3 flex items-center gap-3"
+          style={{ boxShadow: '0 4px 28px rgba(0,0,0,0.13)' }}
+        >
+          <textarea
             value={inputText}
-            onChange={e => setInputText(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') handleSend(); }}
+            onChange={e => {
+              setInputText(e.target.value);
+              e.target.style.height = 'auto';
+              e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+            }}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
             placeholder="코치에게 이야기해보세요"
-            className="flex-1 bg-transparent outline-none font-pretendard text-[14px] text-typo-strong placeholder:text-[#A0A0A5] tracking-[-0.3px]"
+            rows={1}
+            className="flex-1 bg-transparent resize-none outline-none font-pretendard text-[14px] text-typo-strong placeholder:text-[#A0A0A5] tracking-[-0.3px] leading-relaxed max-h-[120px] overflow-y-auto"
+            style={{ height: 'auto' }}
           />
           {inputText.trim() ? (
-            <Pressable pressScale={0.95} onClick={handleSend} className="w-8 h-8 rounded-full bg-[#FF5D8F] flex items-center justify-center text-white flex-shrink-0 shadow-sm">
+            <Pressable pressScale={0.92} onClick={handleSend} className="w-9 h-9 rounded-full bg-[#FF5D8F] flex items-center justify-center text-white flex-shrink-0 shadow-sm">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                 <path d="M22 2L11 13" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
                 <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             </Pressable>
           ) : (
-            <button className="flex items-center justify-center text-[#A0A0A5] flex-shrink-0">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
-                <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+            <button disabled className="w-9 h-9 rounded-full bg-[#FF5D8F]/30 flex items-center justify-center flex-shrink-0 cursor-default">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <path d="M22 2L11 13" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             </button>
           )}

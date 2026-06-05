@@ -13,6 +13,8 @@ import {
   serverTimestamp,
   query,
   where,
+  orderBy,
+  limit,
   getDocs
 } from 'firebase/firestore';
 import { parseVolume, sumReps } from '../../utils/utils';
@@ -405,7 +407,7 @@ export default function WorkoutMemoScreen({ onBack, onSave, initialData, uid, pr
     if (!exerciseName?.trim() || !uid) return;
     const normalizedName = normalizeExerciseName(exerciseName);
     const isBW = isBodyweightExercise(exerciseName);
-    const q = query(collection(db, "logs"), where("uid", "==", uid));
+    const q = query(collection(db, "logs"), where("uid", "==", uid), orderBy("timestamp", "desc"), limit(50));
     const snap = await getDocs(q);
     const sorted = snap.docs
       .map(d => ({ id: d.id, ...d.data() }))
@@ -513,7 +515,7 @@ ${rawText}`;
       // 종목별 볼륨 증감 계산
       if (uid) {
         try {
-          const q = query(collection(db, "logs"), where("uid", "==", uid), where("type", "==", "workout"));
+          const q = query(collection(db, "logs"), where("uid", "==", uid), where("type", "==", "workout"), orderBy("timestamp", "desc"), limit(50));
           const snap = await getDocs(q);
           const sorted = snap.docs.map(d => ({ id: d.id, ...d.data() }))
             .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
@@ -657,7 +659,7 @@ ${rawText}`;
         let context = '';
         if (uid) {
           try {
-            const q = query(collection(db, "logs"), where("uid", "==", uid), where("type", "==", "workout"));
+            const q = query(collection(db, "logs"), where("uid", "==", uid), where("type", "==", "workout"), orderBy("timestamp", "desc"), limit(50));
             const snap = await getDocs(q);
             const sorted = snap.docs.map(d => ({ ...d.data() }))
               .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
@@ -702,7 +704,7 @@ JSON 형식으로만 반환해줘:
         let context = '';
         if (uid) {
           try {
-            const q = query(collection(db, "logs"), where("uid", "==", uid), where("type", "==", "workout"));
+            const q = query(collection(db, "logs"), where("uid", "==", uid), where("type", "==", "workout"), orderBy("timestamp", "desc"), limit(50));
             const snap = await getDocs(q);
             const sorted = snap.docs.map(d => ({ ...d.data() }))
               .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
@@ -755,7 +757,7 @@ JSON 형식으로만 반환해줘:
     setSectionPopover(null);
     if (!uid) return;
     const sec = sections.find(s => s.id === secId);
-    const q = query(collection(db, "logs"), where("uid", "==", uid), where("type", "==", "workout"));
+    const q = query(collection(db, "logs"), where("uid", "==", uid), where("type", "==", "workout"), orderBy("timestamp", "desc"), limit(50));
 
     if (source === 'item' && itemId) {
       const exerciseName = sec?.items.find(it => it.id === itemId)?.title?.trim();
@@ -947,7 +949,7 @@ JSON 형식으로만 반환해줘:
       let lastVolume = 0;
       const currentParts = structuredSections.map(s => s.part).filter(Boolean);
       if (currentParts.length > 0 && uid) {
-        const q = query(collection(db, "logs"), where("uid", "==", uid));
+        const q = query(collection(db, "logs"), where("uid", "==", uid), orderBy("timestamp", "desc"), limit(50));
         const snap = await getDocs(q);
         const sorted = snap.docs.map(d => ({ id: d.id, ...d.data() }))
           .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));

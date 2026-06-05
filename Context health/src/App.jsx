@@ -171,9 +171,32 @@ function App() {
     }
     const unsub = onAuthStateChanged(auth, (fu) => {
       if (fu) {
-        const u = { uid: fu.uid, name: fu.displayName, email: fu.email, photo: fu.photoURL, provider: 'google' };
-        localStorage.setItem('auth_user', JSON.stringify(u));
-        setUser(u);
+        if (fu.isAnonymous) {
+          const saved = localStorage.getItem('auth_user');
+          if (saved) {
+            try {
+              const storedUser = JSON.parse(saved);
+              if (storedUser.uid && storedUser.uid !== fu.uid) {
+                localStorage.removeItem('user_profile');
+                localStorage.removeItem('ai_goals');
+              }
+              const merged = { ...storedUser, uid: fu.uid };
+              localStorage.setItem('auth_user', JSON.stringify(merged));
+              setUser(merged);
+            } catch {}
+          }
+        } else {
+          try {
+            const prev = JSON.parse(localStorage.getItem('auth_user') || '{}');
+            if (prev.uid && prev.uid !== fu.uid) {
+              localStorage.removeItem('user_profile');
+              localStorage.removeItem('ai_goals');
+            }
+          } catch {}
+          const u = { uid: fu.uid, name: fu.displayName, email: fu.email, photo: fu.photoURL, provider: 'google' };
+          localStorage.setItem('auth_user', JSON.stringify(u));
+          setUser(u);
+        }
       } else {
         localStorage.removeItem('auth_user');
         setUser(null);

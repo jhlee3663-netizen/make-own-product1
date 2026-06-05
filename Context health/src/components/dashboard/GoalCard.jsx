@@ -27,6 +27,7 @@ export default function GoalCard({ goal, onComplete, onDismiss }) {
   }
 
   function handleComplete() {
+    if (!allChecked || isFinishing) return;
     setIsFinishing(true);
     setTimeout(() => {
       onComplete(goal);
@@ -106,7 +107,6 @@ export default function GoalCard({ goal, onComplete, onDismiss }) {
         <Pressable
           pressScale={allChecked ? 0.97 : 1}
           onClick={handleComplete}
-          disabled={!allChecked}
           className={`w-full py-3 rounded-xl font-pretendard font-bold text-body-s transition-colors ${allChecked ? (isDiet ? 'bg-[#1a9e5c] text-white shadow-md' : 'bg-brand text-white shadow-md') : 'bg-ui-2 text-typo-alternative opacity-50'}`}
         >
           {allChecked ? (isDiet ? '식단 완료! 기록 저장하기' : '완료! 기록 저장하기 🎉') : `${current} / ${total} 완료`}

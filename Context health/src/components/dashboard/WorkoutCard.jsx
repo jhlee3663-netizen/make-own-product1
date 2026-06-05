@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { QuoteIcon } from '../icons/Icons';
 import Pressable from '../common/Pressable';
 
-const WorkoutCard = ({ data, onCardClick, onDelete, isDeleting, onRetryAI }) => {
+
+const WorkoutCard = ({ data, onCardClick, onDelete, onChangeDate, isDeleting, onRetryAI }) => {
   if (!data) return null;
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -62,6 +63,16 @@ const WorkoutCard = ({ data, onCardClick, onDelete, isDeleting, onRetryAI }) => 
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
+                          if (onChangeDate) onChangeDate(data);
+                          setMenuOpen(false);
+                        }}
+                        className="flex w-full px-4 py-[10px] text-body-s text-[#171a1d] font-medium bg-none border-none text-left active:opacity-60 active:bg-ui-1 border-b border-ui-2"
+                      >
+                        📅 날짜 변경
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
                           if (onDelete) onDelete(data);
                           setMenuOpen(false);
                         }}
@@ -84,37 +95,17 @@ const WorkoutCard = ({ data, onCardClick, onDelete, isDeleting, onRetryAI }) => 
             </div>
           </div>
 
-          {/* Exercise Items (Horizontal Scroll) */}
+          {/* Exercise Items (Horizontal Scroll — 칩 스타일) */}
           <div className="exercise-scroll pb-1">
             {exercises.length > 0 ? (
               exercises.map((ex, i) => (
-                <div key={i} className="bg-[#f1f3f5] rounded-[16px] p-2 flex flex-col items-center gap-2 shrink-0 w-[80px]">
-                  <div className="bg-white h-[48px] w-full rounded-[8px] flex items-center justify-center overflow-hidden">
-                    {ex.thumbnail ? (
-                      <img src={ex.thumbnail} alt={ex.name} className="w-full h-full object-cover" />
-                    ) : null}
-                  </div>
-                  <p className="font-pretendard font-medium text-[14px] text-[#495057] tracking-[-0.35px] text-center w-full truncate">
+                <div key={i} className="bg-[#f1f3f5] px-3 py-1.5 rounded-full shrink-0">
+                  <p className="font-pretendard font-medium text-[13px] text-[#495057] tracking-[-0.3px] whitespace-nowrap m-0">
                     {ex.name}
                   </p>
                 </div>
               ))
-            ) : (
-              <>
-                <div className="bg-[#f1f3f5] rounded-[16px] p-2 flex flex-col items-center gap-2 shrink-0 w-[80px]">
-                  <div className="bg-white h-[48px] w-full rounded-[8px]" />
-                  <p className="font-pretendard font-medium text-[14px] text-[#495057] tracking-[-0.35px] text-center w-full truncate">운동 종목</p>
-                </div>
-                <div className="bg-[#f1f3f5] rounded-[16px] p-2 flex flex-col items-center gap-2 shrink-0 w-[80px]">
-                  <div className="bg-white h-[48px] w-full rounded-[8px]" />
-                  <p className="font-pretendard font-medium text-[14px] text-[#495057] tracking-[-0.35px] text-center w-full truncate">운동 종목</p>
-                </div>
-                <div className="bg-[#f1f3f5] rounded-[16px] p-2 flex flex-col items-center gap-2 shrink-0 w-[80px]">
-                  <div className="bg-white h-[48px] w-full rounded-[8px]" />
-                  <p className="font-pretendard font-medium text-[14px] text-[#495057] tracking-[-0.35px] text-center w-full truncate">운동 종목</p>
-                </div>
-              </>
-            )}
+            ) : null}
           </div>
         </div>
 

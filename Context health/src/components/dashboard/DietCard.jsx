@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import DonutChart from './DonutChart';
 import { QuoteIcon } from '../icons/Icons';
 import { getDietSummaryComment } from '../../utils/dietFeedback';
@@ -12,7 +12,8 @@ function getChip(kcal, goal) {
   return { label: '성공 🔥', color: '#3476EE', bg: 'rgba(0,84,209,0.1)' };
 }
 
-export default function DietCard({ data, isDeleting, targetKcal, profile }) {
+export default function DietCard({ data, isDeleting, targetKcal, profile, onDelete, onChangeDate }) {
+  const [menuOpen, setMenuOpen] = useState(false);
   const dt = data.timestamp ? new Date(data.timestamp.seconds * 1000) : null;
   const ds = dt ? `${String(dt.getFullYear()).slice(2)}. ${dt.getMonth() + 1}. ${dt.getDate()}` : (data.date || "");
   const gid = "qG_" + (data.docId || Math.random().toString(36).substr(2, 9));
@@ -25,8 +26,42 @@ export default function DietCard({ data, isDeleting, targetKcal, profile }) {
       <Pressable as="div" pressScale={0.985} className="bg-white rounded-[16px] overflow-hidden shadow-[0_0_25px_rgba(3,27,38,0.08)] cursor-pointer border border-transparent hover:border-ui-3">
         <div className="p-4 flex flex-col gap-4">
           <div className="flex flex-col gap-2 pb-4 border-b border-[#f1f3f5]">
-            <div className="inline-flex px-2 py-1 rounded-[8px] w-fit" style={{ background: chip.bg }}>
-              <span className="text-[13px] font-pretendard tracking-[-0.325px] whitespace-nowrap" style={{ color: chip.color }}>{chip.label}</span>
+            <div className="flex items-center justify-between">
+              <div className="inline-flex px-2 py-1 rounded-[8px] w-fit" style={{ background: chip.bg }}>
+                <span className="text-[13px] font-pretendard tracking-[-0.325px] whitespace-nowrap" style={{ color: chip.color }}>{chip.label}</span>
+              </div>
+              <div className="relative">
+                <Pressable
+                  pressScale={0.85}
+                  onClick={(e) => { e.stopPropagation(); setMenuOpen(o => !o); }}
+                  className={`w-6 h-6 flex items-center justify-center rounded-full ${menuOpen ? 'bg-ui-2' : 'hover:bg-ui-2'}`}
+                >
+                  <svg width="20" height="4" viewBox="0 0 20 4" fill="none">
+                    <circle cx="2" cy="2" r="2" fill="#ADB5BD"/>
+                    <circle cx="10" cy="2" r="2" fill="#ADB5BD"/>
+                    <circle cx="18" cy="2" r="2" fill="#ADB5BD"/>
+                  </svg>
+                </Pressable>
+                {menuOpen && (
+                  <>
+                    <div onClick={(e) => { e.stopPropagation(); setMenuOpen(false); }} className="fixed inset-0 z-[98]" />
+                    <div className="absolute top-8 right-0 bg-white rounded-[12px] shadow-lg py-1 z-[99] min-w-[120px]" onClick={e => e.stopPropagation()}>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); if (onChangeDate) onChangeDate(data); setMenuOpen(false); }}
+                        className="flex w-full px-4 py-[10px] text-body-s text-[#171a1d] font-medium bg-none border-none text-left active:opacity-60 active:bg-ui-1 border-b border-ui-2"
+                      >
+                        📅 날짜 변경
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); if (onDelete) onDelete(data); setMenuOpen(false); }}
+                        className="flex w-full px-4 py-[10px] text-body-s text-[#e03131] font-medium bg-none border-none text-left active:opacity-60 active:bg-[#fff5f5]"
+                      >
+                        🗑️ 삭제하기
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
             <div className="flex items-center justify-between">
               <p className="text-[24px] font-semibold text-[#171a1d] leading-[32px] tracking-[-0.6px] m-0 font-pretendard">

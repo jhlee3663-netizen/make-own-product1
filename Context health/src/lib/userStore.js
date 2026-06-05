@@ -1,5 +1,5 @@
 import { db } from './firebase';
-import { collection, deleteDoc, doc, getDoc, getDocs, setDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, getDocs, query, limit, setDoc } from 'firebase/firestore';
 
 const ROOMS = ['powerbuilding', 'dumbbell', 'diet', 'mobility', 'routine'];
 
@@ -16,7 +16,7 @@ export async function loadAllCoachRooms(uid) {
   const result = {};
   ROOMS.forEach(roomId => { result[roomId] = null; });
 
-  const snap = await getDocs(collection(db, 'users', uid, 'coachRooms'));
+  const snap = await getDocs(query(collection(db, 'users', uid, 'coachRooms'), limit(20)));
   snap.forEach((roomDoc) => {
     const { messages = [], meta = null } = roomDoc.data();
     result[roomDoc.id] = {
