@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
+import { createPortal } from 'react-dom';
 import { Pin, PinCategory, PageStub, UIMessage, PluginMessage } from './types';
+import { Lang, t, getInitialLang, persistLang } from './i18n';
+import { markdownToHtml, htmlToMarkdown } from './richtext';
 import pinSvg from './pin.svg';
 
 function resizeSvg(svg: string, size: number): string {
@@ -12,7 +15,32 @@ function send(msg: UIMessage): void {
   parent.postMessage({ pluginMessage: msg }, '*');
 }
 
-const EXPECTED_CODE_VERSION = 2; // code.ts의 CODE_VERSION과 항상 동일하게 유지
+const WEB_VIEWER_CLIP_PREFIX = 'SMARTPIN_V1:';
+
+// Figma 플러그인 UI iframe마다 클립보드 API 지원이 달라 두 방식을 모두 시도한다.
+function copyToClipboard(text: string): boolean {
+  let ok = false;
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.top = '0';
+    ta.style.left = '0';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+  } catch (_) {}
+  try {
+    const clip = (navigator as any).clipboard;
+    if (clip && clip.writeText) clip.writeText(text).catch(() => {});
+  } catch (_) {}
+  return ok;
+}
+
+const EXPECTED_CODE_VERSION = 6; // code.ts의 CODE_VERSION과 항상 동일하게 유지
 const UPDATE_URL = 'https://works.do/5WcDgVh';
 
 function isRecentlyUpdated(updatedAt?: string): boolean {
@@ -25,7 +53,7 @@ function isRecentlyUpdated(updatedAt?: string): boolean {
   const s = document.createElement('style');
   s.textContent = [
     '.p-card{transition:transform 0.45s cubic-bezier(0.22,1,0.36,1)}',
-    '.p-card:active:not(:has(.p-btn:active)):not(:has(textarea:active)):not(:has(input:active)){transform:scale(0.99)}',
+    '.p-card:active:not(:has(.p-btn:active)):not(:has(textarea:active)):not(:has(input:active)):not(:has([contenteditable]:active)){transform:scale(0.99)}',
     '.p-btn{transition:transform 0.45s cubic-bezier(0.22,1,0.36,1)}',
     '.p-btn:active{transform:scale(0.99)}',
     // View navigation slide animations
@@ -35,6 +63,13 @@ function isRecentlyUpdated(updatedAt?: string): boolean {
     '.v-back{animation:vBack 0.32s cubic-bezier(0.22,1,0.36,1) both}',
     '@keyframes obFade{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}',
     '.ob-fade{animation:obFade 0.35s cubic-bezier(0.22,1,0.36,1) both}',
+    // Rich text editor
+    '.rt-editor{white-space:pre-wrap;word-break:break-word;overflow-wrap:break-word}',
+    '.rt-editor ul{margin:0;padding-left:20px}',
+    '.rt-editor li{margin:0}',
+    '.rt-editor b,.rt-editor strong{font-weight:700}',
+    '.rt-editor u{text-underline-offset:2px}',
+    '.rt-editor i,.rt-editor em{font-style:italic}',
   ].join('');
   document.head.appendChild(s);
 })();
@@ -121,8 +156,8 @@ function buildGroupTree(pinsSubset: Pin[]): NestedTreeNode[] {
 }
 
 // ── GroupInput ───────────────────────────────────────────────────────────────
-function GroupInput({ value, onChange, suggestions }: {
-  value: string; onChange: (v: string) => void; suggestions: string[];
+function GroupInput({ value, onChange, suggestions, lang }: {
+  value: string; onChange: (v: string) => void; suggestions: string[]; lang: Lang;
 }) {
   const [open, setOpen] = useState(false);
   const [focused, setFocused] = useState(false);
@@ -136,7 +171,7 @@ function GroupInput({ value, onChange, suggestions }: {
         onChange={e => onChange(e.target.value)}
         onFocus={() => { setOpen(true); setFocused(true); }}
         onBlur={() => { setTimeout(() => setOpen(false), 150); setFocused(false); }}
-        placeholder="/를 눌러 그룹 안에 그룹을 만들 수 있어요"
+        placeholder={t(lang, 'groupInputPlaceholder')}
         style={{
           width: '100%', padding: '9px 12px',
           border: `1.5px solid ${focused ? C.primary : C.line}`,
@@ -191,47 +226,243 @@ function HighlightText({ text, query }: { text: string; query?: string }) {
   return <>{parts}</>;
 }
 
-// ── AutoTextarea ─────────────────────────────────────────────────────────────
-function AutoTextarea({ value, onChange, placeholder, style, onKeyDown }: {
-  value: string; onChange: (v: string) => void; placeholder?: string; style?: React.CSSProperties;
-  onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+function previewFormattedText(text: string): string {
+  return text
+    .replace(/\*\*([^*\n]+)\*\*/g, '$1')
+    .replace(/__([^_\n]+)__/g, '$1')
+    .replace(/(^|\n)\s*-\s+/g, '$1• ');
+}
+
+function FormattedInline({ text, query, depth = 0 }: { text: string; query?: string; depth?: number }) {
+  if (depth > 3) return <HighlightText text={text} query={query} />;
+  const pattern = /(\*\*[^*\n]+\*\*|__[^_\n]+__)/g;
+  const parts: React.ReactNode[] = [];
+  let last = 0;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(text))) {
+    if (match.index > last) {
+      parts.push(<HighlightText key={`t-${last}`} text={text.slice(last, match.index)} query={query} />);
+    }
+    const token = match[0];
+    const inner = token.slice(2, -2);
+    const child = <FormattedInline text={inner} query={query} depth={depth + 1} />;
+    parts.push(token.startsWith('**')
+      ? <strong key={`f-${match.index}`} style={{ fontWeight: 700 }}>{child}</strong>
+      : <u key={`f-${match.index}`} style={{ textUnderlineOffset: 2 }}>{child}</u>);
+    last = match.index + token.length;
+  }
+  if (last < text.length) {
+    parts.push(<HighlightText key={`t-${last}`} text={text.slice(last)} query={query} />);
+  }
+  return <>{parts}</>;
+}
+
+function FormattedContent({ text, query }: { text: string; query?: string }) {
+  return <>{text.split('\n').map((line, index) => {
+    const bullet = line.match(/^\s*(?:•|-)\s+(.*)$/);
+    return bullet ? (
+      <div key={index} style={{ display: 'flex', alignItems: 'flex-start', gap: 7, minHeight: '1.6em' }}>
+        <span aria-hidden="true" style={{ flexShrink: 0 }}>•</span>
+        <span><FormattedInline text={bullet[1]} query={query} /></span>
+      </div>
+    ) : (
+      <div key={index} style={{ minHeight: '1.6em' }}><FormattedInline text={line} query={query} /></div>
+    );
+  })}</>;
+}
+
+function findScrollParent(el: HTMLElement): HTMLElement | null {
+  let parent = el.parentElement;
+  while (parent && parent !== document.body) {
+    const { overflowY } = window.getComputedStyle(parent);
+    if (overflowY === 'auto' || overflowY === 'scroll') return parent;
+    parent = parent.parentElement;
+  }
+  return null;
+}
+
+// ── RichTextEditor ───────────────────────────────────────────────────────────
+// A contentEditable surface: bold/underline/bullets are real DOM nodes, so the
+// note looks the way it will be read. Text still enters and leaves as the
+// stored `**`/`__`/`•` format via richtext.ts.
+function RichTextEditor({ value, onChange, placeholder, style, className, editorRef, syncRef, onKeyDown, onSelectionChange, onBlur }: {
+  value: string; onChange: (v: string) => void; placeholder?: string;
+  style?: React.CSSProperties; className?: string;
+  editorRef?: React.RefObject<HTMLDivElement>;
+  syncRef?: React.MutableRefObject<(() => void) | null>;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLDivElement>) => void;
+  onSelectionChange?: () => void;
+  onBlur?: () => void;
 }) {
-  const ref = useRef<HTMLTextAreaElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
+  const ref = editorRef ?? innerRef;
+  // What the editor itself last produced. Rewriting innerHTML on our own edits
+  // would reset the caret to the top on every keystroke.
+  const lastEmitted = useRef<string | null>(null);
+
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = Math.max(el.scrollHeight, 72) + 'px';
+    if (!el || value === lastEmitted.current) return;
+    el.innerHTML = markdownToHtml(value);
+    lastEmitted.current = value;
   }, [value]);
+
+  const emit = () => {
+    const el = ref.current;
+    if (!el) return;
+    const markdown = htmlToMarkdown(el);
+    lastEmitted.current = markdown;
+    onChange(markdown);
+  };
+  if (syncRef) syncRef.current = emit;
+
   return (
-    <textarea ref={ref} value={value} onChange={e => onChange(e.target.value)}
-      placeholder={placeholder}
-      onKeyDown={onKeyDown}
-      onDragStart={e => e.stopPropagation()}
-      style={{ resize: 'none', overflow: 'hidden', minHeight: 72, ...style }} />
+    <div style={{ position: 'relative' }}>
+      <div
+        ref={ref}
+        className={`rt-editor${className ? ` ${className}` : ''}`}
+        contentEditable
+        suppressContentEditableWarning
+        onInput={emit}
+        onKeyDown={onKeyDown}
+        onMouseUp={onSelectionChange}
+        onKeyUp={onSelectionChange}
+        onBlur={onBlur}
+        onPaste={e => {
+          // Paste as plain text: notes only carry bold/underline/bullets, and
+          // pasted fonts or colours would survive the round trip as noise.
+          e.preventDefault();
+          document.execCommand('insertText', false, e.clipboardData.getData('text/plain'));
+        }}
+        onDragStart={e => e.stopPropagation()}
+        style={style}
+      />
+      {!value && placeholder && (
+        <div style={{
+          position: 'absolute', top: 9, left: 12, pointerEvents: 'none',
+          fontSize: 13, lineHeight: 1.5, fontFamily: FONT, color: C.text3,
+        }}>{placeholder}</div>
+      )}
+    </div>
   );
 }
 
 // ── PinCard ──────────────────────────────────────────────────────────────────
-function PinCard({ pin, expanded, focused, allGroups, fileKey, inGroup, searchQuery,
-  onExpand, onSave, onDelete, onNeedFileKey }: {
+function PinCard({ pin, expanded, focused, allGroups, fileKey, inGroup, searchQuery, draggableHint, isReadOnly, lang,
+  onExpand, onSave, onAutoSave, onDelete, onNeedFileKey, onSetNumber }: {
   pin: Pin; expanded: boolean; focused: boolean;
-  allGroups: string[]; fileKey: string | null; inGroup?: boolean; searchQuery?: string;
-  onExpand: () => void; onSave: (p: Pin) => void;
+  allGroups: string[]; fileKey: string | null; inGroup?: boolean; searchQuery?: string; draggableHint?: boolean; isReadOnly?: boolean; lang: Lang;
+  onExpand: () => void; onSave: (p: Pin) => void; onAutoSave: (p: Pin) => void;
   onDelete: (id: string) => void; onNeedFileKey: () => void;
+  onSetNumber: (newNumber: number) => void;
 }) {
   const cardRef     = useRef<HTMLDivElement>(null);
+  const numberInputRef = useRef<HTMLInputElement>(null);
+  const contentInputRef = useRef<HTMLDivElement>(null);
+  const contentSyncRef = useRef<(() => void) | null>(null);
   const [title, setTitle]         = useState(pin.title);
   const [content, setContent]     = useState(pin.content);
   const [category, setCategory]   = useState<PinCategory>(pin.category);
   const [group, setGroup]         = useState(pin.group ?? '');
   const [copied, setCopied]       = useState(false);
   const [hovered, setHovered]     = useState(false);
+  const [editingNumber, setEditingNumber] = useState(false);
+  const [numberInput, setNumberInput]     = useState(String(pin.number));
+  const syncedRef = useRef({ title: pin.title, content: pin.content, category: pin.category, group: pin.group ?? '' });
 
   useEffect(() => {
     setTitle(pin.title); setContent(pin.content);
     setCategory(pin.category); setGroup(pin.group ?? '');
+    syncedRef.current = { title: pin.title, content: pin.content, category: pin.category, group: pin.group ?? '' };
   }, [pin.id]);
+
+  useEffect(() => { setNumberInput(String(pin.number)); }, [pin.number]);
+
+  // ── Quiet autosave ──────────────────────────────────────────────────────
+  // Debounces while typing, and flushes immediately when the card collapses
+  // (Save button, switching to another pin, or this card unmounting) so a
+  // long edit is never lost just because Save was never clicked. `syncedRef`
+  // (not the `pin` prop) is the source of truth for "already persisted" —
+  // the prop only catches up once the UPDATE_PIN round trip resolves, and
+  // comparing against it in the meantime would fire a redundant duplicate.
+  const draftRef = useRef({ title, content, category, group });
+  useEffect(() => { draftRef.current = { title, content, category, group }; });
+
+  const isDirty = () => {
+    const d = draftRef.current, s = syncedRef.current;
+    return d.title !== s.title || d.content !== s.content
+      || d.category !== s.category || d.group.trim() !== s.group.trim();
+  };
+  const flushAutoSave = () => {
+    if (!isDirty()) return;
+    const d = draftRef.current;
+    onAutoSave({ ...pin, title: d.title, content: d.content, category: d.category, status: pin.status, group: d.group.trim() || undefined });
+    syncedRef.current = { ...d };
+  };
+
+  useEffect(() => {
+    if (!expanded || isReadOnly || !isDirty()) return;
+    const timer = window.setTimeout(flushAutoSave, 1200);
+    return () => window.clearTimeout(timer);
+  }, [title, content, category, group, expanded]);
+
+  // Fires when this card collapses (Save clicked, another pin opened, list
+  // re-filtered) and on unmount — covers every way editing can stop.
+  useEffect(() => {
+    return () => flushAutoSave();
+  }, [expanded]);
+
+  useEffect(() => {
+    if (editingNumber) { numberInputRef.current?.focus(); numberInputRef.current?.select(); }
+  }, [editingNumber]);
+
+  const commitNumber = () => {
+    const n = parseInt(numberInput, 10);
+    setEditingNumber(false);
+    if (!isNaN(n) && n > 0 && n !== pin.number) onSetNumber(n);
+    else setNumberInput(String(pin.number));
+  };
+
+  const applyFormat = (command: 'bold' | 'italic' | 'underline' | 'insertUnorderedList') => {
+    const el = contentInputRef.current;
+    if (!el) return;
+    if (!el.contains(document.getSelection()?.anchorNode ?? null)) el.focus();
+    // Keep the browser emitting <b>/<u> tags instead of inline-styled spans.
+    document.execCommand('styleWithCSS', false, 'false');
+    document.execCommand(command);
+    contentSyncRef.current?.();
+  };
+
+  // Floating format popup that appears under a drag-selection, so formatting
+  // an existing sentence doesn't require reaching for the toolbar above.
+  const [selPopup, setSelPopup] = useState<{ top: number; left: number } | null>(null);
+  const SEL_POPUP_WIDTH = 112;
+
+  const updateSelPopup = () => {
+    const el = contentInputRef.current;
+    const selection = document.getSelection();
+    if (!el || !selection || selection.isCollapsed || selection.rangeCount === 0) { setSelPopup(null); return; }
+    const range = selection.getRangeAt(0);
+    if (!el.contains(range.commonAncestorContainer)) { setSelPopup(null); return; }
+    const rect = range.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) { setSelPopup(null); return; }
+    setSelPopup({
+      top: rect.bottom + 6,
+      left: Math.min(Math.max(rect.left, 8), window.innerWidth - SEL_POPUP_WIDTH - 8),
+    });
+  };
+
+  useEffect(() => {
+    if (!selPopup) return;
+    const hide = () => setSelPopup(null);
+    const parent = contentInputRef.current ? findScrollParent(contentInputRef.current) : null;
+    parent?.addEventListener('scroll', hide, { passive: true });
+    window.addEventListener('resize', hide);
+    return () => {
+      parent?.removeEventListener('scroll', hide);
+      window.removeEventListener('resize', hide);
+    };
+  }, [!!selPopup]);
 
   useEffect(() => {
     if (focused) cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -241,9 +472,10 @@ function PinCard({ pin, expanded, focused, allGroups, fileKey, inGroup, searchQu
   const isPending = pin.status === 'pending';
   const isNew     = isRecentlyUpdated(pin.updatedAt);
 
-  const doSave    = () => onSave({ ...pin, title, content, category, status: pin.status,  group: group.trim() || undefined });
-  const doPend    = () => onSave({ ...pin, title, content, category, status: 'pending',   group: group.trim() || undefined });
-  const doRestore = () => onSave({ ...pin, title, content, category, status: 'todo',      group: group.trim() || undefined });
+  const markSynced = () => { syncedRef.current = { title, content, category, group }; };
+  const doSave    = () => { onSave({ ...pin, title, content, category, status: pin.status,  group: group.trim() || undefined }); markSynced(); };
+  const doPend    = () => { onSave({ ...pin, title, content, category, status: 'pending',   group: group.trim() || undefined }); markSynced(); };
+  const doRestore = () => { onSave({ ...pin, title, content, category, status: 'todo',      group: group.trim() || undefined }); markSynced(); };
 
   const toggleDone = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -303,14 +535,56 @@ function PinCard({ pin, expanded, focused, allGroups, fileKey, inGroup, searchQu
         display: 'flex', alignItems: 'center', gap: 10,
         padding: '14px 14px', cursor: 'pointer', background: '#FFFFFF',
       }}>
-        {/* number badge */}
-        <div style={{
-          width: 26, height: 26, borderRadius: 9999, flexShrink: 0,
-          background: (isDone || isPending) ? C.text3 : CAT_COLOR[pin.category],
-          color: '#FFF', fontSize: 11, fontWeight: 700, fontFamily: FONT,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          opacity: (isDone || isPending) ? 0.5 : 1, transition: 'all 0.45s cubic-bezier(0.22,1,0.36,1)',
-        }}>{pin.number}</div>
+        {/* drag handle (visible when this card can be reordered) */}
+        {draggableHint && (
+          <div title={t(lang, 'dragHint')} style={{
+            flexShrink: 0, width: 8, height: 12, marginLeft: -6, marginRight: -2,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            opacity: 0.35, cursor: 'grab',
+          }}>
+            <svg width="8" height="12" viewBox="0 0 8 12" fill="none" style={{ color: C.text3 }}>
+              <circle cx="2" cy="2" r="1.3" fill="currentColor"/>
+              <circle cx="6" cy="2" r="1.3" fill="currentColor"/>
+              <circle cx="2" cy="6" r="1.3" fill="currentColor"/>
+              <circle cx="6" cy="6" r="1.3" fill="currentColor"/>
+              <circle cx="2" cy="10" r="1.3" fill="currentColor"/>
+              <circle cx="6" cy="10" r="1.3" fill="currentColor"/>
+            </svg>
+          </div>
+        )}
+
+        {/* number badge (click to edit) */}
+        {editingNumber ? (
+          <input ref={numberInputRef} type="number" min={1} value={numberInput}
+            onChange={e => setNumberInput(e.target.value)}
+            onClick={e => e.stopPropagation()}
+            onDragStart={e => e.stopPropagation()}
+            onMouseDown={e => e.stopPropagation()}
+            onKeyDown={e => {
+              if (e.key === 'Enter')  { e.preventDefault(); commitNumber(); }
+              if (e.key === 'Escape') { setNumberInput(String(pin.number)); setEditingNumber(false); }
+            }}
+            onBlur={commitNumber}
+            style={{
+              width: 30, height: 26, borderRadius: 9999, flexShrink: 0,
+              border: `1.5px solid ${C.primary}`, background: '#FFFFFF',
+              color: C.text1, fontSize: 11, fontWeight: 700, fontFamily: FONT,
+              textAlign: 'center', outline: 'none', padding: 0, boxSizing: 'border-box',
+            }}
+          />
+        ) : (
+          <div onClick={e => { if (isReadOnly) return; e.stopPropagation(); setEditingNumber(true); }}
+            onMouseDown={e => e.stopPropagation()}
+            title={isReadOnly ? undefined : t(lang, 'numberBadgeHint')}
+            style={{
+              width: 26, height: 26, borderRadius: 9999, flexShrink: 0,
+              background: (isDone || isPending) ? C.text3 : CAT_COLOR[pin.category],
+              color: '#FFF', fontSize: 11, fontWeight: 700, fontFamily: FONT,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              opacity: (isDone || isPending) ? 0.5 : 1, transition: 'all 0.45s cubic-bezier(0.22,1,0.36,1)',
+              cursor: 'pointer',
+            }}>{pin.number}</div>
+        )}
 
         {/* title + meta */}
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -344,7 +618,7 @@ function PinCard({ pin, expanded, focused, allGroups, fileKey, inGroup, searchQu
         {/* icon row */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
           <button className="p-btn" onClick={copyLink}
-            title={fileKey ? '링크 복사' : '팀 스페이스 파일에서 사용 가능'}
+            title={fileKey ? t(lang, 'copyLinkTitle') : t(lang, 'copyLinkTitleDisabled')}
             style={{
               width: 28, height: 28, borderRadius: 8, border: 'none',
               background: copied ? C.success + '20' : 'transparent',
@@ -368,7 +642,7 @@ function PinCard({ pin, expanded, focused, allGroups, fileKey, inGroup, searchQu
 
           {!isPending && (
             <button className="p-btn" onClick={toggleDone}
-              title={isDone ? '다시 열기' : '완료 처리'}
+              title={isDone ? t(lang, 'toggleReopenTitle') : t(lang, 'toggleDoneTitle')}
               style={{
                 width: 28, height: 28, borderRadius: 9999,
                 border: `2px solid ${isDone ? C.success : C.line}`,
@@ -398,7 +672,7 @@ function PinCard({ pin, expanded, focused, allGroups, fileKey, inGroup, searchQu
           padding: '0 14px 12px', background: '#FFFFFF',
           fontSize: 12, color: C.text2, fontFamily: FONT, lineHeight: 1.6,
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }}><HighlightText text={pin.content} query={searchQuery} /></div>
+        }}><HighlightText text={previewFormattedText(pin.content)} query={searchQuery} /></div>
       )}
 
       {/* ── Expanded form ── */}
@@ -407,52 +681,128 @@ function PinCard({ pin, expanded, focused, allGroups, fileKey, inGroup, searchQu
           padding: '16px', background: '#FFFFFF',
           borderTop: `1px solid ${C.line}`,
         }}>
-          <div style={{ marginBottom: 12 }}>
-            <label style={fieldLabel}>제목</label>
-            <input value={title} onChange={e => setTitle(e.target.value)} style={inputStyle}
-              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); doSave(); } }}
-              onDragStart={e => e.stopPropagation()} />
-          </div>
-          <div style={{ marginBottom: 12 }}>
-            <label style={fieldLabel}>내용 <span style={{ fontWeight: 400, color: C.text3 }}>(Cmd+Enter로 저장)</span></label>
-            <AutoTextarea value={content} onChange={setContent} placeholder="내용을 입력하세요"
-              style={{ ...inputStyle, display: 'block' }}
-              onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); doSave(); } }} />
-          </div>
-          <div style={{ marginBottom: 12 }}>
-            <label style={fieldLabel}>그룹</label>
-            <GroupInput value={group} onChange={setGroup} suggestions={allGroups} />
-          </div>
-          <div style={{ marginBottom: 16 }}>
-            <label style={fieldLabel}>카테고리</label>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {(Object.keys(CAT_LABEL) as PinCategory[]).map(cat => (
-                <button key={cat} className="p-btn" onClick={() => setCategory(cat)}
-                  style={{
-                    padding: '5px 14px', borderRadius: 9999, border: 'none',
-                    background: category === cat ? CAT_COLOR[cat] : C.inputBg,
-                    color: category === cat ? '#FFF' : C.text2,
-                    fontSize: 12, fontWeight: 600, lineHeight: 1.5,
-                    fontFamily: FONT, cursor: 'pointer', transition: 'all 0.45s cubic-bezier(0.22,1,0.36,1)',
-                  }}>{CAT_LABEL[cat]}</button>
-              ))}
-            </div>
-          </div>
-
-          <button className="p-btn"
-            onClick={doSave}
-            style={{
-              width: '100%', height: 44, background: C.primary, color: '#FFF',
-              border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 700,
-              lineHeight: 1.5, fontFamily: FONT, cursor: 'pointer', marginBottom: 8,
-            }}
-            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = C.primaryDark; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = C.primary; }}
-          >저장하기</button>
+          {isReadOnly ? (
+            /* Dev Mode: read-only view */
+            <>
+              {pin.title && (
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: C.text3, fontFamily: FONT, marginBottom: 4 }}>{t(lang, 'fieldTitle')}</div>
+                  <div style={{ fontSize: 13, color: C.text1, fontFamily: FONT, lineHeight: 1.6 }}>{pin.title}</div>
+                </div>
+              )}
+              {pin.content && (
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: C.text3, fontFamily: FONT, marginBottom: 4 }}>{t(lang, 'fieldContent')}</div>
+                  <div style={{ fontSize: 13, color: C.text2, fontFamily: FONT, lineHeight: 1.6, wordBreak: 'break-word' }}><FormattedContent text={pin.content} query={searchQuery} /></div>
+                </div>
+              )}
+              {pin.group && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: C.text3, fontFamily: FONT, marginBottom: 4 }}>{t(lang, 'fieldGroup')}</div>
+                  <div style={{ fontSize: 12, color: C.text2, fontFamily: FONT }}>{pin.group}</div>
+                </div>
+              )}
+            </>
+          ) : (
+            /* Design Mode: editable form */
+            <>
+              <div style={{ marginBottom: 12 }}>
+                <label style={fieldLabel}>{t(lang, 'fieldTitle')}</label>
+                <input value={title} onChange={e => setTitle(e.target.value)} style={inputStyle}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); doSave(); } }}
+                  onDragStart={e => e.stopPropagation()} />
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <label style={fieldLabel}>{t(lang, 'fieldContent')} <span style={{ fontWeight: 400, color: C.text3 }}>{t(lang, 'fieldContentHint')}</span></label>
+                <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
+                  <button type="button" className="p-btn" aria-label={t(lang, 'formatBold')} title={`${t(lang, 'formatBold')} (Cmd/Ctrl+B)`}
+                    onMouseDown={e => e.preventDefault()} onClick={() => applyFormat('bold')}
+                    style={{ width: 30, height: 28, border: `1px solid ${C.line}`, borderRadius: 7, background: C.inputBg, color: C.text2, fontFamily: FONT, fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>B</button>
+                  <button type="button" className="p-btn" aria-label={t(lang, 'formatItalic')} title={`${t(lang, 'formatItalic')} (Cmd/Ctrl+I)`}
+                    onMouseDown={e => e.preventDefault()} onClick={() => applyFormat('italic')}
+                    style={{ width: 30, height: 28, border: `1px solid ${C.line}`, borderRadius: 7, background: C.inputBg, color: C.text2, fontFamily: FONT, fontSize: 13, fontStyle: 'italic', cursor: 'pointer' }}>I</button>
+                  <button type="button" className="p-btn" aria-label={t(lang, 'formatUnderline')} title={`${t(lang, 'formatUnderline')} (Cmd/Ctrl+U)`}
+                    onMouseDown={e => e.preventDefault()} onClick={() => applyFormat('underline')}
+                    style={{ width: 30, height: 28, border: `1px solid ${C.line}`, borderRadius: 7, background: C.inputBg, color: C.text2, fontFamily: FONT, fontSize: 13, textDecoration: 'underline', textUnderlineOffset: 2, cursor: 'pointer' }}>U</button>
+                  <button type="button" className="p-btn" aria-label={t(lang, 'formatBullet')} title={t(lang, 'formatBullet')}
+                    onMouseDown={e => e.preventDefault()} onClick={() => applyFormat('insertUnorderedList')}
+                    style={{ width: 34, height: 28, border: `1px solid ${C.line}`, borderRadius: 7, background: C.inputBg, color: C.text2, fontFamily: FONT, fontSize: 16, lineHeight: 1, cursor: 'pointer' }}>•</button>
+                </div>
+                <div style={{ position: 'relative' }}>
+                  <RichTextEditor value={content} onChange={setContent} placeholder={t(lang, 'fieldContentPlaceholder')}
+                    editorRef={contentInputRef}
+                    syncRef={contentSyncRef}
+                    style={{ ...inputStyle, display: 'block', minHeight: 72 }}
+                    onKeyDown={e => {
+                      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') { e.preventDefault(); applyFormat('bold'); }
+                      else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'i') { e.preventDefault(); applyFormat('italic'); }
+                      else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'u') { e.preventDefault(); applyFormat('underline'); }
+                      else if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); doSave(); }
+                    }}
+                    onSelectionChange={updateSelPopup}
+                    onBlur={() => setSelPopup(null)} />
+                  {selPopup && createPortal(
+                    <div
+                      onMouseDown={e => e.preventDefault()}
+                      style={{
+                        position: 'fixed', top: selPopup.top, left: selPopup.left, zIndex: 50,
+                        display: 'flex', gap: 3, padding: 3,
+                        background: '#25282D', borderRadius: 8,
+                        boxShadow: '0 4px 14px rgba(0,0,0,0.28)',
+                      }}
+                    >
+                      <button type="button" aria-label={t(lang, 'formatBold')} title={t(lang, 'formatBold')}
+                        onClick={() => { applyFormat('bold'); updateSelPopup(); }}
+                        style={{ width: 26, height: 24, border: 'none', borderRadius: 5, background: 'transparent', color: '#FFF', fontFamily: FONT, fontSize: 12, fontWeight: 800, cursor: 'pointer' }}>B</button>
+                      <button type="button" aria-label={t(lang, 'formatItalic')} title={t(lang, 'formatItalic')}
+                        onClick={() => { applyFormat('italic'); updateSelPopup(); }}
+                        style={{ width: 26, height: 24, border: 'none', borderRadius: 5, background: 'transparent', color: '#FFF', fontFamily: FONT, fontSize: 12, fontStyle: 'italic', cursor: 'pointer' }}>I</button>
+                      <button type="button" aria-label={t(lang, 'formatUnderline')} title={t(lang, 'formatUnderline')}
+                        onClick={() => { applyFormat('underline'); updateSelPopup(); }}
+                        style={{ width: 26, height: 24, border: 'none', borderRadius: 5, background: 'transparent', color: '#FFF', fontFamily: FONT, fontSize: 12, textDecoration: 'underline', textUnderlineOffset: 2, cursor: 'pointer' }}>U</button>
+                      <button type="button" aria-label={t(lang, 'formatBullet')} title={t(lang, 'formatBullet')}
+                        onClick={() => { applyFormat('insertUnorderedList'); setSelPopup(null); }}
+                        style={{ width: 26, height: 24, border: 'none', borderRadius: 5, background: 'transparent', color: '#FFF', fontFamily: FONT, fontSize: 14, lineHeight: 1, cursor: 'pointer' }}>•</button>
+                    </div>,
+                    document.body
+                  )}
+                </div>
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <label style={fieldLabel}>{t(lang, 'fieldGroup')}</label>
+                <GroupInput value={group} onChange={setGroup} suggestions={allGroups} lang={lang} />
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <label style={fieldLabel}>{t(lang, 'fieldCategory')}</label>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {(Object.keys(CAT_LABEL) as PinCategory[]).map(cat => (
+                    <button key={cat} className="p-btn" onClick={() => setCategory(cat)}
+                      style={{
+                        padding: '5px 14px', borderRadius: 9999, border: 'none',
+                        background: category === cat ? CAT_COLOR[cat] : C.inputBg,
+                        color: category === cat ? '#FFF' : C.text2,
+                        fontSize: 12, fontWeight: 600, lineHeight: 1.5,
+                        fontFamily: FONT, cursor: 'pointer', transition: 'all 0.45s cubic-bezier(0.22,1,0.36,1)',
+                      }}>{CAT_LABEL[cat]}</button>
+                  ))}
+                </div>
+              </div>
+              <button className="p-btn"
+                onClick={doSave}
+                style={{
+                  width: '100%', height: 44, background: C.primary, color: '#FFF',
+                  border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 700,
+                  lineHeight: 1.5, fontFamily: FONT, cursor: 'pointer', marginBottom: 8,
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = C.primaryDark; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = C.primary; }}
+              >{t(lang, 'saveBtn')}</button>
+            </>
+          )}
 
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="p-btn" onClick={copyLink}
-              title={fileKey ? 'Copy Figma link' : '팀 스페이스 파일에서만 사용 가능'}
+              title={fileKey ? 'Copy Figma link' : t(lang, 'copyLinkBtnTitleDisabled')}
               style={{
                 flex: 1, height: 38, background: copied ? C.success + '18' : C.inputBg,
                 border: 'none', borderRadius: 10, color: copied ? C.success : C.text2,
@@ -463,12 +813,12 @@ function PinCard({ pin, expanded, focused, allGroups, fileKey, inGroup, searchQu
               onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = copied ? C.success + '18' : C.inputBg; }}
             >
               {copied ? (
-                <><svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2.5 7L5.5 10L11.5 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>복사됨!</>
+                <><svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2.5 7L5.5 10L11.5 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>{t(lang, 'copiedBtn')}</>
               ) : (
-                <><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M7 9a4.95 4.95 0 007 0l2-2a4.95 4.95 0 00-7-7L8 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><path d="M9 7a4.95 4.95 0 00-7 0l-2 2a4.95 4.95 0 007 7l1-1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>링크 복사</>
+                <><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M7 9a4.95 4.95 0 007 0l2-2a4.95 4.95 0 00-7-7L8 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><path d="M9 7a4.95 4.95 0 00-7 0l-2 2a4.95 4.95 0 007 7l1-1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>{t(lang, 'copyLinkBtn')}</>
               )}
             </button>
-            {!isPending ? (
+            {!isReadOnly && !isPending ? (
               <button className="p-btn" onClick={doPend}
                 style={{
                   flex: 1, height: 38, background: 'transparent', border: 'none',
@@ -477,7 +827,7 @@ function PinCard({ pin, expanded, focused, allGroups, fileKey, inGroup, searchQu
                 }}
                 onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = C.inputBg; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
-              >보류</button>
+              >{t(lang, 'pendingBtn')}</button>
             ) : (
               <button className="p-btn" onClick={doRestore}
                 style={{
@@ -487,17 +837,19 @@ function PinCard({ pin, expanded, focused, allGroups, fileKey, inGroup, searchQu
                 }}
                 onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = C.success + '28'; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = C.success + '18'; }}
-              >복구</button>
+              >{t(lang, 'restoreBtn')}</button>
             )}
-            <button className="p-btn" onClick={() => onDelete(pin.id)}
-              style={{
-                flex: 1, height: 38, background: 'transparent', border: 'none',
-                borderRadius: 10, color: C.error, fontSize: 13, fontWeight: 600,
-                lineHeight: 1.5, fontFamily: FONT, cursor: 'pointer', transition: 'all 0.45s cubic-bezier(0.22,1,0.36,1)',
-              }}
-              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = C.error + '12'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
-            >완전삭제</button>
+            {!isReadOnly && (
+              <button className="p-btn" onClick={() => onDelete(pin.id)}
+                style={{
+                  flex: 1, height: 38, background: 'transparent', border: 'none',
+                  borderRadius: 10, color: C.error, fontSize: 13, fontWeight: 600,
+                  lineHeight: 1.5, fontFamily: FONT, cursor: 'pointer', transition: 'all 0.45s cubic-bezier(0.22,1,0.36,1)',
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = C.error + '12'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
+              >{t(lang, 'deleteBtn')}</button>
+            )}
           </div>
         </div>
       )}
@@ -506,18 +858,34 @@ function PinCard({ pin, expanded, focused, allGroups, fileKey, inGroup, searchQu
 }
 
 // ── ResizeHandle ─────────────────────────────────────────────────────────────
+type ResizeDir = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
+
+const RESIZE_CURSOR: Record<ResizeDir, string> = {
+  n: 'ns-resize', s: 'ns-resize',
+  e: 'ew-resize', w: 'ew-resize',
+  ne: 'nesw-resize', sw: 'nesw-resize',
+  nw: 'nwse-resize', se: 'nwse-resize',
+};
+
 function ResizeHandle() {
-  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+  const EDGE   = 8;  // 변 영역 두께
+  const CORNER = 16; // 모서리 영역 크기
+
+  const startResize = (dir: ResizeDir) => (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
     const el = e.currentTarget;
     el.setPointerCapture(e.pointerId);
     const startX = e.clientX, startY = e.clientY;
     const startW = window.innerWidth, startH = window.innerHeight;
     const onMove = (ev: PointerEvent) => {
-      send({ type: 'RESIZE',
-        width:  Math.max(300, Math.round(startW + ev.clientX - startX)),
-        height: Math.max(400, Math.round(startH + ev.clientY - startY)),
-      });
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      let w = startW, h = startH;
+      if (dir.includes('e')) w = startW + dx;
+      if (dir.includes('w')) w = startW - dx;
+      if (dir.includes('s')) h = startH + dy;
+      if (dir.includes('n')) h = startH - dy;
+      send({ type: 'RESIZE', width: Math.max(300, Math.round(w)), height: Math.max(400, Math.round(h)) });
     };
     const onUp = () => {
       el.removeEventListener('pointermove', onMove);
@@ -528,21 +896,40 @@ function ResizeHandle() {
     el.addEventListener('pointerup', onUp);
     el.addEventListener('pointercancel', onUp);
   };
-  return (
-    <div onPointerDown={onPointerDown}
-      style={{ position: 'fixed', bottom: 0, right: 0, width: 18, height: 18, cursor: 'nwse-resize',
-        display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end', padding: '0 3px 3px 0', zIndex: 100 }}>
-      <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
-        <path d="M8 1L1 8" stroke={C.line} strokeWidth="1.5" strokeLinecap="round"/>
-        <path d="M8 5L5 8" stroke={C.line} strokeWidth="1.5" strokeLinecap="round"/>
-      </svg>
+
+  const handle = (dir: ResizeDir, style: React.CSSProperties, children?: React.ReactNode) => (
+    <div key={dir} onPointerDown={startResize(dir)}
+      style={{ position: 'fixed', cursor: RESIZE_CURSOR[dir], zIndex: 100, ...style }}>
+      {children}
     </div>
+  );
+
+  return (
+    <>
+      {/* edges */}
+      {handle('n', { top: 0, left: CORNER, right: CORNER, height: EDGE })}
+      {handle('s', { bottom: 0, left: CORNER, right: CORNER, height: EDGE })}
+      {handle('w', { left: 0, top: CORNER, bottom: CORNER, width: EDGE })}
+      {handle('e', { right: 0, top: CORNER, bottom: CORNER, width: EDGE })}
+      {/* corners */}
+      {handle('nw', { top: 0, left: 0, width: CORNER, height: CORNER })}
+      {handle('ne', { top: 0, right: 0, width: CORNER, height: CORNER })}
+      {handle('sw', { bottom: 0, left: 0, width: CORNER, height: CORNER })}
+      {handle('se', { bottom: 0, right: 0, width: CORNER, height: CORNER },
+        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end', padding: '0 3px 3px 0' }}>
+          <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
+            <path d="M8 1L1 8" stroke={C.line} strokeWidth="1.5" strokeLinecap="round"/>
+            <path d="M8 5L5 8" stroke={C.line} strokeWidth="1.5" strokeLinecap="round"/>
+          </svg>
+        </div>
+      )}
+    </>
   );
 }
 
 // ── FileCard ──────────────────────────────────────────────────────────────────
 function FileCard({ pageId, pageName, count, isCurrent, onNavigate, onRename, onDelete,
-  onDragStart, onDragOver, onDrop, dragPosition }: {
+  onDragStart, onDragOver, onDrop, dragPosition, lang }: {
   pageId: string; pageName: string; count: number; isCurrent: boolean;
   onNavigate: () => void;
   onRename: (newName: string) => void;
@@ -551,6 +938,7 @@ function FileCard({ pageId, pageName, count, isCurrent, onNavigate, onRename, on
   onDragOver?: (e: React.DragEvent, pos: 'before' | 'after') => void;
   onDrop?: () => void;
   dragPosition?: 'before' | 'after' | null;
+  lang: Lang;
 }) {
   const [menuOpen, setMenuOpen]   = useState(false);
   const [renaming, setRenaming]   = useState(false);
@@ -662,12 +1050,12 @@ function FileCard({ pageId, pageName, count, isCurrent, onNavigate, onRename, on
                   flexShrink: 0, fontSize: 10, fontWeight: 700, fontFamily: FONT,
                   color: C.primary, background: C.blue10,
                   padding: '1px 7px', borderRadius: 9999, lineHeight: 1.6,
-                }}>현재</span>
+                }}>{t(lang, 'currentBadge')}</span>
               )}
             </div>
           )}
           <span style={{ fontSize: 11, color: C.text3, fontFamily: FONT, lineHeight: 1.5 }}>
-            핀 {count}개
+            {t(lang, 'pinCount', count)}
           </span>
         </div>
         {/* Right: more-menu + navigate arrow */}
@@ -708,7 +1096,7 @@ function FileCard({ pageId, pageName, count, isCurrent, onNavigate, onRename, on
                   }}
                   onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = C.inputBg; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none'; }}
-                >이름 수정</button>
+                >{t(lang, 'renameMenuItem')}</button>
                 <button
                   onClick={e => { e.stopPropagation(); setMenuOpen(false); onDelete(); }}
                   style={{
@@ -718,7 +1106,7 @@ function FileCard({ pageId, pageName, count, isCurrent, onNavigate, onRename, on
                   }}
                   onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = C.error + '12'; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none'; }}
-                >삭제</button>
+                >{t(lang, 'deleteMenuItem')}</button>
               </div>
             )}
           </div>
@@ -842,7 +1230,7 @@ function IllustTeam() {
 
 // ── Onboarding component ──────────────────────────────────────────────────────
 
-function Onboarding({ onDone }: { onDone: () => void }) {
+function Onboarding({ onDone, lang }: { onDone: () => void; lang: Lang }) {
   const [slide, setSlide] = useState(0);
   const [animKey, setAnimKey] = useState(0);
   const TOTAL = 4;
@@ -853,23 +1241,23 @@ function Onboarding({ onDone }: { onDone: () => void }) {
 
   const SLIDES = [
     {
-      title: '레이어를 선택하세요',
-      desc: '피그마 캔버스에서 핀을 달고 싶은\n레이어를 클릭해 선택해주세요.',
+      title: t(lang, 'onboardSlide1Title'),
+      desc: t(lang, 'onboardSlide1Desc'),
       illus: <IllustSelect />,
     },
     {
-      title: 'Add Note로 핀을 추가하세요',
-      desc: '레이어를 선택한 뒤 Add Note 버튼을\n누르면 핀이 바로 생성돼요.',
+      title: t(lang, 'onboardSlide2Title'),
+      desc: t(lang, 'onboardSlide2Desc'),
       illus: <IllustAddNote />,
     },
     {
-      title: '내용과 상태를 기록하세요',
-      desc: '제목·내용·카테고리·그룹을 편집하고\n완료·보류 상태를 관리할 수 있어요.',
+      title: t(lang, 'onboardSlide3Title'),
+      desc: t(lang, 'onboardSlide3Desc'),
       illus: <IllustEdit />,
     },
     {
-      title: '팀원과 함께 관리하세요',
-      desc: '모든 핀은 파일에 저장돼\n팀원 누구나 함께 확인하고 편집할 수 있어요.',
+      title: t(lang, 'onboardSlide4Title'),
+      desc: t(lang, 'onboardSlide4Desc'),
       illus: <IllustTeam />,
     },
   ];
@@ -888,7 +1276,7 @@ function Onboarding({ onDone }: { onDone: () => void }) {
           style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: C.text3, fontFamily: FONT, padding: '4px 8px', borderRadius: 8, lineHeight: 1.5 }}
           onMouseEnter={e => (e.currentTarget.style.color = C.text2)}
           onMouseLeave={e => (e.currentTarget.style.color = C.text3)}
-        >건너뛰기</button>
+        >{t(lang, 'onboardSkip')}</button>
       </div>
 
       {/* Illustration + text (animates together on slide change) */}
@@ -917,14 +1305,54 @@ function Onboarding({ onDone }: { onDone: () => void }) {
         {slide > 0 && (
           <button onClick={prev} className="p-btn"
             style={{ height: 44, background: C.inputBg, border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 600, fontFamily: FONT, color: C.text2, cursor: 'pointer', padding: '0 20px', flexShrink: 0 }}>
-            이전
+            {t(lang, 'onboardPrev')}
           </button>
         )}
         <button onClick={next} className="p-btn"
           style={{ flex: 1, height: 44, background: C.primary, border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 700, fontFamily: FONT, color: '#FFF', cursor: 'pointer' }}
           onMouseEnter={e => (e.currentTarget.style.background = C.primaryDark)}
           onMouseLeave={e => (e.currentTarget.style.background = C.primary)}
-        >{slide === TOTAL - 1 ? '시작하기' : '다음'}</button>
+        >{slide === TOTAL - 1 ? t(lang, 'onboardStart') : t(lang, 'onboardNext')}</button>
+      </div>
+    </div>
+  );
+}
+
+// ── ConfirmModal ──────────────────────────────────────────────────────────────
+function ConfirmModal({ title, message, confirmLabel, danger, onConfirm, onCancel, lang }: {
+  title: string; message: React.ReactNode; confirmLabel?: string; danger?: boolean;
+  onConfirm: () => void; onCancel: () => void; lang: Lang;
+}) {
+  return (
+    <div onClick={onCancel} style={{
+      position: 'fixed', inset: 0, zIndex: 200,
+      background: 'rgba(15,23,32,0.40)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 20, boxSizing: 'border-box',
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        width: '100%', maxWidth: 280, background: C.card, borderRadius: 16,
+        padding: '18px 18px 14px', boxShadow: '0 12px 32px rgba(0,0,0,0.18)',
+        fontFamily: FONT,
+      }}>
+        <h3 style={{ margin: '0 0 8px', fontSize: 14, fontWeight: 700, color: C.text1, lineHeight: 1.5 }}>
+          {title}
+        </h3>
+        <div style={{ fontSize: 12.5, lineHeight: 1.6, color: C.text2, marginBottom: 16 }}>
+          {message}
+        </div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button onClick={onCancel} style={{
+            padding: '8px 14px', borderRadius: 9999, border: 'none',
+            background: C.inputBg, color: C.text2,
+            fontSize: 12.5, fontWeight: 600, fontFamily: FONT, cursor: 'pointer',
+          }}>{t(lang, 'modalCancel')}</button>
+          <button onClick={onConfirm} style={{
+            padding: '8px 14px', borderRadius: 9999, border: 'none',
+            background: danger ? C.error : C.primary, color: '#FFF',
+            fontSize: 12.5, fontWeight: 700, fontFamily: FONT, cursor: 'pointer',
+          }}>{confirmLabel ?? t(lang, 'modalConfirm')}</button>
+        </div>
       </div>
     </div>
   );
@@ -932,6 +1360,8 @@ function Onboarding({ onDone }: { onDone: () => void }) {
 
 // ── App ──────────────────────────────────────────────────────────────────────
 function App() {
+  const [lang, setLangState]              = useState<Lang>(getInitialLang());
+  const setLang = (next: Lang) => { setLangState(next); persistLang(next); };
   const [pins, setPins]                   = useState<Pin[]>([]);
   const [hasSelection, setHasSelection]   = useState(false);
   const [expandedId, setExpandedId]       = useState<string | null>(null);
@@ -956,18 +1386,28 @@ function App() {
   const [addPageName, setAddPageName]         = useState('');
   const [showKeyPrompt, setShowKeyPrompt] = useState(false);
   const [customKeyUrl, setCustomKeyUrl]   = useState('');
+  const [pendingOpenWeb, setPendingOpenWeb] = useState(false);
   const [toast, setToast]                 = useState<string | null>(null);
   const [fileOrder, setFileOrder]               = useState<string[]>([]);
   const [groupOrders, setGroupOrders]           = useState<Record<string, string[]>>({});
+  const [pinOrders, setPinOrders]               = useState<Record<string, string[]>>({});
   const [dragOverPageInfo, setDragOverPageInfo]   = useState<{ pageId: string; pos: 'before' | 'after' } | null>(null);
   const [dragOverGroupInfo, setDragOverGroupInfo] = useState<{ path: string; pos: 'before' | 'after' } | null>(null);
+  const [dragOverPinInfo, setDragOverPinInfo]     = useState<{ id: string; pos: 'before' | 'after' } | null>(null);
+  const [numberConflict, setNumberConflict]       = useState<{ pin: Pin; conflictPin: Pin; newNumber: number } | null>(null);
+  const [showCompactConfirm, setShowCompactConfirm] = useState(false);
+  const [pageMenuOpen, setPageMenuOpen]           = useState(false);
+  const [isDevMode, setIsDevMode]                 = useState(false);
   const focusTimerRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastTimerRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileDragRef        = useRef<string | null>(null);
   const groupDragRef       = useRef<string | null>(null);
+  const pinDragRef         = useRef<string | null>(null);
   const dragOriginRef      = useRef<HTMLElement | null>(null);
   const pinsRef            = useRef<Pin[]>([]);          // always-current snapshot for async handlers
   const selectedPageIdRef  = useRef<string | null>(null);
+  const langRef            = useRef<Lang>(lang);          // always-current snapshot for the mount-only message handler
+  langRef.current = lang;
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -979,6 +1419,23 @@ function App() {
     setExpandedId(id); setFocusedId(id);
     if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
     focusTimerRef.current = setTimeout(() => setFocusedId(null), 2500);
+  };
+
+  // 핀 데이터를 URL이 아닌 클립보드로 전달 → OS/브라우저의 URL 길이 제한(특히 Windows)에 안 걸림
+  const openWebViewer = (explicitFileKey?: string | null) => {
+    const payload = {
+      pins: pinsRef.current.map(p => ({
+        id: p.id, number: p.number, title: p.title, content: p.content,
+        category: p.category, status: p.status, group: p.group || '',
+        pageId: p.pageId, pageName: p.pageName, pinNodeId: p.pinNodeId,
+      })),
+      stubs: pageStubs.map(s => ({ pageId: s.pageId, pageName: s.pageName })),
+      fileKey: explicitFileKey ?? fileKey ?? null,
+      exportedAt: Date.now(),
+    };
+    const ok = copyToClipboard(WEB_VIEWER_CLIP_PREFIX + JSON.stringify(payload));
+    send({ type: 'OPEN_WEB_VIEWER' });
+    showToast(ok ? t(lang, 'toastWebCopySuccess') : t(lang, 'toastWebCopyFail'));
   };
 
   useEffect(() => {
@@ -996,7 +1453,9 @@ function App() {
           setCodeVersion(msg.codeVersion ?? 0);
           setFileOrder(msg.fileOrder ?? []);
           setGroupOrders(msg.groupOrders ?? {});
+          setPinOrders(msg.pinOrders ?? {});
           setShowOnboarding(!msg.onboardingDone);
+          setIsDevMode(msg.isDevMode ?? false);
           break;
         case 'PAGE_CHANGED':
           setCurrentPageId(msg.pageId);
@@ -1055,6 +1514,24 @@ function App() {
           triggerFocus(msg.id);
           break;
         }
+        case 'REPOSITION_DONE':
+          showToast(msg.moved > 0 ? t(langRef.current, 'toastRepositionMoved', msg.moved) : t(langRef.current, 'toastRepositionNone'));
+          break;
+        case 'PIN_NUMBERS_CHANGED': {
+          if (msg.pins.length > 0) {
+            const updates = new Map(msg.pins.map(p => [p.id, p]));
+            pinsRef.current = pinsRef.current.map(p => updates.get(p.id) ?? p);
+            setPins(prev => prev.map(p => updates.get(p.id) ?? p));
+          }
+          if (msg.reason === 'compact') {
+            showToast(msg.pins.length > 0 ? t(langRef.current, 'toastCompactDone', msg.pins.length) : t(langRef.current, 'toastCompactAlready'));
+          } else if (msg.reason === 'swap') {
+            showToast(t(langRef.current, 'toastSwapDone'));
+          } else if (msg.reason === 'edit') {
+            showToast(t(langRef.current, 'toastNumberChanged'));
+          }
+          break;
+        }
         case 'ERROR':         setError(msg.message); setTimeout(() => setError(null), 3000); break;
       }
     };
@@ -1068,7 +1545,16 @@ function App() {
     setLastGroup(updated.group ?? '');
     setLastCategory(updated.category);
     setExpandedId(null);
-    showToast('저장했어요');
+    showToast(t(lang, 'toastSaved'));
+  };
+
+  // Quiet save: debounced while typing, or flushed when a card collapses /
+  // another pin opens. No toast, no collapsing — the explicit Save button
+  // still does that.
+  const handleAutoSave = (updated: Pin) => {
+    send({ type: 'UPDATE_PIN', pin: updated });
+    setLastGroup(updated.group ?? '');
+    setLastCategory(updated.category);
   };
 
   const handleDelete = (id: string) => {
@@ -1107,12 +1593,12 @@ function App() {
     pins.forEach(pin => {
       const pid = pin.pageId ?? '';
       if (!map.has(pid)) {
-        map.set(pid, { pageId: pid, pageName: pin.pageName || '(이전 버전 핀)', pins: [] });
+        map.set(pid, { pageId: pid, pageName: pin.pageName || t(lang, 'legacyPageLabel'), pins: [] });
       }
       map.get(pid)!.pins.push(pin);
     });
     return [...map.values()];
-  }, [pins]);
+  }, [pins, lang]);
 
   // ── Merge pin-groups + stubs (stubs for pages with no pins yet) ─────────────
   const mergedPages = useMemo(() => {
@@ -1193,20 +1679,108 @@ function App() {
     });
   };
 
+  // ── Pin number editing (with collision → swap confirmation) ──────────────
+  const handleSetNumber = (pin: Pin, newNumber: number) => {
+    if (!Number.isInteger(newNumber) || newNumber < 1 || newNumber === pin.number) return;
+    const conflict = pinsRef.current.find(p => p.id !== pin.id && p.number === newNumber);
+    if (conflict) {
+      setNumberConflict({ pin, conflictPin: conflict, newNumber });
+    } else {
+      send({ type: 'SET_PIN_NUMBER', id: pin.id, number: newNumber });
+    }
+  };
+
   // ── Card factory ────────────────────────────────────────────────────────
-  const makeCard = (pin: Pin, inGroup = false) => (
-    <PinCard key={pin.id} pin={pin} inGroup={inGroup}
+  const makeCard = (pin: Pin, inGroup = false, draggableHint = false) => (
+    <PinCard key={pin.id} pin={pin} inGroup={inGroup} draggableHint={isDevMode ? false : draggableHint}
+      isReadOnly={isDevMode}
       expanded={expandedId === pin.id} focused={focusedId === pin.id}
-      allGroups={allGroups} fileKey={fileKey} searchQuery={query.trim() || undefined}
+      allGroups={allGroups} fileKey={fileKey} searchQuery={query.trim() || undefined} lang={lang}
       onExpand={() => {
         const opening = expandedId !== pin.id;
         setExpandedId(opening ? pin.id : null);
         if (opening) send({ type: 'FOCUS_PIN', pinNodeId: pin.pinNodeId });
       }}
-      onSave={handleSave} onDelete={handleDelete}
+      onSave={handleSave} onAutoSave={handleAutoSave} onDelete={handleDelete}
       onNeedFileKey={() => setShowKeyPrompt(true)}
+      onSetNumber={(n) => handleSetNumber(pin, n)}
     />
   );
+
+  // ── Pin order helpers ──────────────────────────────────────────────────
+  const sortByPinOrder = (list: Pin[], orderKey: string): Pin[] => {
+    const order = pinOrders[orderKey];
+    if (!order || order.length === 0) return list;
+    const idx = new Map(order.map((id, i) => [id, i]));
+    return [...list].sort((a, b) => {
+      const ia = idx.has(a.id) ? idx.get(a.id)! : Number.MAX_SAFE_INTEGER;
+      const ib = idx.has(b.id) ? idx.get(b.id)! : Number.MAX_SAFE_INTEGER;
+      return ia - ib;
+    });
+  };
+
+  // Renders a list of sibling pins with drag-to-reorder (linked number reassignment)
+  const renderPinGroup = (pinList: Pin[], orderKey: string): React.ReactNode => {
+    const sorted = sortByPinOrder(pinList, orderKey);
+    if (sorted.length < 2) return sorted.map(pin => makeCard(pin, true));
+
+    const handleDrop = (targetId: string) => {
+      const fromId = pinDragRef.current;
+      const pos = dragOverPinInfo?.id === targetId ? dragOverPinInfo.pos : 'before';
+      pinDragRef.current = null;
+      setDragOverPinInfo(null);
+      if (!fromId || fromId === targetId) return;
+
+      const order = sorted.map(p => p.id);
+      reorder(order, fromId, targetId, pos);
+
+      const renumbers: { id: string; number: number }[] = [];
+      if (sorted.every(p => typeof p.number === 'number' && !isNaN(p.number))) {
+        const sortedNumbers = sorted.map(p => p.number).sort((a, b) => a - b);
+        order.forEach((id, i) => {
+          const pin = sorted.find(p => p.id === id)!;
+          if (pin.number !== sortedNumbers[i]) renumbers.push({ id, number: sortedNumbers[i] });
+        });
+      }
+
+      setPinOrders(prev => ({ ...prev, [orderKey]: order }));
+      send({ type: 'REORDER_PINS', orderKey, order, renumbers });
+    };
+
+    return sorted.map(pin => {
+      const isExpanded = expandedId === pin.id;
+      const dragPos = dragOverPinInfo?.id === pin.id ? dragOverPinInfo.pos : null;
+      return (
+        <div key={pin.id} style={{ position: 'relative' }}
+          draggable={!isExpanded}
+          onMouseDownCapture={e => { dragOriginRef.current = e.target as HTMLElement; }}
+          onDragStart={e => {
+            const origin = dragOriginRef.current;
+            if (origin?.closest('input, textarea, button')) { e.preventDefault(); return; }
+            e.stopPropagation();
+            pinDragRef.current = pin.id;
+          }}
+          onDragOver={e => {
+            e.preventDefault(); e.stopPropagation();
+            const rect = e.currentTarget.getBoundingClientRect();
+            setDragOverPinInfo({ id: pin.id, pos: e.clientY < rect.top + rect.height / 2 ? 'before' : 'after' });
+          }}
+          onDrop={e => { e.stopPropagation(); handleDrop(pin.id); }}
+          onDragLeave={() => setDragOverPinInfo(null)}
+        >
+          {dragPos === 'before' && (
+            <div style={{ position: 'absolute', top: -3, left: 0, right: 0, height: 2,
+              background: C.primary, borderRadius: 2, zIndex: 10, boxShadow: `0 0 0 3px ${C.blue10}` }} />
+          )}
+          {dragPos === 'after' && (
+            <div style={{ position: 'absolute', bottom: 3, left: 0, right: 0, height: 2,
+              background: C.primary, borderRadius: 2, zIndex: 10, boxShadow: `0 0 0 3px ${C.blue10}` }} />
+          )}
+          {makeCard(pin, true, !isExpanded)}
+        </div>
+      );
+    });
+  };
 
   // ── Group header ─────────────────────────────────────────────────────────
   // LAYOUT CONSTANTS (px)
@@ -1253,7 +1827,7 @@ function App() {
         </div>
         <span style={{
           flexShrink: 0, fontFamily: FONT, borderRadius: 9999, lineHeight: 1.5, ...CHIP,
-        }}>{count}개</span>
+        }}>{t(lang, 'itemCount', count)}</span>
       </div>
     );
   };
@@ -1355,7 +1929,7 @@ function App() {
                 marginBottom: isRoot ? 4 : 2,
                 borderLeft: `1.5px solid ${C.guideLine}`,
               }}>
-                {node.pins.map(pin => makeCard(pin, true))}
+                {renderPinGroup(node.pins, `${pageId ?? selectedPageId ?? ''}::${node.path}`)}
                 {sortedChildren.length > 0 && (
                   <div style={{ marginTop: node.pins.length > 0 ? 4 : 0 }}>
                     {renderTreeNode(sortedChildren, false, childDragHandlers, pageId)}
@@ -1413,9 +1987,9 @@ function App() {
         <div style={{ padding: '56px 16px', textAlign: 'center', fontFamily: FONT }}>
           <div style={{ fontSize: 32, marginBottom: 14 }}>📌</div>
           <p style={{ fontSize: 14, fontWeight: 600, color: C.text2, lineHeight: 1.6, margin: 0 }}>
-            {q ? <>"{q}"에 대한 결과가 없어요</> : <>레이어를 선택하고<br />Add Note를 눌러주세요</>}
+            {q ? t(lang, 'emptySearchTitle', q) : t(lang, 'emptyDefaultTitle').split('\n').map((line, i) => <React.Fragment key={i}>{i > 0 && <br />}{line}</React.Fragment>)}
           </p>
-          {!q && <p style={{ fontSize: 12, color: C.text3, lineHeight: 1.6, margin: '6px 0 0', fontFamily: FONT }}>핀을 추가하면 여기에 목록이 표시돼요</p>}
+          {!q && <p style={{ fontSize: 12, color: C.text3, lineHeight: 1.6, margin: '6px 0 0', fontFamily: FONT }}>{t(lang, 'emptyHint')}</p>}
         </div>
       );
     }
@@ -1468,15 +2042,15 @@ function App() {
           <>
             {sortedPgTree.length > 0 && <div style={{ height: 20 }} />}
             <div style={{ padding: `0 ${OUTER}px` }}>
-              {groupHeader('기타', pgUngrouped.length, '__ungrouped__', 0)}
-              {!collapsedPaths.has('__ungrouped__') && pgUngrouped.map(pin => makeCard(pin, true))}
+              {groupHeader(t(lang, 'ungroupedLabel'), pgUngrouped.length, '__ungrouped__', 0)}
+              {!collapsedPaths.has('__ungrouped__') && renderPinGroup(pgUngrouped, `${selectedPageId}::__ungrouped__`)}
             </div>
           </>
         )}
       </>
     ) : (
       <div style={{ padding: `0 ${OUTER}px` }}>
-        {filtered.map(pin => makeCard(pin, true))}
+        {renderPinGroup(filtered, `${selectedPageId}::__root__`)}
       </div>
     );
   };
@@ -1489,7 +2063,7 @@ function App() {
       <ResizeHandle />
 
       {showOnboarding && (
-        <Onboarding onDone={() => {
+        <Onboarding lang={lang} onDone={() => {
           send({ type: 'ONBOARDING_DONE' });
           setShowOnboarding(false);
         }} />
@@ -1524,7 +2098,79 @@ function App() {
                   {selectedPage.pins.length}
                 </span>
               )}
+              {/* ⋮ 더보기 메뉴 */}
+              {!isDevMode && <div style={{ position: 'relative', flexShrink: 0 }}>
+                {pageMenuOpen && (
+                  <div style={{ position: 'fixed', inset: 0, zIndex: 49 }} onClick={() => setPageMenuOpen(false)} />
+                )}
+                <button className="p-btn" onClick={() => setPageMenuOpen(v => !v)}
+                  title={t(lang, 'pageMenuTitle')}
+                  style={{
+                    width: 32, height: 32, borderRadius: 9, border: 'none',
+                    background: pageMenuOpen ? C.bg : 'none',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'pointer', color: C.text2,
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.background = C.bg)}
+                  onMouseLeave={e => { if (!pageMenuOpen) e.currentTarget.style.background = 'none'; }}
+                >
+                  <svg width="3" height="13" viewBox="0 0 3 13" fill="none">
+                    <circle cx="1.5" cy="1.5" r="1.5" fill="currentColor"/>
+                    <circle cx="1.5" cy="6.5" r="1.5" fill="currentColor"/>
+                    <circle cx="1.5" cy="11.5" r="1.5" fill="currentColor"/>
+                  </svg>
+                </button>
+                {pageMenuOpen && (
+                  <div style={{
+                    position: 'absolute', right: 0, top: '100%', marginTop: 4, zIndex: 50,
+                    background: C.card, borderRadius: 12, overflow: 'hidden',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.14)', minWidth: 140,
+                    border: `1px solid ${C.line}`,
+                  }}>
+                    <button
+                      title={t(lang, 'repositionTitle')}
+                      onClick={() => { setPageMenuOpen(false); if (selectedPageId) send({ type: 'REPOSITION_PINS', pageId: selectedPageId }); }}
+                      style={{
+                        width: '100%', padding: '10px 14px', border: 'none', background: 'none',
+                        fontSize: 13, fontWeight: 500, fontFamily: FONT, color: C.text1,
+                        cursor: 'pointer', textAlign: 'left', display: 'block',
+                      }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = C.inputBg; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none'; }}
+                    >{t(lang, 'repositionBtn')}</button>
+                    <button
+                      title={t(lang, 'compactTitle')}
+                      onClick={() => { setPageMenuOpen(false); setShowCompactConfirm(true); }}
+                      style={{
+                        width: '100%', padding: '10px 14px', border: 'none', background: 'none',
+                        fontSize: 13, fontWeight: 500, fontFamily: FONT, color: C.text1,
+                        cursor: 'pointer', textAlign: 'left', display: 'block',
+                      }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = C.inputBg; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none'; }}
+                    >{t(lang, 'compactBtn')}</button>
+                  </div>
+                )}
+              </div>}
             </div>
+
+            {/* Dev Mode banner */}
+            {isDevMode && (
+              <div style={{
+                margin: '0 0 10px', padding: '8px 12px', borderRadius: 10,
+                background: 'rgba(255,190,0,0.12)', border: '1px solid rgba(255,190,0,0.35)',
+                display: 'flex', alignItems: 'center', gap: 7,
+              }}>
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+                  <path d="M8 1.5L1 14.5h14L8 1.5z" stroke="#C47F00" strokeWidth="1.5" strokeLinejoin="round"/>
+                  <path d="M8 6v4" stroke="#C47F00" strokeWidth="1.5" strokeLinecap="round"/>
+                  <circle cx="8" cy="12" r="0.7" fill="#C47F00"/>
+                </svg>
+                <span style={{ fontSize: 11.5, fontWeight: 600, color: '#8A5700', fontFamily: FONT, lineHeight: 1.5 }}>
+                  {t(lang, 'devModeBanner')}
+                </span>
+              </div>
+            )}
 
             {/* Search */}
             <div style={{ position: 'relative', marginBottom: 10 }}>
@@ -1537,7 +2183,7 @@ function App() {
                 onChange={e => setQuery(e.target.value)}
                 onFocus={() => setSearchFocus(true)}
                 onBlur={() => setSearchFocus(false)}
-                placeholder="핀 검색..."
+                placeholder={t(lang, 'searchPlaceholder')}
                 style={{
                   width: '100%', padding: '9px 32px 9px 32px',
                   border: `1.5px solid ${searchFocus ? C.primary : 'transparent'}`,
@@ -1560,8 +2206,8 @@ function App() {
             {/* Status filter tabs */}
             <div style={{ display: 'flex', gap: 4, marginBottom: 10 }}>
               {([
-                { key: 'all' as const, label: '전체' },
-                { key: 'pending' as const, label: `보류${pendingCount > 0 ? ` ${pendingCount}` : ''}` },
+                { key: 'all' as const, label: t(lang, 'statusAll') },
+                { key: 'pending' as const, label: t(lang, 'statusPending', pendingCount) },
               ]).map(({ key, label }) => (
                 <button key={key} className="p-btn" onClick={() => setStatusFilter(key)}
                   style={{
@@ -1578,29 +2224,33 @@ function App() {
             </div>
 
             {/* Add Note */}
-            <button className="p-btn"
-              onClick={() => send({ type: 'ADD_PIN', category: lastCategory, group: lastGroup })}
-              disabled={!hasSelection}
-              style={{
-                width: '100%', height: 44,
-                background: hasSelection ? C.primary : C.disabledBg,
-                color: hasSelection ? '#FFF' : C.disabledText,
-                border: 'none', borderRadius: 12,
-                fontSize: 14, fontWeight: 700, lineHeight: 1.5, fontFamily: FONT,
-                cursor: hasSelection ? 'pointer' : 'default',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-              }}
-              onMouseEnter={e => { if (hasSelection) (e.currentTarget as HTMLButtonElement).style.background = C.primaryDark; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = hasSelection ? C.primary : C.disabledBg; }}
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"/>
-              </svg>
-              Add Note
-            </button>
-            <p style={{ marginTop: 7, fontSize: 11, textAlign: 'center', fontFamily: FONT, lineHeight: 1.5, color: hasSelection ? C.success : C.text3 }}>
-              {hasSelection ? '레이어가 선택되었어요' : '레이어를 먼저 선택해주세요'}
-            </p>
+            {!isDevMode && (
+              <>
+                <button className="p-btn"
+                  onClick={() => send({ type: 'ADD_PIN', category: lastCategory, group: lastGroup })}
+                  disabled={!hasSelection}
+                  style={{
+                    width: '100%', height: 44,
+                    background: hasSelection ? C.primary : C.disabledBg,
+                    color: hasSelection ? '#FFF' : C.disabledText,
+                    border: 'none', borderRadius: 12,
+                    fontSize: 14, fontWeight: 700, lineHeight: 1.5, fontFamily: FONT,
+                    cursor: hasSelection ? 'pointer' : 'default',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  }}
+                  onMouseEnter={e => { if (hasSelection) (e.currentTarget as HTMLButtonElement).style.background = C.primaryDark; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = hasSelection ? C.primary : C.disabledBg; }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"/>
+                  </svg>
+                  Add Note
+                </button>
+                <p style={{ marginTop: 7, fontSize: 11, textAlign: 'center', fontFamily: FONT, lineHeight: 1.5, color: hasSelection ? C.success : C.text3 }}>
+                  {hasSelection ? t(lang, 'selectionSelected') : t(lang, 'selectionNotSelected')}
+                </p>
+              </>
+            )}
           </>
         ) : (
           /* File list view: title row only */
@@ -1608,9 +2258,9 @@ function App() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
               <div dangerouslySetInnerHTML={{ __html: resizeSvg(pinSvg, 18) }} style={{ flexShrink: 0, lineHeight: 0 }} />
               <span style={{ fontSize: 16, fontWeight: 800, fontFamily: FONT, color: C.text1, letterSpacing: '-0.03em', lineHeight: 1.4 }}>
-                imbc_smart pin
+                Smart pin
               </span>
-              <button className="p-btn" onClick={() => send({ type: 'INIT' })} title="새로고침"
+              <button className="p-btn" onClick={() => send({ type: 'INIT' })} title={t(lang, 'refreshTitle')}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4,
                   display: 'flex', alignItems: 'center', color: C.text3, borderRadius: 6 }}
                 onMouseEnter={e => (e.currentTarget.style.background = C.bg)}
@@ -1621,11 +2271,25 @@ function App() {
                 </svg>
               </button>
             </div>
-            {pins.length > 0 && (
-              <span style={{ background: C.primary, color: '#FFF', borderRadius: 9999, padding: '2px 9px', fontSize: 11, fontWeight: 700, fontFamily: FONT, lineHeight: 1.5 }}>
-                {pins.length}
-              </span>
-            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ display: 'inline-flex', background: C.bg, borderRadius: 9999, padding: 2 }}>
+                {(['ko', 'en'] as Lang[]).map(l => (
+                  <button key={l} className="p-btn" onClick={() => setLang(l)}
+                    style={{
+                      padding: '3px 9px', borderRadius: 9999, border: 'none',
+                      background: lang === l ? C.primary : 'transparent',
+                      color: lang === l ? '#FFF' : C.text3,
+                      fontSize: 10.5, fontWeight: 700, fontFamily: FONT, cursor: 'pointer',
+                      transition: 'all 0.2s',
+                    }}>{l === 'ko' ? '한' : 'EN'}</button>
+                ))}
+              </div>
+              {pins.length > 0 && (
+                <span style={{ background: C.primary, color: '#FFF', borderRadius: 9999, padding: '2px 9px', fontSize: 11, fontWeight: 700, fontFamily: FONT, lineHeight: 1.5 }}>
+                  {pins.length}
+                </span>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -1645,8 +2309,8 @@ function App() {
             <circle cx="8" cy="11.2" r="0.8" fill="#F5A623"/>
           </svg>
           <span style={{ flex: 1, fontSize: 12, fontFamily: FONT, lineHeight: 1.5, color: '#7A4F00' }}>
-            플러그인 업데이트가 필요해요.{' '}
-            <strong style={{ fontWeight: 700 }}>code.js</strong>를 다시 받아주세요.
+            {t(lang, 'updateBannerPre')}
+            <strong style={{ fontWeight: 700 }}>code.js</strong>{t(lang, 'updateBannerPost')}
           </span>
           <a href={UPDATE_URL} target="_blank" rel="noreferrer"
             style={{
@@ -1658,7 +2322,7 @@ function App() {
             }}
             onMouseEnter={e => (e.currentTarget.style.background = '#D4891C')}
             onMouseLeave={e => (e.currentTarget.style.background = '#F5A623')}
-          >다운로드</a>
+          >{t(lang, 'downloadBtn')}</a>
         </div>
       )}
 
@@ -1666,7 +2330,7 @@ function App() {
       {showKeyPrompt && !fileKey && (
         <div style={{ padding: '10px 14px', background: C.blue10, borderBottom: `1px solid ${C.line}` }}>
           <p style={{ fontSize: 12, fontWeight: 600, color: C.primary, margin: '0 0 7px', lineHeight: 1.5, fontFamily: FONT }}>
-            파일 공유 링크를 붙여넣어주세요
+            {t(lang, 'keyPromptLabel')}
           </p>
           <div style={{ display: 'flex', gap: 6 }}>
             <input value={customKeyUrl} onChange={e => setCustomKeyUrl(e.target.value)}
@@ -1675,13 +2339,24 @@ function App() {
                 borderRadius: 8, border: `1.5px solid ${C.primary}`,
                 outline: 'none', minWidth: 0, fontFamily: FONT,
                 boxSizing: 'border-box', background: C.card, color: C.text1 }} />
-            <button onClick={() => { if (customKeyUrl) send({ type: 'SET_CUSTOM_KEY', key: customKeyUrl }); setShowKeyPrompt(false); }}
+            <button onClick={() => {
+                if (customKeyUrl) {
+                  send({ type: 'SET_CUSTOM_KEY', key: customKeyUrl });
+                  if (pendingOpenWeb) {
+                    const m = customKeyUrl.trim().match(/figma\.com\/(?:file|design|board)\/([^/?]+)/);
+                    const k = m ? m[1] : customKeyUrl.trim();
+                    openWebViewer(k);
+                  }
+                }
+                setShowKeyPrompt(false);
+                setPendingOpenWeb(false);
+              }}
               style={{ background: C.primary, color: '#fff', border: 'none', borderRadius: 8, padding: '0 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: FONT }}>
-              저장
+              {t(lang, 'saveBtnShort')}
             </button>
             <button onClick={() => setShowKeyPrompt(false)}
               style={{ background: 'transparent', color: C.text2, border: 'none', borderRadius: 8, padding: '0 10px', fontSize: 12, cursor: 'pointer', fontFamily: FONT }}>
-              취소
+              {t(lang, 'modalCancel')}
             </button>
           </div>
         </div>
@@ -1705,10 +2380,10 @@ function App() {
                 <div style={{ padding: '40px 0 24px', textAlign: 'center', fontFamily: FONT }}>
                   <div style={{ fontSize: 32, marginBottom: 14 }}>📌</div>
                   <p style={{ fontSize: 14, fontWeight: 600, color: C.text2, lineHeight: 1.6, margin: 0 }}>
-                    아직 등록된 파일이 없어요
+                    {t(lang, 'fileListEmptyTitle')}
                   </p>
                   <p style={{ fontSize: 12, color: C.text3, lineHeight: 1.6, margin: '6px 0 0', fontFamily: FONT }}>
-                    아래 버튼으로 파일을 추가해보세요
+                    {t(lang, 'fileListEmptyHint')}
                   </p>
                 </div>
               )}
@@ -1720,6 +2395,7 @@ function App() {
                   onRename={newName => handleRenamePageGroup(pg.pageId, newName)}
                   onDelete={() => handleDeletePageGroup(pg.pageId)}
                   dragPosition={dragOverPageInfo?.pageId === pg.pageId ? dragOverPageInfo.pos : null}
+                  lang={lang}
                   onDragStart={() => { fileDragRef.current = pg.pageId; }}
                   onDragOver={(e, pos) => { e.preventDefault(); setDragOverPageInfo({ pageId: pg.pageId, pos }); }}
                   onDrop={() => {
@@ -1756,12 +2432,11 @@ function App() {
                       <circle cx="8" cy="5.2" r="0.8" fill={C.primary}/>
                     </svg>
                     <span style={{ fontSize: 11, fontFamily: FONT, lineHeight: 1.55, color: C.primary }}>
-                      현재 피그마 페이지 <strong style={{ fontWeight: 700 }}>"{currentPageName || '(알 수 없음)'}"</strong>에 파일이 등록됩니다.{'\u00A0'}
-                      다른 페이지에 추가하려면 해당 페이지로 이동 후 다시 시도해주세요.
+                      {t(lang, 'addPageCurrentNotice', currentPageName || t(lang, 'unknownPageName'))}
                     </span>
                   </div>
                   <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text3, fontFamily: FONT, marginBottom: 6, letterSpacing: '0.04em' }}>
-                    파일 이름
+                    {t(lang, 'fileNameLabel')}
                   </label>
                   <input
                     autoFocus
@@ -1780,7 +2455,7 @@ function App() {
                       }
                       if (e.key === 'Escape') { setShowAddPage(false); setAddPageName(''); }
                     }}
-                    placeholder={currentPageName || '페이지 이름 입력'}
+                    placeholder={currentPageName || t(lang, 'fileNamePlaceholder')}
                     style={{
                       width: '100%', padding: '9px 12px', fontSize: 13, lineHeight: 1.5,
                       fontFamily: FONT, color: C.text1, border: `1.5px solid ${C.line}`,
@@ -1789,7 +2464,7 @@ function App() {
                     }}
                   />
                   <p style={{ margin: '0 0 12px', fontSize: 11, color: C.text3, fontFamily: FONT, lineHeight: 1.5 }}>
-                    피그마 드래프트 내 개별 페이지와 동일한 이름으로 만들어주세요.
+                    {t(lang, 'fileNameHint')}
                   </p>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button className="p-btn"
@@ -1810,7 +2485,7 @@ function App() {
                         border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700,
                         fontFamily: FONT, cursor: addPageName.trim() ? 'pointer' : 'default',
                       }}
-                    >추가</button>
+                    >{t(lang, 'addBtn')}</button>
                     <button className="p-btn"
                       onClick={() => { setShowAddPage(false); setAddPageName(''); }}
                       style={{
@@ -1818,7 +2493,7 @@ function App() {
                         border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 600,
                         fontFamily: FONT, cursor: 'pointer',
                       }}
-                    >취소</button>
+                    >{t(lang, 'modalCancel')}</button>
                   </div>
                 </div>
               ) : (
@@ -1846,9 +2521,46 @@ function App() {
                   <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                     <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
                   </svg>
-                  새 파일 추가
+                  {t(lang, 'addFileBtn')}
                 </button>
               )}
+
+              {/* ── Dev Mode 웹 뷰어 진입 ── */}
+              <div style={{
+                marginTop: 16,
+                paddingTop: 16,
+                borderTop: `1px solid ${C.guideLine}`,
+              }}>
+                <p style={{
+                  fontSize: 11.5, color: C.text3, fontFamily: FONT,
+                  lineHeight: 1.6, marginBottom: 10, textAlign: 'center',
+                }}>{t(lang, 'devModeSectionNote')}</p>
+                <button className="p-btn"
+                  onClick={() => {
+                    if (!fileKey) { setPendingOpenWeb(true); setShowKeyPrompt(true); return; }
+                    openWebViewer();
+                  }}
+                  style={{
+                    width: '100%', height: 40,
+                    background: C.blue10, color: C.primary,
+                    border: `1px solid rgba(49,130,246,0.18)`,
+                    borderRadius: 10,
+                    fontSize: 13, fontWeight: 600, fontFamily: FONT,
+                    cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    transition: 'all 0.2s',
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(49,130,246,0.16)'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = C.blue10; }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                    <path d="M7 3H3a1 1 0 00-1 1v9a1 1 0 001 1h9a1 1 0 001-1V9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                    <path d="M10 2h4v4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M14 2L8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                  </svg>
+                  {t(lang, 'webViewBtn')}
+                </button>
+              </div>
             </div>
           ) : (
             /* ── Pin list view ── */
@@ -1865,6 +2577,37 @@ function App() {
           fontSize: 13, lineHeight: 1.5, fontWeight: 600, fontFamily: FONT,
           zIndex: 1000, boxShadow: '0 8px 24px rgba(0,0,0,0.18)', whiteSpace: 'nowrap',
         }}>{toast}</div>
+      )}
+
+      {/* ── Number swap confirm ── */}
+      {numberConflict && (
+        <ConfirmModal
+          lang={lang}
+          title={t(lang, 'numberSwapTitle')}
+          message={t(lang, 'numberSwapMessage', numberConflict.newNumber, numberConflict.conflictPin.title || t(lang, 'noTitleFallback'))}
+          confirmLabel={t(lang, 'numberSwapConfirm')}
+          onCancel={() => setNumberConflict(null)}
+          onConfirm={() => {
+            send({ type: 'SET_PIN_NUMBER', id: numberConflict.pin.id, number: numberConflict.newNumber, swapWithId: numberConflict.conflictPin.id });
+            setNumberConflict(null);
+          }}
+        />
+      )}
+
+      {/* ── Compact numbers confirm ── */}
+      {showCompactConfirm && (
+        <ConfirmModal
+          lang={lang}
+          title={t(lang, 'compactConfirmTitle')}
+          message={t(lang, 'compactConfirmMessage')}
+          confirmLabel={t(lang, 'compactConfirmBtn')}
+          danger
+          onCancel={() => setShowCompactConfirm(false)}
+          onConfirm={() => {
+            send({ type: 'COMPACT_NUMBERS' });
+            setShowCompactConfirm(false);
+          }}
+        />
       )}
     </div>
   );

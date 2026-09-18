@@ -51,11 +51,11 @@ for (const f of required) {
   }
 }
 
-// ── step 1: dist/ui.html → deploy_github/index.html ──────────────────────────
+// ── step 1: dist/ui.html → deploy_github/app.html (플러그인 UI; index.html은 웹 뷰어 전용)
 
 console.log('\n[1] GitHub Pages 배포 파일 복사');
 ensureDir(DEPLOY_GITHUB);
-copyFile(path.join(DIST, 'ui.html'), path.join(DEPLOY_GITHUB, 'index.html'));
+copyFile(path.join(DIST, 'ui.html'), path.join(DEPLOY_GITHUB, 'app.html'));
 
 // ── step 2: deploy_figma/ui.html (리다이렉트 껍데기) ─────────────────────────
 
@@ -76,7 +76,7 @@ const redirectHtml =
     </style>
   </head>
   <body>
-    <iframe id="f" src="${HOSTED_URL}"></iframe>
+    <iframe id="f" src="${HOSTED_URL}app.html"></iframe>
     <script>
       var iframe = document.getElementById('f');
       window.addEventListener('message', function(e) {
@@ -125,18 +125,19 @@ try {
   execSync(`git clone ${PAGES_REPO} "${CLONE_DIR}"`, { stdio: 'inherit' });
   // 최신 파일 복사 (UI + 플러그인 파일 전체)
   fs.copyFileSync(path.join(DEPLOY_GITHUB,  'index.html'),   path.join(CLONE_DIR, 'index.html'));
+  fs.copyFileSync(path.join(DEPLOY_GITHUB,  'app.html'),     path.join(CLONE_DIR, 'app.html'));
   fs.copyFileSync(path.join(DEPLOY_FIGMA,   'code.js'),      path.join(CLONE_DIR, 'code.js'));
   fs.copyFileSync(path.join(DEPLOY_FIGMA,   'ui.html'),      path.join(CLONE_DIR, 'ui.html'));
   fs.copyFileSync(path.join(DEPLOY_FIGMA,   'manifest.json'),path.join(CLONE_DIR, 'manifest.json'));
   // 변경사항 commit & push
   // main 브랜치 업데이트
   execSync(
-    'git checkout main && git add index.html code.js ui.html manifest.json && git diff --cached --quiet || (git commit -m "deploy: update plugin UI" && git push origin main)',
+    'git checkout main && git add index.html app.html code.js ui.html manifest.json && git diff --cached --quiet || (git commit -m "deploy: update plugin UI" && git push origin main)',
     { cwd: CLONE_DIR, stdio: 'inherit' }
   );
   // gh-pages 브랜치 업데이트 (GitHub Pages 실제 서빙 브랜치)
   execSync(
-    'git checkout gh-pages && git checkout main -- index.html && git add index.html && git diff --cached --quiet || (git commit -m "deploy: update plugin UI" && git push origin gh-pages)',
+    'git checkout gh-pages && git checkout main -- index.html app.html && git add index.html app.html && git diff --cached --quiet || (git commit -m "deploy: update plugin UI" && git push origin gh-pages)',
     { cwd: CLONE_DIR, stdio: 'inherit' }
   );
   execSync('git checkout main', { cwd: CLONE_DIR, stdio: 'pipe' });

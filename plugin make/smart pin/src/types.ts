@@ -6,6 +6,13 @@ export interface PageStub {
   pageName: string;
 }
 
+export interface PinAnchor {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
 export interface Pin {
   id: string;
   nodeId: string;
@@ -20,6 +27,7 @@ export interface Pin {
   group?: string;
   createdAt: number;
   updatedAt?: string;
+  anchor?: PinAnchor;  // offsets from target node's edges, used to reposition pin after layout changes
 }
 
 // UI → Plugin
@@ -36,11 +44,16 @@ export type UIMessage =
   | { type: 'ADD_PAGE_STUB'; pageName: string }
   | { type: 'SET_FILE_ORDER'; order: string[] }
   | { type: 'SET_GROUP_ORDER'; pageId: string; order: string[] }
-  | { type: 'ONBOARDING_DONE' };
+  | { type: 'ONBOARDING_DONE' }
+  | { type: 'REPOSITION_PINS'; pageId: string }
+  | { type: 'REORDER_PINS'; orderKey: string; order: string[]; renumbers: { id: string; number: number }[] }
+  | { type: 'SET_PIN_NUMBER'; id: string; number: number; swapWithId?: string }
+  | { type: 'COMPACT_NUMBERS' }
+  | { type: 'OPEN_WEB_VIEWER' };
 
 // Plugin → UI
 export type PluginMessage =
-  | { type: 'PINS_LOADED'; pins: Pin[]; pageStubs: PageStub[]; fileKey: string | null | undefined; currentPageId: string; currentPageName: string; codeVersion: number; fileOrder: string[]; groupOrders: Record<string, string[]>; onboardingDone: boolean }
+  | { type: 'PINS_LOADED'; pins: Pin[]; pageStubs: PageStub[]; fileKey: string | null | undefined; currentPageId: string; currentPageName: string; codeVersion: number; fileOrder: string[]; groupOrders: Record<string, string[]>; pinOrders: Record<string, string[]>; onboardingDone: boolean; isDevMode?: boolean }
   | { type: 'PIN_ADDED'; pin: Pin }
   | { type: 'PIN_UPDATED'; pin: Pin }
   | { type: 'PIN_DELETED'; id: string }
@@ -48,4 +61,6 @@ export type PluginMessage =
   | { type: 'PIN_FOCUSED'; id: string }
   | { type: 'AUTO_FOCUS'; id: string }
   | { type: 'PAGE_CHANGED'; pageId: string; pageName: string }
+  | { type: 'REPOSITION_DONE'; pageId: string; moved: number; total: number }
+  | { type: 'PIN_NUMBERS_CHANGED'; pins: Pin[]; reason: 'reorder' | 'swap' | 'edit' | 'compact' }
   | { type: 'ERROR'; message: string };
