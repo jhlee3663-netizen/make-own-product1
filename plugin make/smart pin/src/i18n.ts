@@ -168,6 +168,15 @@ const ko: Dict = {
   inboxBadge: (n: number) => `의견 ${n}`,
   toastNewComment: (n: number) => n > 1 ? `새 의견 ${n}개가 도착했어요` : '새 의견이 도착했어요',
   toastView: '보기',
+  dupCallout: (n: number) => `이 핀의 배지가 ${n}개 복제되어 있어요. 복사본은 핀 내용과 연결되지 않아요.`,
+  dupAction: '복사본 정리',
+  dupAdoptCallout: (n: number) => `원래 배지는 지워졌지만 복사본 ${n}개가 남아 있어요. 복사본 하나를 이 핀의 배지로 연결하고 나머지는 지워요.`,
+  dupAdoptAction: '복사본으로 연결',
+  driftCallout: '배지가 원래 위치에서 벗어나 있어요.',
+  driftAction: '위치 맞추기',
+  pageDriftBanner: (n: number) => `배지 ${n}개가 원래 위치에서 벗어났어요.`,
+  pageDupBanner: (n: number) => `복제된 배지가 있는 핀이 ${n}개 있어요.`,
+  pageDupAction: '정리하기',
 };
 
 const en: Dict = {
@@ -336,6 +345,15 @@ const en: Dict = {
   inboxBadge: (n: number) => `${n} new`,
   toastNewComment: (n: number) => n > 1 ? `${n} new comments arrived` : 'A new comment arrived',
   toastView: 'View',
+  dupCallout: (n: number) => `This pin's badge was duplicated ${n} time(s). Copies are not linked to the note.`,
+  dupAction: 'Remove copies',
+  dupAdoptCallout: (n: number) => `The original badge is gone but ${n} copy(ies) remain. Link one copy to this pin and remove the rest.`,
+  dupAdoptAction: 'Link a copy',
+  driftCallout: 'The badge has moved away from its layer.',
+  driftAction: 'Move back',
+  pageDriftBanner: (n: number) => `${n} badge(s) moved away from their layers.`,
+  pageDupBanner: (n: number) => `${n} pin(s) have duplicated badges.`,
+  pageDupAction: 'Clean up',
 };
 
 export const translations: Record<Lang, Dict> = { ko, en };

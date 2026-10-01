@@ -61,7 +61,8 @@ function isRecentlyUpdated(updatedAt?: string): boolean {
   const s = document.createElement('style');
   s.textContent = [
     '.p-card{transition:transform 0.45s cubic-bezier(0.22,1,0.36,1)}',
-    '.p-card:active:not(:has(.p-btn:active)):not(:has(textarea:active)):not(:has(input:active)):not(:has([contenteditable]:active)){transform:scale(0.99)}',
+    // Only pressing the card itself (or its title toggle) gives press feedback; no inner control may shrink it.
+    '.p-card:active:not(:has(button:not([data-drag-ok]):active)):not(:has(textarea:active)):not(:has(input:active)):not(:has([contenteditable]:active)):not(:has([role="menuitem"]:active)){transform:scale(0.99)}',
     '.p-btn{transition:transform 0.45s cubic-bezier(0.22,1,0.36,1)}',
     '.p-btn:active{transform:scale(0.99)}',
     // View navigation slide animations
@@ -371,7 +372,7 @@ function RichTextEditor({ value, onChange, placeholder, style, className, editor
 type PinRole = 'dev' | 'owner' | 'editor' | 'assignee' | 'viewer';
 
 function PinCard({ pin, expanded, focused, allGroups, fileKey, inGroup, searchQuery, draggableHint, isReadOnly, canDelete, canChangeStatus, lang,
-  onExpand, onSave, onAutoSave, onDelete, onNeedFileKey, onSetNumber, onManage, role, canRequest, onToast, inboxCount }: {
+  onExpand, onSave, onAutoSave, onDelete, onNeedFileKey, onSetNumber, onManage, role, canRequest, onToast, inboxCount, onCanvasAction }: {
   pin: Pin; expanded: boolean; focused: boolean;
   allGroups: string[]; fileKey: string | null; inGroup?: boolean; searchQuery?: string; draggableHint?: boolean; isReadOnly?: boolean; lang: Lang;
   onExpand: () => void; onSave: (p: Pin) => void; onAutoSave: (p: Pin) => void;
@@ -379,6 +380,7 @@ function PinCard({ pin, expanded, focused, allGroups, fileKey, inGroup, searchQu
   onSetNumber: (newNumber: number) => void;
   canDelete?: boolean; canChangeStatus?: boolean; onManage: (entry?: Omit<ManageEntry, 'id'>) => void;
   role: PinRole; canRequest: boolean; onToast: (message: string) => void; inboxCount?: number;
+  onCanvasAction: (action: 'cleanup' | 'align') => void;
 }) {
   const cardRef     = useRef<HTMLDivElement>(null);
   const numberInputRef = useRef<HTMLInputElement>(null);
@@ -594,7 +596,12 @@ function PinCard({ pin, expanded, focused, allGroups, fileKey, inGroup, searchQu
     <Callout key="foreign" tone="info" onDismiss={dismissForeignHint}>{t(lang, 'foreignHint')}</Callout>);
   if (!pin.author && canRequest && !pin.requests?.some(r => r.kind === 'claim' && !r.resolvedAt)) callouts.push(
     <Callout key="claim" tone="neutral" action={{ label: t(lang, 'claimAction'), onClick: () => onManage({ view: 'requests', kind: 'claim' }) }}>{t(lang, 'claimCallout')}</Callout>);
-  if (pin.badgeMissing && !isReadOnly) callouts.push(
+  if (pin.duplicateBadges && !isReadOnly) callouts.push(pin.badgeMissing
+    ? <Callout key="dup" tone="warning" action={{ label: t(lang, 'dupAdoptAction'), onClick: () => onCanvasAction('cleanup') }}>{t(lang, 'dupAdoptCallout', pin.duplicateBadges)}</Callout>
+    : <Callout key="dup" tone="warning" action={{ label: t(lang, 'dupAction'), onClick: () => onCanvasAction('cleanup') }}>{t(lang, 'dupCallout', pin.duplicateBadges)}</Callout>);
+  if (pin.badgeDrift && !pin.badgeMissing && !isReadOnly) callouts.push(
+    <Callout key="drift" tone="neutral" action={{ label: t(lang, 'driftAction'), onClick: () => onCanvasAction('align') }}>{t(lang, 'driftCallout')}</Callout>);
+  if (pin.badgeMissing && !pin.duplicateBadges && !isReadOnly) callouts.push(
     <Callout key="badge" tone="warning" action={{ label: t(lang, 'badgeMissingAction'), onClick: () => onManage() }}>{t(lang, 'badgeMissingCallout')}</Callout>);
   if (pin.conflictCount) callouts.push(
     <Callout key="conflict" tone="warning" action={{ label: t(lang, 'conflictAction'), onClick: () => onManage({ view: 'history' }) }}>{t(lang, 'conflictCallout', pin.conflictCount)}</Callout>);
@@ -1648,6 +1655,9 @@ function App() {
         : canStatus(pin, safety.user) ? 'assignee' : 'viewer'}
       onToast={message => showToast(message)}
       inboxCount={inboxByPin[pin.id]}
+      onCanvasAction={action => action === 'cleanup'
+        ? send({ type: 'BADGE_CLEANUP', ids: [pin.id] })
+        : send({ type: 'REPOSITION_PINS', pageId: pin.pageId, ids: [pin.id] })}
       onManage={entry => setManage({ id: pin.id, ...entry })}
       expanded={expandedId === pin.id} focused={focusedId === pin.id}
       allGroups={allGroups} fileKey={fileKey} searchQuery={query.trim() || undefined} lang={lang}
@@ -1933,7 +1943,7 @@ function App() {
   const renderPinList = () => {
     if (filtered.length === 0) {
       return (
-        <div style={{ padding: `${spacing[12]}px ${GUTTER}px`, textAlign: 'center' }}>
+        <div style={{ padding: `${spacing[8]}px ${GUTTER}px` }}>
           <p style={{ ...text('t6', 'semibold', C.text2), margin: 0, whiteSpace: 'pre-line' }}>
             {q ? t(lang, 'emptySearchTitle', q) : listFilter !== 'all' ? t(lang, 'emptyFilterTitle') : t(lang, 'emptyDefaultTitle')}
           </p>
@@ -2158,7 +2168,7 @@ function App() {
             /* ── File list view ── */
             <div style={{ padding: `0 ${GUTTER}px` }}>
               {mergedPages.length === 0 && !showAddPage && (
-                <div style={{ padding: `${spacing[10]}px 0 ${spacing[6]}px`, textAlign: 'center' }}>
+                <div style={{ padding: `${spacing[8]}px 0 ${spacing[6]}px` }}>
                   <p style={{ ...text('t6', 'semibold', C.text2), margin: 0 }}>{t(lang, 'fileListEmptyTitle')}</p>
                   <p style={{ ...text('t7', 'regular', C.text3), margin: `${spacing[1]}px 0 0` }}>{t(lang, 'fileListEmptyHint')}</p>
                 </div>
@@ -2265,7 +2275,25 @@ function App() {
             </div>
           ) : (
             /* ── Pin list view ── */
-            renderPinList()
+            <>
+              {(() => {
+                const editable = isDevMode ? [] : (selectedPage?.pins ?? []).filter(p => canEdit(p, safety.user));
+                const drifted = editable.filter(p => p.badgeDrift && !p.badgeMissing);
+                const duplicated = editable.filter(p => p.duplicateBadges);
+                if (!drifted.length && !duplicated.length) return null;
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: spacing[2], padding: `0 ${GUTTER}px ${spacing[3]}px` }}>
+                    {drifted.length > 0 && <Callout tone="neutral" action={{ label: t(lang, 'driftAction'),
+                      onClick: () => send({ type: 'REPOSITION_PINS', pageId: selectedPageId!, ids: drifted.map(p => p.id) }) }}>
+                      {t(lang, 'pageDriftBanner', drifted.length)}</Callout>}
+                    {duplicated.length > 0 && <Callout tone="warning" action={{ label: t(lang, 'pageDupAction'),
+                      onClick: () => send({ type: 'BADGE_CLEANUP', ids: duplicated.map(p => p.id) }) }}>
+                      {t(lang, 'pageDupBanner', duplicated.length)}</Callout>}
+                  </div>
+                );
+              })()}
+              {renderPinList()}
+            </>
           )}
         </div>
       </div>

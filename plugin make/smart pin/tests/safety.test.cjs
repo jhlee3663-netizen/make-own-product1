@@ -176,3 +176,59 @@ test('restoration resolves a number collision without changing another pin', asy
   const r = await runtime(); r.store.commit({ ...source(), deletedAt: 1 }, alice, 'trash'); r.store.commit({ ...source('other'), author: bob }, bob, 'create');
   await r.send({ type: 'SAFETY', action: 'restore', id: 'p1' }); assert.equal(r.store.get('other').number, 1); assert.equal(r.store.get('p1').number, 2);
 });
+
+const lastPins = r => [...r.messages].reverse().find(m => m.type === 'PINS_LOADED').pins;
+
+test('duplicated badges are reported, never auto-removed, and cleaned only on request', async () => {
+  const r = await runtime(); await r.send({ type: 'ADD_PIN', category: 'design', group: '' }); const p = r.store.all()[0];
+  const original = r.nodes.get(p.pinNodeId); const copyA = original.clone(); const copyB = original.clone();
+  await r.poll();
+  assert.equal(lastPins(r).find(x => x.id === p.id).duplicateBadges, 2);
+  assert.ok(r.nodes.has(copyA.id) && r.nodes.has(copyB.id), 'poll must not delete anything');
+  assert.equal(r.store.get(p.id).duplicateBadges, undefined, 'diagnostics are never stored');
+  await r.send({ type: 'BADGE_CLEANUP', ids: [p.id] });
+  assert.equal(r.nodes.has(copyA.id) || r.nodes.has(copyB.id), false);
+  assert.ok(r.nodes.has(original.id));
+  assert.equal(r.store.get(p.id).pinNodeId, original.id);
+});
+
+test('when the original badge is gone, cleanup adopts a surviving copy instead of making another', async () => {
+  const r = await runtime(); await r.send({ type: 'ADD_PIN', category: 'design', group: '' }); const p = r.store.all()[0];
+  const original = r.nodes.get(p.pinNodeId); const copyA = original.clone(); const copyB = original.clone(); original.remove();
+  await r.send({ type: 'BADGE_CLEANUP', ids: [p.id] });
+  const pin = r.store.get(p.id);
+  assert.equal(pin.pinNodeId, copyA.id); assert.equal(pin.badgeMissing, false);
+  assert.ok(r.nodes.has(copyA.id)); assert.equal(r.nodes.has(copyB.id), false);
+  assert.match(r.store.history(p.id)[0].action, /복제된 배지/);
+});
+
+test('cleanup of someone else\'s pin is refused and touches nothing', async () => {
+  const r = await runtime(alice);
+  const badge = r.figma.createFrame(); badge.name = '📌 Pin #2'; r.figma.currentPage.appendChild(badge);
+  badge.setSharedPluginData('smart_pin', 'smartPinId', 'p2');
+  r.store.commit({ ...source('p2'), author: bob, number: 2, pinNodeId: badge.id }, bob, 'create');
+  await r.send({ type: 'INIT' });
+  const copy = badge.clone();
+  const msgs = await r.send({ type: 'BADGE_CLEANUP', ids: ['p2'] });
+  assert.ok(msgs.some(m => m.type === 'ERROR'));
+  assert.ok(r.nodes.has(copy.id) && r.nodes.has(badge.id));
+});
+
+test('drifted and reparented badges are reported, and moved back only when asked', async () => {
+  const r = await runtime(); await r.send({ type: 'ADD_PIN', category: 'design', group: '' }); const p = r.store.all()[0];
+  const badge = r.nodes.get(p.pinNodeId); const home = { x: badge.x, y: badge.y };
+  badge.x += 80; badge.y += 40;
+  await r.poll();
+  assert.equal(lastPins(r).find(x => x.id === p.id).badgeDrift, true);
+  assert.deepEqual({ x: badge.x, y: badge.y }, { x: home.x + 80, y: home.y + 40 }, 'poll must not move badges');
+  await r.send({ type: 'REPOSITION_PINS', pageId: p.pageId, ids: [p.id] });
+  assert.deepEqual({ x: badge.x, y: badge.y }, home);
+  // Dragged into a frame: Figma reparents it. Re-placing must bring it back to page level.
+  r.nodes.get('target').appendChild(badge); badge.x = 5; badge.y = 5;
+  await r.poll();
+  assert.equal(lastPins(r).find(x => x.id === p.id).badgeDrift, true);
+  await r.send({ type: 'REPOSITION_PINS', pageId: p.pageId, ids: [p.id] });
+  assert.equal(badge.parent.type, 'PAGE'); assert.deepEqual({ x: badge.x, y: badge.y }, home);
+  await r.poll();
+  assert.equal(lastPins(r).find(x => x.id === p.id).badgeDrift, undefined);
+});

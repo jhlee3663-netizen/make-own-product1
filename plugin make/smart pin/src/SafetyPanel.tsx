@@ -481,12 +481,12 @@ export function SafetyPanel({ pins, state, entry, history, errorKey, send, onClo
         backLabel={stack.length <= 1 ? '관리 닫기' : '뒤로'}
         right={(navRight || stack.length > 1) ? <>{navRight}{stack.length > 1 && <IconButton label="관리 닫기" icon="close" onClick={onClose} color={semantic.textPrimary} />}</> : undefined} />
       <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
-        <div key={`${stack.length}-${view.name}`} className="tds-page-in" style={{ maxWidth: 640, margin: '0 auto', paddingBottom: spacing[8] }}>
+        <div key={`${stack.length}-${view.name}`} className="tds-page-in" style={{ paddingBottom: spacing[8] }}>
           {screen()}
         </div>
       </div>
       {showComposerCTA && (
-        <div style={{ padding: `${spacing[3]}px ${GUTTER}px ${spacing[4]}px`, flexShrink: 0, maxWidth: 640, width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
+        <div style={{ padding: `${spacing[3]}px ${GUTTER}px ${spacing[4]}px`, flexShrink: 0 }}>
           <Button display="full" size="large" onClick={() => setComposer(composerKinds(pin!)[0])}>의견 · 요청 남기기</Button>
         </div>
       )}

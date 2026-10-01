@@ -168,6 +168,9 @@ const until = async (fn, label, ms = 4000) => {
       assert.equal(await panel.getByRole('button', { name: new RegExp(row) }).count(), 1, row);
     }
     await shot('hub-720.png');
+    // Content starts at the same left edge as the nav bar (no centred column).
+    const rowBox = await panel.getByRole('button', { name: /받은 의견함/ }).boundingBox();
+    assert.equal(Math.round(rowBox.x), 0, 'hub rows are full-width, left aligned');
     await panel.getByRole('button', { name: /팀 권한 및 관리자/ }).click();
     await panel.getByRole('button', { name: '나를 첫 관리자로 등록' }).click();
     await sheet('나를 첫 관리자로 등록할까요?').getByLabel('변경 사유').fill('Team-approved administrator');
@@ -200,9 +203,36 @@ const until = async (fn, label, ms = 4000) => {
     assert.ok((await download).suggestedFilename().endsWith('.json'));
     await panel.getByRole('button', { name: '뒤로', exact: true }).click();
 
+    // ── Canvas: duplicated badge → 정리, drifted badge → 위치 맞추기 ─────────
+    await panel.getByRole('button', { name: '관리 닫기' }).click();
+    await page.getByRole('button', { name: 'Add Note' }).click();
+    await until(() => s.all().some(p => p.title.startsWith('Note #') && !p.deletedAt), 'pin added from UI');
+    const added = s.all().find(p => p.title.startsWith('Note #'));
+    const badge = r.nodes.get(added.pinNodeId);
+    const copy = badge.clone();
+    await r.poll();
+    await card(added.title).getByRole('button', { name: '복사본 정리' }).click();
+    await until(() => !r.nodes.has(copy.id), 'copy removed on request');
+    assert.ok(r.nodes.has(badge.id));
+    const home = { x: badge.x, y: badge.y };
+    badge.x += 60;
+    await r.poll();
+    await page.getByText('배지 1개가 원래 위치에서 벗어났어요.').waitFor();
+    await shot('canvas-banner-720.png');
+    await page.getByRole('button', { name: '위치 맞추기' }).first().click();
+    await until(() => badge.x === home.x && badge.y === home.y, 'badge moved back on request');
+
+    // Pressing a card's ··· must not trigger the card press-shrink.
+    const more = await card('Bob note').getByRole('button', { name: '핀 메뉴' }).boundingBox();
+    await page.mouse.move(more.x + more.width / 2, more.y + more.height / 2); await page.mouse.down(); await page.waitForTimeout(120);
+    const pressed = await card('Bob note').evaluate(el => getComputedStyle(el).transform);
+    await page.mouse.up(); await page.keyboard.press('Escape');
+    assert.ok(pressed === 'none' || pressed === 'matrix(1, 0, 0, 1, 0, 0)', `card shrank while pressing ···: ${pressed}`);
+
     // ── 360px ───────────────────────────────────────────────────────────────
     await page.setViewportSize({ width: 360, height: 740 });
     await page.waitForTimeout(300);
+    await page.getByRole('button', { name: /^관리/ }).first().click();
     await shot('hub-360.png'); await noOverflow();
     await panel.getByRole('button', { name: '관리 닫기' }).click();
     await shot('list-360.png'); await noOverflow();
@@ -210,6 +240,6 @@ const until = async (fn, label, ms = 4000) => {
     await shot('owner-edit-360.png'); await noOverflow();
 
     assert.deepEqual(errors, []);
-    console.log("Browser checks passed: what's-new once, inbox + one-tap acknowledge + arrival toast, foreign read-only + comment + delete request, card→manage without picker, owner edit/status/trash/undo, co-editor autosave, assignee status-only, unknown-author claim, first admin, claim approval, purge, backup download, 720/360 without overflow.");
+    console.log("Browser checks passed: what's-new once, left-aligned hub, duplicate cleanup + drift re-place, no press-shrink on ···, inbox + one-tap acknowledge + arrival toast, foreign read-only + comment + delete request, card→manage without picker, owner edit/status/trash/undo, co-editor autosave, assignee status-only, unknown-author claim, first admin, claim approval, purge, backup download, 720/360 without overflow.");
   } finally { await browser.close(); server.close(); }
 })().catch(e => { console.error(e); process.exitCode = 1; });

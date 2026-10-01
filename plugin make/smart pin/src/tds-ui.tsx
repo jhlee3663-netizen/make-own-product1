@@ -61,7 +61,7 @@ const PATHS: Record<IconName, React.ReactNode> = {
   restore: <><path d="M4.5 12a7.5 7.5 0 107.5-7.5H9" /><path d="M11 2L8.5 4.5 11 7" /></>,
   relink: <><path d="M9 15l6-6" /><path d="M11 6.5l1.2-1.2a4 4 0 015.6 5.6L16.6 12" /><path d="M13 17.5l-1.2 1.2a4 4 0 01-5.6-5.6L7.4 12" /></>,
   refresh: <><path d="M19.5 12a7.5 7.5 0 11-2.2-5.3" /><path d="M19.5 4.5v4h-4" /></>,
-  gear: <><circle cx="12" cy="12" r="3" /><path d="M12 3.5l1.6 2.2 2.7-.6.8 2.6 2.5 1.2-.9 2.6.9 2.6-2.5 1.2-.8 2.6-2.7-.6L12 20.5l-1.6-2.2-2.7.6-.8-2.6-2.5-1.2.9-2.6-.9-2.6 2.5-1.2.8-2.6 2.7.6z" /></>,
+  gear: <><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></>,
 };
 
 export function Icon({ name, size = 20, color = 'currentColor', strokeWidth = 1.8 }: { name: IconName; size?: number; color?: string; strokeWidth?: number }) {
@@ -253,7 +253,7 @@ export function IconTile({ icon, tone = 'grey' }: { icon: IconName; tone?: 'grey
 
 export function EmptyState({ title, description }: { title: string; description?: string }) {
   return (
-    <div style={{ padding: `${spacing[12]}px ${GUTTER}px`, textAlign: 'center' }}>
+    <div style={{ padding: `${spacing[8]}px ${GUTTER}px` }}>
       <p style={{ ...text('t6', 'semibold', semantic.textSecondary), margin: 0 }}>{title}</p>
       {description && <p style={{ ...text('t7', 'regular', semantic.textTertiary), margin: `${spacing[1]}px 0 0` }}>{description}</p>}
     </div>
@@ -398,7 +398,7 @@ export function BottomCTA({ children, caption }: { children: React.ReactNode; ca
   return createPortal(
     <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: z.cta, pointerEvents: 'none',
       background: `linear-gradient(to bottom, rgba(255,255,255,0), ${colors.background} ${spacing[4]}px)` }}>
-      <div style={{ pointerEvents: 'auto', maxWidth: 640, margin: '0 auto', padding: `${spacing[5]}px ${GUTTER}px ${spacing[4]}px`, boxSizing: 'border-box' }}>
+      <div style={{ pointerEvents: 'auto', padding: `${spacing[5]}px ${GUTTER}px ${spacing[4]}px`, boxSizing: 'border-box' }}>
         {caption && <p style={{ ...text('st12', 'regular', semantic.textTertiary), margin: `0 0 ${spacing[2]}px`, textAlign: 'center' }}>{caption}</p>}
         {children}
       </div>

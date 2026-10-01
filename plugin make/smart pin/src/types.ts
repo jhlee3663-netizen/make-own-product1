@@ -51,6 +51,9 @@ export interface Pin {
   badgeMissing?: boolean;
   requests?: PinRequest[];
   conflictCount?: number; // derived from retained concurrent branches, never an authority field
+  // Derived from a read-only canvas scan when sending to the UI; never stored.
+  duplicateBadges?: number;
+  badgeDrift?: boolean;
 }
 
 // UI → Plugin
@@ -69,7 +72,8 @@ export type UIMessage =
   | { type: 'SET_FILE_ORDER'; order: string[] }
   | { type: 'SET_GROUP_ORDER'; pageId: string; order: string[] }
   | { type: 'ONBOARDING_DONE' }
-  | { type: 'REPOSITION_PINS'; pageId: string }
+  | { type: 'REPOSITION_PINS'; pageId: string; ids?: string[] }
+  | { type: 'BADGE_CLEANUP'; ids: string[] }
   | { type: 'REORDER_PINS'; orderKey: string; order: string[]; renumbers: { id: string; number: number }[] }
   | { type: 'SET_PIN_NUMBER'; id: string; number: number; swapWithId?: string }
   | { type: 'COMPACT_NUMBERS' }

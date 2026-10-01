@@ -249,7 +249,11 @@ function postPinsLoaded(): void {
   }
   post({
     type: 'PINS_LOADED',
-    pins,
+    pins: pins.map(p => {
+      const dup = canvasState.duplicates.get(p.id)?.length || 0;
+      const drift = canvasState.drifted.has(p.id);
+      return dup || drift ? { ...p, duplicateBadges: dup || undefined, badgeDrift: drift || undefined } : p;
+    }),
     pageStubs,
     fileKey,
     currentPageId: figma.currentPage.id,
@@ -557,49 +561,119 @@ async function createBadge(node: SceneNode, num: number, category: PinCategory):
 
 // Reposition pin badges to follow their target layer's current position/size,
 // using each pin's edge-anchor offsets (closest-edge, like Figma's constraints).
-async function repositionPins(pageId: string): Promise<{ moved: number; total: number }> {
-  const targetPins = pins.filter(p => p.pageId === pageId);
+// Where a badge should sit, from its target layer and stored edge anchor.
+async function badgePlacement(pin: Pin): Promise<{ frame: FrameNode; target: SceneNode; x: number; y: number } | null> {
+  const targetNode = await figma.getNodeByIdAsync(pin.nodeId);
+  const badgeNode = await figma.getNodeByIdAsync(pin.pinNodeId);
+  if (!targetNode || !badgeNode || badgeNode.type !== 'FRAME' || !pin.anchor) return null;
+  const t = (targetNode as SceneNode).absoluteBoundingBox;
+  if (!t) return null;
+  const { left, top, right, bottom } = pin.anchor;
+  return { frame: badgeNode as FrameNode, target: targetNode as SceneNode,
+    x: left <= right ? t.x + left : t.x + t.width - right,
+    y: top <= bottom ? t.y + top : t.y + t.height - bottom };
+}
+
+const absXY = (n: SceneNode) => ({ x: n.absoluteTransform[0][2], y: n.absoluteTransform[1][2] });
+const pageOf = (n: BaseNode | null): PageNode | null => { while (n && n.type !== 'PAGE') n = n.parent; return n as PageNode | null; };
+
+async function repositionPins(pageId: string, ids?: string[]): Promise<{ moved: number; total: number }> {
+  const targetPins = pins.filter(p => p.pageId === pageId && (!ids || ids.includes(p.id)));
   let moved = 0;
   let changed = false;
 
   for (const pin of targetPins) {
     try {
-      const targetNode = await figma.getNodeByIdAsync(pin.nodeId);
-      const badgeNode = await figma.getNodeByIdAsync(pin.pinNodeId);
-      if (!targetNode || !badgeNode) continue;
-
-      const tBbox = (targetNode as SceneNode).absoluteBoundingBox;
-      if (!tBbox) continue;
-
-      const frame = badgeNode as FrameNode;
-
       if (!pin.anchor) {
         // Legacy pin: establish baseline anchor from its current position (no movement yet)
-        pin.anchor = {
-          left: frame.x - tBbox.x,
-          top: frame.y - tBbox.y,
-          right: (tBbox.x + tBbox.width) - frame.x,
-          bottom: (tBbox.y + tBbox.height) - frame.y,
-        };
+        const targetNode = await figma.getNodeByIdAsync(pin.nodeId);
+        const badgeNode = await figma.getNodeByIdAsync(pin.pinNodeId);
+        const tBbox = targetNode && (targetNode as SceneNode).absoluteBoundingBox;
+        if (!badgeNode || !tBbox) continue;
+        const { x, y } = absXY(badgeNode as SceneNode);
+        pin.anchor = { left: x - tBbox.x, top: y - tBbox.y, right: (tBbox.x + tBbox.width) - x, bottom: (tBbox.y + tBbox.height) - y };
         changed = true;
         continue;
       }
-
-      const { left, top, right, bottom } = pin.anchor;
-      const newX = left <= right ? tBbox.x + left : tBbox.x + tBbox.width - right;
-      const newY = top <= bottom ? tBbox.y + top : tBbox.y + tBbox.height - bottom;
-
-      if (Math.abs(frame.x - newX) > 0.5 || Math.abs(frame.y - newY) > 0.5) {
-        frame.x = newX;
-        frame.y = newY;
+      const place = await badgePlacement(pin);
+      if (!place) continue;
+      const { frame, target, x, y } = place;
+      // A badge dragged onto a frame gets reparented into it; put it back at
+      // page level so it never ships inside exported or auto-layout frames.
+      const page = pageOf(target);
+      if (page && frame.parent !== page) { page.appendChild(frame); moved++; }
+      const cur = absXY(frame);
+      if (Math.abs(cur.x - x) > 0.5 || Math.abs(cur.y - y) > 0.5) {
+        frame.x = x;
+        frame.y = y;
         moved++;
-        changed = true;
       }
     } catch (_) {}
   }
 
   if (changed) await save();
   return { moved, total: targetPins.length };
+}
+
+// ─── read-only canvas diagnostics ───────────────
+// The poll only *looks*: copies of a badge (they carry the same smartPinId)
+// and badges that drifted from their layer are reported to the UI, which
+// offers explicit 정리 / 위치 맞추기 actions. Nothing moves on its own, so the
+// canvas never changes under someone's undo history.
+const canvasState = { duplicates: new Map<string, string[]>(), drifted: new Set<string>() };
+
+async function scanCanvas(): Promise<void> {
+  const page = figma.currentPage;
+  const byId = new Map(pins.map(p => [p.id, p]));
+  const duplicates = new Map<string, string[]>();
+  const frames: SceneNode[] = typeof (page as any).findAllWithCriteria === 'function'
+    ? page.findAllWithCriteria({ types: ['FRAME'] })
+    : page.findAll(n => n.type === 'FRAME');
+  for (const f of frames) {
+    if (!f.name.startsWith('📌 Pin #')) continue;
+    const id = f.getSharedPluginData(NAMESPACE, 'smartPinId');
+    const pin = id ? byId.get(id) : undefined;
+    if (pin && f.id !== pin.pinNodeId) duplicates.set(pin.id, [...(duplicates.get(pin.id) || []), f.id]);
+  }
+  const drifted = new Set<string>();
+  for (const pin of pins) {
+    if (pin.pageId !== page.id || !pin.anchor) continue;
+    try {
+      const place = await badgePlacement(pin);
+      if (!place) continue;
+      const cur = absXY(place.frame);
+      if (place.frame.parent?.type !== 'PAGE' || Math.abs(cur.x - place.x) > 1 || Math.abs(cur.y - place.y) > 1) drifted.add(pin.id);
+    } catch (_) {}
+  }
+  canvasState.duplicates = duplicates;
+  canvasState.drifted = drifted;
+}
+
+async function cleanupBadges(ids: string[]): Promise<number> {
+  await scanCanvas();
+  let removed = 0;
+  for (const id of ids) {
+    const pin = store.get(id);
+    const copies = canvasState.duplicates.get(id) || [];
+    if (!pin || pin.deletedAt || !copies.length) continue;
+    requireEditable([pin]);
+    const original = await figma.getNodeByIdAsync(pin.pinNodeId);
+    let keep: string | null = null;
+    if (!original) {
+      // The original is gone but a copy survives: adopt that copy instead of
+      // reporting a missing badge and making the user create yet another one.
+      keep = copies[0];
+      store.commit({ ...pin, pinNodeId: keep, badgeMissing: false }, actor(), '복제된 배지로 다시 연결', pin.revision);
+    }
+    for (const nodeId of copies) {
+      if (nodeId === keep) continue;
+      const node = await figma.getNodeByIdAsync(nodeId);
+      if (node) { node.remove(); removed++; }
+    }
+    const current = store.get(id);
+    if (current) { await updateBadgeNumber(current); await updateBadgeColor(current); }
+  }
+  return removed;
 }
 
 // ─── init ───────────────────────────────────────
@@ -664,6 +738,7 @@ setInterval(() => enqueue(async () => {
   // A missing canvas badge does NOT prove who deleted it. Keep the original
   // text active and offer reconnection; never attribute deletion to the observer.
   for (const p of pins) p.badgeMissing = !(await figma.getNodeByIdAsync(p.pinNodeId));
+  try { await scanCanvas(); } catch (_) {}
   postPinsLoaded();
 }), 5000);
 
@@ -861,9 +936,21 @@ async function handleMessage(msg: UIMessage): Promise<void> {
     }
 
     case 'REPOSITION_PINS': {
-      requireEditable(pins.filter(p => p.pageId === msg.pageId));
-      const { moved, total } = await repositionPins(msg.pageId);
+      const ids = Array.isArray(msg.ids) ? msg.ids.filter((id): id is string => typeof id === 'string') : undefined;
+      requireEditable(pins.filter(p => p.pageId === msg.pageId && (!ids || ids.includes(p.id))));
+      const { moved, total } = await repositionPins(msg.pageId, ids);
+      try { await scanCanvas(); } catch (_) {}
+      postPinsLoaded();
       post({ type: 'REPOSITION_DONE', pageId: msg.pageId, moved, total });
+      break;
+    }
+
+    case 'BADGE_CLEANUP': {
+      const ids = Array.isArray(msg.ids) ? msg.ids.filter((id): id is string => typeof id === 'string') : [];
+      const removed = await cleanupBadges(ids);
+      await scanCanvas();
+      await refresh();
+      post({ type: 'NOTICE', message: removed ? `복제된 배지 ${removed}개를 정리했어요.` : '배지를 정리했어요.' });
       break;
     }
 
