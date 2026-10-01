@@ -1,7 +1,15 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createPortal } from 'react-dom';
-import { Pin, PinCategory, PageStub, UIMessage, PluginMessage } from './types';
+import { Pin, PinCategory, PinStatus, PageStub, UIMessage, PluginMessage, SafetyState, PinRevision } from './types';
+import { canEdit, canStatus, isOwner } from './safety';
+import { SafetyPanel, ManageEntry, inboxItems } from './SafetyPanel';
+import { WhatsNew } from './WhatsNew';
+import { colors, greyOpacity, spacing, radius, text, semantic, categoryColor, shadow, z, motion, GUTTER, FONT as TDS_FONT } from './tds';
+import {
+  Badge, BottomCTA, BOTTOM_CTA_SPACE, Button, Callout, FieldLabel, FilterChips, Icon, IconButton, Menu, MenuItem,
+  SegmentedControl, TextInput, Toast, ToastData, fieldShell,
+} from './tds-ui';
 import { Lang, t, getInitialLang, persistLang } from './i18n';
 import { markdownToHtml, htmlToMarkdown } from './richtext';
 import pinSvg from './pin.svg';
@@ -40,7 +48,7 @@ function copyToClipboard(text: string): boolean {
   return ok;
 }
 
-const EXPECTED_CODE_VERSION = 6; // code.ts의 CODE_VERSION과 항상 동일하게 유지
+const EXPECTED_CODE_VERSION = 7; // code.ts의 CODE_VERSION과 항상 동일하게 유지
 const UPDATE_URL = 'https://works.do/5WcDgVh';
 
 function isRecentlyUpdated(updatedAt?: string): boolean {
@@ -74,33 +82,42 @@ function isRecentlyUpdated(updatedAt?: string): boolean {
   document.head.appendChild(s);
 })();
 
-// ── TDS Color Tokens ─────────────────────────────────────────────────────────
+// ── Colour aliases (all values come from the TDS tokens in ./tds) ────────────
 const C = {
-  primary:     '#3182F6',
-  primaryDark: '#1B64DA',
-  bg:          '#F2F4F6',
-  card:        '#FFFFFF',
-  cardHover:   '#F8F9FA',
-  inputBg:     '#F8F9FA',
-  text1:       '#191F28',
-  text2:       '#4E5968',
-  text3:       '#8B95A1',
-  line:        '#F2F4F5',
-  guideLine:   '#E5E8EB',
-  success:     '#00B493',
-  error:       '#F04452',
-  blue10:      'rgba(49,130,246,0.10)',
-  disabledBg:  '#DCEBFF',
-  disabledText:'#99C3FF',
+  primary:     colors.blue500,
+  primaryDark: colors.blue600,
+  bg:          semantic.bgPage,
+  card:        colors.background,
+  cardHover:   colors.grey50,
+  inputBg:     semantic.bgField,
+  text1:       semantic.textPrimary,
+  text2:       semantic.textSecondary,
+  text3:       semantic.textTertiary,
+  line:        colors.grey100,
+  guideLine:   semantic.divider,
+  success:     colors.green500,
+  error:       colors.red500,
+  blue10:      colors.blue50,
+  disabledBg:  colors.blue50,
+  disabledText:colors.blue200,
 } as const;
 
-const CAT_COLOR: Record<PinCategory, string> = {
-  design: '#3182F6', descript: '#00B493', dev: '#F5A623', ask: '#F04452',
-};
+const CAT_COLOR: Record<PinCategory, string> = categoryColor;
 const CAT_LABEL: Record<PinCategory, string> = {
   design: 'Design', descript: 'Descript', dev: 'Dev', ask: 'Ask',
 };
-const FONT = '-apple-system, "Pretendard", BlinkMacSystemFont, "Segoe UI", sans-serif';
+const FONT = TDS_FONT;
+const FOREIGN_HINT_KEY = 'hint-foreign-v1';
+const WHATS_NEW_KEY = 'whats-new-v7';
+const LANG_FLAG_KEY = 'lang';
+// The "someone else's pin" hint is shown once: on the first foreign pin a
+// viewer opens. That card keeps it for the session; no other card shows it.
+let foreignHintPinId: string | null = null;
+// figma.clientStorage-backed flags (the UI iframe has no usable localStorage).
+// Until they arrive, treat hints as already seen so nothing flashes twice.
+const clientFlags: { loaded: boolean; values: Record<string, string> } = { loaded: false, values: {} };
+const setClientFlag = (key: string, value = '1') => { clientFlags.values[key] = value; send({ type: 'CLIENT_SET', key, value }); };
+const foreignHintSeen = () => !clientFlags.loaded || clientFlags.values[FOREIGN_HINT_KEY] === '1';
 
 // ── Nested tree type ─────────────────────────────────────────────────────────
 interface NestedTreeNode {
@@ -172,28 +189,22 @@ function GroupInput({ value, onChange, suggestions, lang }: {
         onFocus={() => { setOpen(true); setFocused(true); }}
         onBlur={() => { setTimeout(() => setOpen(false), 150); setFocused(false); }}
         placeholder={t(lang, 'groupInputPlaceholder')}
+        aria-label={t(lang, 'fieldGroup')}
         style={{
-          width: '100%', padding: '9px 12px',
-          border: `1.5px solid ${focused ? C.primary : C.line}`,
-          borderRadius: 10, fontSize: 13, lineHeight: 1.5,
-          fontFamily: FONT, color: C.text1,
-          background: C.inputBg, outline: 'none', boxSizing: 'border-box',
-          transition: 'border-color 0.15s',
+          ...fieldShell(focused), ...text('st11', 'regular', C.text1),
+          width: '100%', height: 48, padding: `0 ${spacing[4]}px`, outline: 'none',
         }}
       />
       {open && filtered.length > 0 && (
-        <div style={{
-          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20,
-          background: C.card, border: `1px solid ${C.line}`,
-          borderRadius: 10, marginTop: 4,
-          boxShadow: '0 8px 24px rgba(0,0,0,0.10)', overflow: 'hidden',
+        <div role="listbox" style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: z.selectionPopup,
+          background: C.card, borderRadius: radius.lg, marginTop: spacing[1],
+          boxShadow: shadow.floating, overflow: 'hidden', padding: `${spacing[1]}px 0`,
         }}>
           {filtered.map(s => (
-            <div key={s}
+            <div key={s} role="option" aria-selected={false} className="tds-menu-item"
               onMouseDown={e => { e.preventDefault(); onChange(s); setOpen(false); }}
-              style={{ padding: '9px 12px', fontSize: 13, lineHeight: 1.5, fontFamily: FONT, color: C.text1, cursor: 'pointer' }}
-              onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = C.inputBg; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = C.card; }}
+              style={{ ...text('st11', 'regular', C.text1), padding: `${spacing[2] + 2}px ${spacing[4]}px`, cursor: 'pointer' }}
             >{s}</div>
           ))}
         </div>
@@ -213,7 +224,7 @@ function HighlightText({ text, query }: { text: string; query?: string }) {
     if (idx > last) parts.push(text.slice(last, idx));
     parts.push(
       <mark key={idx} style={{
-        background: '#FFE566', color: 'inherit',
+        background: colors.yellow200, color: 'inherit',
         borderRadius: 3, padding: '0 1px', margin: '0 -1px',
       }}>
         {text.slice(idx, idx + query.length)}
@@ -334,13 +345,21 @@ function RichTextEditor({ value, onChange, placeholder, style, className, editor
           e.preventDefault();
           document.execCommand('insertText', false, e.clipboardData.getData('text/plain'));
         }}
-        onDragStart={e => e.stopPropagation()}
+        onDragStart={e => {
+          // Selecting a large block and dragging from inside that selection is
+          // a browser built-in "drag this text out" gesture — stopPropagation
+          // alone only stops our own pin-reorder handler from reacting to it,
+          // it doesn't stop the browser from actually starting that native
+          // drag (the ghost-image "screen tearing away" effect).
+          e.preventDefault();
+          e.stopPropagation();
+        }}
         style={style}
       />
       {!value && placeholder && (
-        <div style={{
-          position: 'absolute', top: 9, left: 12, pointerEvents: 'none',
-          fontSize: 13, lineHeight: 1.5, fontFamily: FONT, color: C.text3,
+        <div aria-hidden="true" style={{
+          position: 'absolute', top: spacing[3], left: spacing[4], pointerEvents: 'none',
+          ...text('st11', 'regular', semantic.placeholder),
         }}>{placeholder}</div>
       )}
     </div>
@@ -348,13 +367,18 @@ function RichTextEditor({ value, onChange, placeholder, style, className, editor
 }
 
 // ── PinCard ──────────────────────────────────────────────────────────────────
-function PinCard({ pin, expanded, focused, allGroups, fileKey, inGroup, searchQuery, draggableHint, isReadOnly, lang,
-  onExpand, onSave, onAutoSave, onDelete, onNeedFileKey, onSetNumber }: {
+// Who the current viewer is relative to a pin; drives copy, not permissions.
+type PinRole = 'dev' | 'owner' | 'editor' | 'assignee' | 'viewer';
+
+function PinCard({ pin, expanded, focused, allGroups, fileKey, inGroup, searchQuery, draggableHint, isReadOnly, canDelete, canChangeStatus, lang,
+  onExpand, onSave, onAutoSave, onDelete, onNeedFileKey, onSetNumber, onManage, role, canRequest, onToast, inboxCount }: {
   pin: Pin; expanded: boolean; focused: boolean;
   allGroups: string[]; fileKey: string | null; inGroup?: boolean; searchQuery?: string; draggableHint?: boolean; isReadOnly?: boolean; lang: Lang;
   onExpand: () => void; onSave: (p: Pin) => void; onAutoSave: (p: Pin) => void;
   onDelete: (id: string) => void; onNeedFileKey: () => void;
   onSetNumber: (newNumber: number) => void;
+  canDelete?: boolean; canChangeStatus?: boolean; onManage: (entry?: Omit<ManageEntry, 'id'>) => void;
+  role: PinRole; canRequest: boolean; onToast: (message: string) => void; inboxCount?: number;
 }) {
   const cardRef     = useRef<HTMLDivElement>(null);
   const numberInputRef = useRef<HTMLInputElement>(null);
@@ -364,11 +388,16 @@ function PinCard({ pin, expanded, focused, allGroups, fileKey, inGroup, searchQu
   const [content, setContent]     = useState(pin.content);
   const [category, setCategory]   = useState<PinCategory>(pin.category);
   const [group, setGroup]         = useState(pin.group ?? '');
-  const [copied, setCopied]       = useState(false);
   const [hovered, setHovered]     = useState(false);
   const [editingNumber, setEditingNumber] = useState(false);
   const [numberInput, setNumberInput]     = useState(String(pin.number));
   const syncedRef = useRef({ title: pin.title, content: pin.content, category: pin.category, group: pin.group ?? '' });
+  const baseRef = useRef(pin);
+  const latestRef = useRef({ pin, isReadOnly, onAutoSave });
+  latestRef.current = { pin, isReadOnly, onAutoSave };
+  const [recoveryDraft, setRecoveryDraft] = useState<string | null>(() => {
+    try { return sessionStorage.getItem(`smart-pin-draft-${pin.id}`); } catch (_) { return null; }
+  });
 
   useEffect(() => {
     setTitle(pin.title); setContent(pin.content);
@@ -393,12 +422,30 @@ function PinCard({ pin, expanded, focused, allGroups, fileKey, inGroup, searchQu
     return d.title !== s.title || d.content !== s.content
       || d.category !== s.category || d.group.trim() !== s.group.trim();
   };
+  const preserveDraft = (draft: { title: string; content: string; category: PinCategory; group: string }) => {
+    const raw = JSON.stringify(draft);
+    try { sessionStorage.setItem(`smart-pin-draft-${pin.id}`, raw); } catch (_) {}
+    setRecoveryDraft(raw);
+  };
   const flushAutoSave = () => {
-    if (!isDirty()) return;
+    if (latestRef.current.isReadOnly || !isDirty()) return;
     const d = draftRef.current;
-    onAutoSave({ ...pin, title: d.title, content: d.content, category: d.category, status: pin.status, group: d.group.trim() || undefined });
+    preserveDraft(d);
+    latestRef.current.onAutoSave({ ...baseRef.current, title: d.title, content: d.content, category: d.category, status: latestRef.current.pin.status, group: d.group.trim() || undefined });
     syncedRef.current = { ...d };
   };
+
+  useEffect(() => {
+    const s = syncedRef.current;
+    const isOwnAck = pin.title === s.title && pin.content === s.content && pin.category === s.category && (pin.group || '') === s.group;
+    if (!isDirty() || isOwnAck) {
+      baseRef.current = pin;
+      if (!isDirty()) {
+        setTitle(pin.title); setContent(pin.content); setCategory(pin.category); setGroup(pin.group || '');
+        syncedRef.current = { title: pin.title, content: pin.content, category: pin.category, group: pin.group || '' };
+      }
+    }
+  }, [pin.revision]);
 
   useEffect(() => {
     if (!expanded || isReadOnly || !isDirty()) return;
@@ -431,6 +478,27 @@ function PinCard({ pin, expanded, focused, allGroups, fileKey, inGroup, searchQu
     document.execCommand('styleWithCSS', false, 'false');
     document.execCommand(command);
     contentSyncRef.current?.();
+  };
+
+  // Exiting a bullet list by pressing Enter (or Backspace) on an already-empty
+  // item is normally handled by the browser's own contentEditable logic —
+  // but that native heuristic turned out to be unreliable on Windows (the
+  // bullet dot survives). We replace it with the exact same toggle command
+  // the bullet button already uses, so behavior no longer depends on
+  // Chromium's own build-specific list-exit handling.
+  const exitEmptyBulletIfNeeded = (e: React.KeyboardEvent<HTMLDivElement>): boolean => {
+    if (e.shiftKey || e.metaKey || e.ctrlKey || e.altKey) return false;
+    if (e.key !== 'Enter' && e.key !== 'Backspace') return false;
+    const sel = document.getSelection();
+    const node = sel?.anchorNode;
+    if (!sel || !node || !sel.isCollapsed) return false;
+    const li = (node.nodeType === Node.TEXT_NODE ? node.parentElement : (node as Element))?.closest('li');
+    if (!li || li.textContent?.trim()) return false;
+    e.preventDefault();
+    document.execCommand('styleWithCSS', false, 'false');
+    document.execCommand('insertUnorderedList');
+    contentSyncRef.current?.();
+    return true;
   };
 
   // Floating format popup that appears under a drag-selection, so formatting
@@ -471,76 +539,105 @@ function PinCard({ pin, expanded, focused, allGroups, fileKey, inGroup, searchQu
   const isDone    = pin.status === 'done';
   const isPending = pin.status === 'pending';
   const isNew     = isRecentlyUpdated(pin.updatedAt);
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+  const [contentFocused, setContentFocused] = useState(false);
+  const [foreignHintDismissed, setForeignHintDismissed] = useState(false);
+  const foreignHint = !foreignHintDismissed && role === 'viewer' && canRequest && !!pin.author && expanded
+    && (foreignHintPinId === pin.id || (foreignHintPinId === null && !foreignHintSeen()));
+  useEffect(() => {
+    if (!foreignHint || foreignHintPinId) return;
+    foreignHintPinId = pin.id;
+    setClientFlag(FOREIGN_HINT_KEY);
+  }, [foreignHint]);
+  const dismissForeignHint = () => setForeignHintDismissed(true);
 
   const markSynced = () => { syncedRef.current = { title, content, category, group }; };
-  const doSave    = () => { onSave({ ...pin, title, content, category, status: pin.status,  group: group.trim() || undefined }); markSynced(); };
-  const doPend    = () => { onSave({ ...pin, title, content, category, status: 'pending',   group: group.trim() || undefined }); markSynced(); };
-  const doRestore = () => { onSave({ ...pin, title, content, category, status: 'todo',      group: group.trim() || undefined }); markSynced(); };
-
-  const toggleDone = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onSave({ ...pin, status: isDone ? 'todo' : 'done' });
+  const doSave    = () => { preserveDraft({ title, content, category, group }); onSave({ ...baseRef.current, title, content, category, status: pin.status,  group: group.trim() || undefined }); markSynced(); };
+  // A status change saves together with the current draft, exactly like the
+  // former 보류 / 다시 열기 buttons. Assignees (read-only) send status alone.
+  const doStatus  = (status: PinStatus) => {
+    if (isReadOnly) { if (canChangeStatus) onSave({ ...pin, status }); return; }
+    preserveDraft({ title, content, category, group });
+    onSave({ ...baseRef.current, title, content, category, status, group: group.trim() || undefined });
+    markSynced();
   };
 
-  const copyLink = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const copyLink = () => {
     if (!fileKey) { onNeedFileKey(); return; }
     const nodeId = pin.pinNodeId.replace(':', '-');
     const url = `https://www.figma.com/file/${fileKey}?node-id=${nodeId}`;
-    const el = document.createElement('textarea');
-    el.value = url;
-    el.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
-    document.body.appendChild(el);
-    el.focus(); el.select();
-    try { document.execCommand('copy'); } catch (_) {}
-    document.body.removeChild(el);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    onToast(copyToClipboard(url) ? t(lang, 'toastLinkCopied') : t(lang, 'toastLinkCopyFail'));
   };
 
-  const cardBg = (hovered && !expanded) ? C.cardHover : '#FFFFFF';
+  const menuItems: MenuItem[] = [
+    { key: 'link', label: t(lang, 'menuCopyLink'), icon: 'link', disabled: !pin.pinNodeId,
+      description: fileKey ? undefined : t(lang, 'copyLinkTitleDisabled'), onSelect: copyLink },
+    { key: 'manage', label: t(lang, 'menuManage'), icon: 'people', onSelect: () => onManage() },
+  ];
+  if (canDelete) menuItems.push({ key: 'trash', label: t(lang, 'deleteBtn'), icon: 'trash', tone: 'danger',
+    onSelect: () => { flushAutoSave(); onDelete(pin.id); } });
+  else if (canRequest) menuItems.push({ key: 'delete-request', label: t(lang, 'menuRequestDelete'), icon: 'trash',
+    description: t(lang, 'menuRequestDeleteHint'), onSelect: () => onManage({ view: 'requests', kind: 'delete' }) });
 
-  const inputStyle: React.CSSProperties = {
-    width: '100%', padding: '9px 12px',
-    border: `1.5px solid ${C.line}`, borderRadius: 10,
-    fontSize: 13, lineHeight: 1.5, fontFamily: FONT,
-    color: C.text1, background: C.inputBg, outline: 'none',
-    boxSizing: 'border-box',
-  };
-  const fieldLabel: React.CSSProperties = {
-    fontSize: 11, fontWeight: 600, color: C.text3,
-    fontFamily: FONT, display: 'block', marginBottom: 6, lineHeight: 1.5,
-  };
+  const roleText = role === 'dev' ? t(lang, 'roleDev') : role === 'owner' ? t(lang, 'roleOwner')
+    : role === 'editor' ? t(lang, 'roleEditor') : role === 'assignee' ? t(lang, 'roleAssignee') : t(lang, 'roleViewer', pin.author?.name);
+  const statusItems: { value: PinStatus; label: string }[] = [
+    { value: 'todo', label: t(lang, 'statusTodo') }, { value: 'pending', label: t(lang, 'statusPendingLabel') }, { value: 'done', label: t(lang, 'statusDoneLabel') },
+  ];
 
   // Margin: when inside group guide container, no horizontal margin (container handles it)
-  const outerMargin = inGroup ? '0 0 6px 0' : '0 16px 8px';
+  const outerMargin = inGroup ? `0 0 ${spacing[2]}px 0` : `0 ${GUTTER}px ${spacing[2]}px`;
+  const titleColor = isDone || isPending ? semantic.textDisabled : semantic.textPrimary;
+
+  const callouts: React.ReactNode[] = [];
+  if (foreignHint) callouts.push(
+    <Callout key="foreign" tone="info" onDismiss={dismissForeignHint}>{t(lang, 'foreignHint')}</Callout>);
+  if (!pin.author && canRequest && !pin.requests?.some(r => r.kind === 'claim' && !r.resolvedAt)) callouts.push(
+    <Callout key="claim" tone="neutral" action={{ label: t(lang, 'claimAction'), onClick: () => onManage({ view: 'requests', kind: 'claim' }) }}>{t(lang, 'claimCallout')}</Callout>);
+  if (pin.badgeMissing && !isReadOnly) callouts.push(
+    <Callout key="badge" tone="warning" action={{ label: t(lang, 'badgeMissingAction'), onClick: () => onManage() }}>{t(lang, 'badgeMissingCallout')}</Callout>);
+  if (pin.conflictCount) callouts.push(
+    <Callout key="conflict" tone="warning" action={{ label: t(lang, 'conflictAction'), onClick: () => onManage({ view: 'history' }) }}>{t(lang, 'conflictCallout', pin.conflictCount)}</Callout>);
+
+  const formatButton = (label: string, glyph: React.ReactNode, command: 'bold' | 'italic' | 'underline' | 'insertUnorderedList', shortcut?: string, dark = false) => (
+    <button type="button" className={dark ? 'tds-press' : 'tds-icon-btn tds-press'} aria-label={label} title={shortcut ? `${label} (${shortcut})` : label}
+      onMouseDown={e => e.preventDefault()}
+      onClick={() => { applyFormat(command); if (dark) { if (command === 'insertUnorderedList') setSelPopup(null); else updateSelPopup(); } }}
+      style={{ ...text('t7', 'semibold', dark ? colors.background : semantic.textSecondary), width: 32, height: 32, border: 'none',
+        borderRadius: radius.md, background: 'transparent', cursor: 'pointer', display: 'inline-flex', alignItems: 'center',
+        justifyContent: 'center', padding: 0 }}>{glyph}</button>
+  );
+  const formatSet = (dark = false) => (
+    <>
+      {formatButton(t(lang, 'formatBold'), <b>B</b>, 'bold', 'Cmd/Ctrl+B', dark)}
+      {formatButton(t(lang, 'formatItalic'), <i style={{ fontFamily: 'Georgia, serif' }}>I</i>, 'italic', 'Cmd/Ctrl+I', dark)}
+      {formatButton(t(lang, 'formatUnderline'), <u style={{ textUnderlineOffset: 2 }}>U</u>, 'underline', 'Cmd/Ctrl+U', dark)}
+      {formatButton(t(lang, 'formatBullet'), <span style={{ fontSize: 18, lineHeight: 1 }}>•</span>, 'insertUnorderedList', undefined, dark)}
+    </>
+  );
 
   return (
     <div ref={cardRef} className="p-card"
       style={{
-        margin: outerMargin, borderRadius: 14,
-        background: cardBg,
-        border: focused ? `1.5px solid ${C.primary}` : '1.5px solid transparent',
-        boxShadow: focused
-          ? `0 0 0 3px ${C.blue10}, 0 2px 8px rgba(0,0,0,0.04)`
-          : '0 2px 8px rgba(0,0,0,0.04)',
-        overflow: 'hidden',
-        transition: 'all 0.45s cubic-bezier(0.22,1,0.36,1)',
+        margin: outerMargin, borderRadius: radius.xl, background: colors.background,
+        boxShadow: focused ? `0 0 0 2px ${colors.blue400}, ${shadow.ring}` : 'none',
+        overflow: 'hidden', transition: `box-shadow .3s ${motion}`,
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
       {/* ── Header ── */}
       <div onClick={onExpand} style={{
-        display: 'flex', alignItems: 'center', gap: 10,
-        padding: '14px 14px', cursor: 'pointer', background: '#FFFFFF',
+        display: 'flex', alignItems: 'flex-start', gap: spacing[3], cursor: 'pointer',
+        padding: `${spacing[4]}px ${spacing[2]}px ${!expanded && pin.content ? spacing[1] : spacing[4]}px ${spacing[4]}px`,
+        background: hovered && !expanded ? colors.grey50 : 'transparent', transition: `background .15s ${motion}`,
       }}>
         {/* drag handle (visible when this card can be reordered) */}
         {draggableHint && (
-          <div title={t(lang, 'dragHint')} style={{
-            flexShrink: 0, width: 8, height: 12, marginLeft: -6, marginRight: -2,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            opacity: 0.35, cursor: 'grab',
+          <div title={t(lang, 'dragHint')} aria-hidden="true" style={{
+            flexShrink: 0, width: 8, height: 28, marginLeft: -spacing[2], marginRight: -spacing[1],
+            display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: hovered ? 0.6 : 0.3, cursor: 'grab',
+            transition: `opacity .2s ${motion}`,
           }}>
             <svg width="8" height="12" viewBox="0 0 8 12" fill="none" style={{ color: C.text3 }}>
               <circle cx="2" cy="2" r="1.3" fill="currentColor"/>
@@ -555,7 +652,7 @@ function PinCard({ pin, expanded, focused, allGroups, fileKey, inGroup, searchQu
 
         {/* number badge (click to edit) */}
         {editingNumber ? (
-          <input ref={numberInputRef} type="number" min={1} value={numberInput}
+          <input ref={numberInputRef} type="number" min={1} value={numberInput} aria-label={t(lang, 'numberBadgeHint')}
             onChange={e => setNumberInput(e.target.value)}
             onClick={e => e.stopPropagation()}
             onDragStart={e => e.stopPropagation()}
@@ -566,291 +663,190 @@ function PinCard({ pin, expanded, focused, allGroups, fileKey, inGroup, searchQu
             }}
             onBlur={commitNumber}
             style={{
-              width: 30, height: 26, borderRadius: 9999, flexShrink: 0,
-              border: `1.5px solid ${C.primary}`, background: '#FFFFFF',
-              color: C.text1, fontSize: 11, fontWeight: 700, fontFamily: FONT,
+              ...text('st12', 'bold', C.text1), width: 36, height: 28, borderRadius: radius.full, flexShrink: 0,
+              border: `1.5px solid ${C.primary}`, background: colors.background,
               textAlign: 'center', outline: 'none', padding: 0, boxSizing: 'border-box',
             }}
           />
         ) : (
-          <div onClick={e => { if (isReadOnly) return; e.stopPropagation(); setEditingNumber(true); }}
+          <button type="button" className="tds-press"
+            onClick={e => { e.stopPropagation(); if (!isReadOnly) setEditingNumber(true); }}
             onMouseDown={e => e.stopPropagation()}
             title={isReadOnly ? undefined : t(lang, 'numberBadgeHint')}
+            aria-label={isReadOnly ? `#${pin.number}` : `#${pin.number} · ${t(lang, 'numberBadgeHint')}`}
             style={{
-              width: 26, height: 26, borderRadius: 9999, flexShrink: 0,
-              background: (isDone || isPending) ? C.text3 : CAT_COLOR[pin.category],
-              color: '#FFF', fontSize: 11, fontWeight: 700, fontFamily: FONT,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              opacity: (isDone || isPending) ? 0.5 : 1, transition: 'all 0.45s cubic-bezier(0.22,1,0.36,1)',
-              cursor: 'pointer',
-            }}>{pin.number}</div>
+              ...text('st12', 'bold', colors.background), width: 28, height: 28, borderRadius: radius.full, flexShrink: 0,
+              background: (isDone || isPending) ? colors.grey300 : CAT_COLOR[pin.category], border: 'none', padding: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: isReadOnly ? 'default' : 'pointer',
+            }}>{pin.number}</button>
         )}
 
         {/* title + meta */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+        <button type="button" className="tds-focus" aria-expanded={expanded} data-drag-ok=""
+          onClick={e => { e.stopPropagation(); onExpand(); }}
+          style={{ flex: 1, minWidth: 0, background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer', borderRadius: radius.sm }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: spacing[2] - 2, minHeight: 28, flexWrap: 'wrap' }}>
             <span style={{
-              fontSize: 14, fontWeight: 600, fontFamily: FONT,
-              color: (isDone || isPending) ? C.text3 : C.text1, lineHeight: 1.5,
+              ...text('t6', 'semibold', titleColor), minWidth: 0, maxWidth: '100%',
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              textDecoration: (isDone || isPending) ? 'line-through' : 'none', transition: 'color 0.2s',
-            }}><HighlightText text={pin.title} query={searchQuery} /></span>
-            {isNew && (
-              <span style={{
-                flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 3,
-                padding: '1px 7px', borderRadius: 9999, background: C.blue10,
-                fontSize: 10, fontWeight: 700, fontFamily: FONT, color: C.primary,
-              }}>
-                <span style={{ width: 5, height: 5, borderRadius: 9999, background: C.primary, display: 'inline-block' }} />
-                Updated
-              </span>
-            )}
-          </div>
-          <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
-            {pin.group && (
-              <span style={{ fontSize: 11, color: C.text3, fontFamily: FONT, lineHeight: 1.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 90 }}><HighlightText text={pin.group} query={searchQuery} /></span>
-            )}
-            {pin.group && <span style={{ color: C.text3, fontSize: 10 }}>·</span>}
-            <span style={{ fontSize: 11, fontWeight: 500, fontFamily: FONT, lineHeight: 1.5, color: CAT_COLOR[pin.category] }}>{CAT_LABEL[pin.category]}</span>
-          </div>
-        </div>
+              textDecoration: isDone ? 'line-through' : 'none',
+            }}><HighlightText text={pin.title || t(lang, 'noTitleFallback')} query={searchQuery} /></span>
+            {isPending && <Badge color="yellow">{t(lang, 'statusPendingLabel')}</Badge>}
+            {isDone && <Badge color="green">{t(lang, 'statusDoneLabel')}</Badge>}
+            {!!inboxCount && <Badge color="red" size="xsmall">{t(lang, 'inboxBadge', inboxCount)}</Badge>}
+            {isNew && !isDone && !inboxCount && <Badge color="blue" size="xsmall">{t(lang, 'updatedBadge')}</Badge>}
+          </span>
+          <span style={{ ...text('st12', 'regular', semantic.textTertiary), display: 'flex', alignItems: 'center', gap: spacing[1], flexWrap: 'wrap', marginTop: 2 }}>
+            <span style={{ fontWeight: 600, color: CAT_COLOR[pin.category] }}>{CAT_LABEL[pin.category]}</span>
+            {pin.group && <><span aria-hidden="true">·</span><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 140 }}><HighlightText text={pin.group} query={searchQuery} /></span></>}
+            <span aria-hidden="true">·</span>
+            <span>{pin.author?.name || t(lang, 'authorUnknown')}</span>
+            {pin.protected && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }} title={t(lang, 'protectedLabel')}>
+              <span aria-hidden="true">·</span><Icon name="lock" size={12} /><span>{t(lang, 'protectedLabel')}</span></span>}
+          </span>
+        </button>
 
-        {/* icon row */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-          <button className="p-btn" onClick={copyLink}
-            title={fileKey ? t(lang, 'copyLinkTitle') : t(lang, 'copyLinkTitleDisabled')}
-            style={{
-              width: 28, height: 28, borderRadius: 8, border: 'none',
-              background: copied ? C.success + '20' : 'transparent',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer', color: copied ? C.success : C.text3, transition: 'all 0.45s cubic-bezier(0.22,1,0.36,1)',
-            }}
-            onMouseEnter={e => { if (!copied) (e.currentTarget as HTMLButtonElement).style.background = C.line; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = copied ? C.success + '20' : 'transparent'; }}
-          >
-            {copied ? (
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <path d="M2.5 7L5.5 10L11.5 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            ) : (
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                <path d="M7 9a4.95 4.95 0 007 0l2-2a4.95 4.95 0 00-7-7L8 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                <path d="M9 7a4.95 4.95 0 00-7 0l-2 2a4.95 4.95 0 007 7l1-1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-              </svg>
-            )}
-          </button>
-
-          {!isPending && (
-            <button className="p-btn" onClick={toggleDone}
-              title={isDone ? t(lang, 'toggleReopenTitle') : t(lang, 'toggleDoneTitle')}
-              style={{
-                width: 28, height: 28, borderRadius: 9999,
-                border: `2px solid ${isDone ? C.success : C.line}`,
-                background: isDone ? C.success : 'transparent',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer', flexShrink: 0, transition: 'all 0.45s cubic-bezier(0.22,1,0.36,1)',
-              }}
-            >
-              {isDone && (
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                  <path d="M2.5 6.5L5 9L9.5 3.5" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              )}
-            </button>
-          )}
-
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"
-            style={{ color: C.text3, transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.45s cubic-bezier(0.22,1,0.36,1)' }}>
-            <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </div>
+        <IconButton label={t(lang, 'menuMore')} icon="more" haspopup="menu" expanded={!!menuAnchor}
+          onMouseDown={e => e.stopPropagation()}
+          onClick={e => { e.stopPropagation(); setMenuAnchor(e.currentTarget); }} />
+        <Menu open={!!menuAnchor} anchor={menuAnchor} onClose={() => setMenuAnchor(null)} items={menuItems} label={t(lang, 'menuMore')} />
       </div>
 
       {/* ── Content preview (collapsed) ── */}
       {!expanded && pin.content && (
-        <div style={{
-          padding: '0 14px 12px', background: '#FFFFFF',
-          fontSize: 12, color: C.text2, fontFamily: FONT, lineHeight: 1.6,
+        <div onClick={onExpand} style={{
+          ...text('t7', 'regular', semantic.textSecondary), cursor: 'pointer',
+          padding: `0 ${spacing[4]}px ${spacing[4]}px ${spacing[4] + 28 + spacing[3]}px`,
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}><HighlightText text={previewFormattedText(pin.content)} query={searchQuery} /></div>
       )}
 
-      {/* ── Expanded form ── */}
+      {/* ── Expanded ── */}
       {expanded && (
-        <div style={{
-          padding: '16px', background: '#FFFFFF',
-          borderTop: `1px solid ${C.line}`,
-        }}>
+        <div
+          // Belt-and-suspenders: no legitimate drag (pin reorder is gated to
+          // collapsed cards only) should ever originate while a card is open
+          // for editing. Catching dragstart here, on capture, backstops the
+          // rich-text editor's own handler in case some other child element
+          // — not the contentEditable div itself — ends up as the event's
+          // actual origin.
+          onDragStartCapture={e => e.preventDefault()}
+          style={{ padding: `0 ${spacing[4]}px ${spacing[5]}px` }}>
+          <div style={{ ...text('st12', 'medium', semantic.textTertiary), display: 'flex', alignItems: 'center', gap: spacing[1],
+            paddingTop: spacing[3], borderTop: `1px solid ${C.line}`, marginBottom: spacing[4] }}>
+            {pin.protected ? <Icon name="lock" size={14} /> : <Icon name={role === 'viewer' || role === 'dev' ? 'info' : 'check'} size={14} />}
+            <span>{roleText}</span>
+          </div>
+          {callouts.length > 0 && <div style={{ display: 'flex', flexDirection: 'column', gap: spacing[2], marginBottom: spacing[5] }}>{callouts}</div>}
+
           {isReadOnly ? (
-            /* Dev Mode: read-only view */
-            <>
-              {pin.title && (
-                <div style={{ marginBottom: 10 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: C.text3, fontFamily: FONT, marginBottom: 4 }}>{t(lang, 'fieldTitle')}</div>
-                  <div style={{ fontSize: 13, color: C.text1, fontFamily: FONT, lineHeight: 1.6 }}>{pin.title}</div>
+            /* Read view: other people's pins, assignees, and Dev Mode */
+            <div style={{ display: 'flex', flexDirection: 'column', gap: spacing[5] }}>
+              <div style={{ ...text('st11', 'regular', semantic.textPrimary), wordBreak: 'break-word' }}>
+                {pin.content ? <FormattedContent text={pin.content} query={searchQuery} />
+                  : <span style={{ color: semantic.textDisabled }}>{t(lang, 'noContent')}</span>}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: spacing[4], rowGap: spacing[2], ...text('t7', 'regular', semantic.textSecondary) }}>
+                <span style={{ color: semantic.textTertiary }}>{t(lang, 'fieldCategory')}</span>
+                <span style={{ color: CAT_COLOR[pin.category], fontWeight: 600 }}>{CAT_LABEL[pin.category]}</span>
+                {pin.group && <><span style={{ color: semantic.textTertiary }}>{t(lang, 'fieldGroup')}</span><span style={{ overflowWrap: 'anywhere' }}>{pin.group}</span></>}
+                {!canChangeStatus && <><span style={{ color: semantic.textTertiary }}>{t(lang, 'fieldStatus')}</span><span>{statusItems.find(s => s.value === pin.status)?.label}</span></>}
+              </div>
+              {canChangeStatus && (
+                <div>
+                  <FieldLabel>{t(lang, 'fieldStatus')}</FieldLabel>
+                  <SegmentedControl ariaLabel={t(lang, 'fieldStatus')} value={pin.status} onChange={doStatus} items={statusItems} />
                 </div>
               )}
-              {pin.content && (
-                <div style={{ marginBottom: 10 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: C.text3, fontFamily: FONT, marginBottom: 4 }}>{t(lang, 'fieldContent')}</div>
-                  <div style={{ fontSize: 13, color: C.text2, fontFamily: FONT, lineHeight: 1.6, wordBreak: 'break-word' }}><FormattedContent text={pin.content} query={searchQuery} /></div>
-                </div>
+              {canRequest && (
+                <Button color="light" variant="weak" size="medium" display="full" icon="message"
+                  onClick={() => onManage({ view: 'requests', kind: canChangeStatus ? 'comment' : 'edit' })}>{t(lang, 'leaveComment')}</Button>
               )}
-              {pin.group && (
-                <div style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: C.text3, fontFamily: FONT, marginBottom: 4 }}>{t(lang, 'fieldGroup')}</div>
-                  <div style={{ fontSize: 12, color: C.text2, fontFamily: FONT }}>{pin.group}</div>
-                </div>
-              )}
-            </>
+            </div>
           ) : (
-            /* Design Mode: editable form */
-            <>
-              <div style={{ marginBottom: 12 }}>
-                <label style={fieldLabel}>{t(lang, 'fieldTitle')}</label>
-                <input value={title} onChange={e => setTitle(e.target.value)} style={inputStyle}
+            /* Edit form */
+            <div style={{ display: 'flex', flexDirection: 'column', gap: spacing[5] }}>
+              <div>
+                <FieldLabel htmlFor={`pin-title-${pin.id}`}>{t(lang, 'fieldTitle')}</FieldLabel>
+                <TextInput id={`pin-title-${pin.id}`} value={title} onChange={e => setTitle(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); doSave(); } }}
                   onDragStart={e => e.stopPropagation()} />
               </div>
-              <div style={{ marginBottom: 12 }}>
-                <label style={fieldLabel}>{t(lang, 'fieldContent')} <span style={{ fontWeight: 400, color: C.text3 }}>{t(lang, 'fieldContentHint')}</span></label>
-                <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
-                  <button type="button" className="p-btn" aria-label={t(lang, 'formatBold')} title={`${t(lang, 'formatBold')} (Cmd/Ctrl+B)`}
-                    onMouseDown={e => e.preventDefault()} onClick={() => applyFormat('bold')}
-                    style={{ width: 30, height: 28, border: `1px solid ${C.line}`, borderRadius: 7, background: C.inputBg, color: C.text2, fontFamily: FONT, fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>B</button>
-                  <button type="button" className="p-btn" aria-label={t(lang, 'formatItalic')} title={`${t(lang, 'formatItalic')} (Cmd/Ctrl+I)`}
-                    onMouseDown={e => e.preventDefault()} onClick={() => applyFormat('italic')}
-                    style={{ width: 30, height: 28, border: `1px solid ${C.line}`, borderRadius: 7, background: C.inputBg, color: C.text2, fontFamily: FONT, fontSize: 13, fontStyle: 'italic', cursor: 'pointer' }}>I</button>
-                  <button type="button" className="p-btn" aria-label={t(lang, 'formatUnderline')} title={`${t(lang, 'formatUnderline')} (Cmd/Ctrl+U)`}
-                    onMouseDown={e => e.preventDefault()} onClick={() => applyFormat('underline')}
-                    style={{ width: 30, height: 28, border: `1px solid ${C.line}`, borderRadius: 7, background: C.inputBg, color: C.text2, fontFamily: FONT, fontSize: 13, textDecoration: 'underline', textUnderlineOffset: 2, cursor: 'pointer' }}>U</button>
-                  <button type="button" className="p-btn" aria-label={t(lang, 'formatBullet')} title={t(lang, 'formatBullet')}
-                    onMouseDown={e => e.preventDefault()} onClick={() => applyFormat('insertUnorderedList')}
-                    style={{ width: 34, height: 28, border: `1px solid ${C.line}`, borderRadius: 7, background: C.inputBg, color: C.text2, fontFamily: FONT, fontSize: 16, lineHeight: 1, cursor: 'pointer' }}>•</button>
-                </div>
-                <div style={{ position: 'relative' }}>
-                  <RichTextEditor value={content} onChange={setContent} placeholder={t(lang, 'fieldContentPlaceholder')}
-                    editorRef={contentInputRef}
-                    syncRef={contentSyncRef}
-                    style={{ ...inputStyle, display: 'block', minHeight: 72 }}
-                    onKeyDown={e => {
-                      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') { e.preventDefault(); applyFormat('bold'); }
-                      else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'i') { e.preventDefault(); applyFormat('italic'); }
-                      else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'u') { e.preventDefault(); applyFormat('underline'); }
-                      else if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); doSave(); }
-                    }}
-                    onSelectionChange={updateSelPopup}
-                    onBlur={() => setSelPopup(null)} />
-                  {selPopup && createPortal(
-                    <div
-                      onMouseDown={e => e.preventDefault()}
-                      style={{
-                        position: 'fixed', top: selPopup.top, left: selPopup.left, zIndex: 50,
-                        display: 'flex', gap: 3, padding: 3,
-                        background: '#25282D', borderRadius: 8,
-                        boxShadow: '0 4px 14px rgba(0,0,0,0.28)',
+              <div>
+                <FieldLabel>{t(lang, 'fieldContent')}</FieldLabel>
+                <div style={fieldShell(contentFocused)}
+                  onFocusCapture={() => setContentFocused(true)} onBlurCapture={() => setContentFocused(false)}>
+                  <div role="toolbar" aria-label={t(lang, 'formatToolbar')} style={{ display: 'flex', gap: 2, padding: `${spacing[1]}px ${spacing[2]}px`,
+                    borderBottom: `1px solid ${semantic.divider}` }}>
+                    {formatSet()}
+                  </div>
+                  <div style={{ position: 'relative' }}>
+                    <RichTextEditor value={content} onChange={setContent} placeholder={t(lang, 'fieldContentPlaceholder')}
+                      editorRef={contentInputRef}
+                      syncRef={contentSyncRef}
+                      style={{ ...text('st11', 'regular', semantic.textPrimary), display: 'block', minHeight: 96, width: '100%',
+                        padding: `${spacing[3]}px ${spacing[4]}px`, boxSizing: 'border-box', outline: 'none', background: 'transparent', border: 'none' }}
+                      onKeyDown={e => {
+                        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') { e.preventDefault(); applyFormat('bold'); }
+                        else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'i') { e.preventDefault(); applyFormat('italic'); }
+                        else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'u') { e.preventDefault(); applyFormat('underline'); }
+                        else if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); doSave(); }
+                        else if (exitEmptyBulletIfNeeded(e)) { /* handled */ }
                       }}
-                    >
-                      <button type="button" aria-label={t(lang, 'formatBold')} title={t(lang, 'formatBold')}
-                        onClick={() => { applyFormat('bold'); updateSelPopup(); }}
-                        style={{ width: 26, height: 24, border: 'none', borderRadius: 5, background: 'transparent', color: '#FFF', fontFamily: FONT, fontSize: 12, fontWeight: 800, cursor: 'pointer' }}>B</button>
-                      <button type="button" aria-label={t(lang, 'formatItalic')} title={t(lang, 'formatItalic')}
-                        onClick={() => { applyFormat('italic'); updateSelPopup(); }}
-                        style={{ width: 26, height: 24, border: 'none', borderRadius: 5, background: 'transparent', color: '#FFF', fontFamily: FONT, fontSize: 12, fontStyle: 'italic', cursor: 'pointer' }}>I</button>
-                      <button type="button" aria-label={t(lang, 'formatUnderline')} title={t(lang, 'formatUnderline')}
-                        onClick={() => { applyFormat('underline'); updateSelPopup(); }}
-                        style={{ width: 26, height: 24, border: 'none', borderRadius: 5, background: 'transparent', color: '#FFF', fontFamily: FONT, fontSize: 12, textDecoration: 'underline', textUnderlineOffset: 2, cursor: 'pointer' }}>U</button>
-                      <button type="button" aria-label={t(lang, 'formatBullet')} title={t(lang, 'formatBullet')}
-                        onClick={() => { applyFormat('insertUnorderedList'); setSelPopup(null); }}
-                        style={{ width: 26, height: 24, border: 'none', borderRadius: 5, background: 'transparent', color: '#FFF', fontFamily: FONT, fontSize: 14, lineHeight: 1, cursor: 'pointer' }}>•</button>
-                    </div>,
-                    document.body
-                  )}
+                      onSelectionChange={updateSelPopup}
+                      onBlur={() => setSelPopup(null)} />
+                    {selPopup && createPortal(
+                      <div
+                        onMouseDown={e => e.preventDefault()}
+                        role="toolbar" aria-label={t(lang, 'formatToolbar')}
+                        style={{
+                          position: 'fixed', top: selPopup.top, left: selPopup.left, zIndex: z.selectionPopup,
+                          display: 'flex', gap: 2, padding: spacing[1] - 1,
+                          background: colors.grey900, borderRadius: radius.lg, boxShadow: shadow.floating,
+                        }}
+                      >
+                        {formatSet(true)}
+                      </div>,
+                      document.body
+                    )}
+                  </div>
                 </div>
               </div>
-              <div style={{ marginBottom: 12 }}>
-                <label style={fieldLabel}>{t(lang, 'fieldGroup')}</label>
+              <div>
+                <FieldLabel>{t(lang, 'fieldGroup')}</FieldLabel>
                 <GroupInput value={group} onChange={setGroup} suggestions={allGroups} lang={lang} />
               </div>
-              <div style={{ marginBottom: 16 }}>
-                <label style={fieldLabel}>{t(lang, 'fieldCategory')}</label>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {(Object.keys(CAT_LABEL) as PinCategory[]).map(cat => (
-                    <button key={cat} className="p-btn" onClick={() => setCategory(cat)}
-                      style={{
-                        padding: '5px 14px', borderRadius: 9999, border: 'none',
-                        background: category === cat ? CAT_COLOR[cat] : C.inputBg,
-                        color: category === cat ? '#FFF' : C.text2,
-                        fontSize: 12, fontWeight: 600, lineHeight: 1.5,
-                        fontFamily: FONT, cursor: 'pointer', transition: 'all 0.45s cubic-bezier(0.22,1,0.36,1)',
-                      }}>{CAT_LABEL[cat]}</button>
-                  ))}
+              <div>
+                <FieldLabel>{t(lang, 'fieldCategory')}</FieldLabel>
+                <div role="radiogroup" aria-label={t(lang, 'fieldCategory')} style={{ display: 'flex', gap: spacing[2] - 2, flexWrap: 'wrap' }}>
+                  {(Object.keys(CAT_LABEL) as PinCategory[]).map(cat => {
+                    const on = category === cat;
+                    return (
+                      <button key={cat} type="button" role="radio" aria-checked={on} className="tds-press" onClick={() => setCategory(cat)}
+                        style={{ ...text('t7', 'semibold', on ? colors.background : semantic.textSecondary), height: 32,
+                          padding: `0 ${spacing[3] + 2}px`, borderRadius: radius.full, border: 'none', cursor: 'pointer',
+                          background: on ? CAT_COLOR[cat] : semantic.bgSubtle }}>{CAT_LABEL[cat]}</button>
+                    );
+                  })}
                 </div>
               </div>
-              <button className="p-btn"
-                onClick={doSave}
-                style={{
-                  width: '100%', height: 44, background: C.primary, color: '#FFF',
-                  border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 700,
-                  lineHeight: 1.5, fontFamily: FONT, cursor: 'pointer', marginBottom: 8,
-                }}
-                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = C.primaryDark; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = C.primary; }}
-              >{t(lang, 'saveBtn')}</button>
-            </>
-          )}
-
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="p-btn" onClick={copyLink}
-              title={fileKey ? 'Copy Figma link' : t(lang, 'copyLinkBtnTitleDisabled')}
-              style={{
-                flex: 1, height: 38, background: copied ? C.success + '18' : C.inputBg,
-                border: 'none', borderRadius: 10, color: copied ? C.success : C.text2,
-                fontSize: 13, fontWeight: 600, lineHeight: 1.5, fontFamily: FONT, cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, transition: 'all 0.45s cubic-bezier(0.22,1,0.36,1)',
-              }}
-              onMouseEnter={e => { if (!copied) (e.currentTarget as HTMLButtonElement).style.background = C.cardHover; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = copied ? C.success + '18' : C.inputBg; }}
-            >
-              {copied ? (
-                <><svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2.5 7L5.5 10L11.5 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>{t(lang, 'copiedBtn')}</>
-              ) : (
-                <><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M7 9a4.95 4.95 0 007 0l2-2a4.95 4.95 0 00-7-7L8 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><path d="M9 7a4.95 4.95 0 00-7 0l-2 2a4.95 4.95 0 007 7l1-1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>{t(lang, 'copyLinkBtn')}</>
+              <div>
+                <FieldLabel>{t(lang, 'fieldStatus')}</FieldLabel>
+                <SegmentedControl ariaLabel={t(lang, 'fieldStatus')} value={pin.status} onChange={doStatus} items={statusItems} disabled={!canChangeStatus} />
+              </div>
+              {recoveryDraft && (
+                <details style={text('st12', 'regular', semantic.textTertiary)}>
+                  <summary style={{ cursor: 'pointer', ...text('st12', 'medium', semantic.textTertiary) }}>{t(lang, 'draftCopyLabel')}</summary>
+                  <p style={{ margin: `${spacing[2]}px 0` }}>{t(lang, 'draftCopyHint')}</p>
+                  <textarea readOnly aria-label="입력 내용 사본" value={(() => { try { const d = JSON.parse(recoveryDraft); return d.title + '\n\n' + d.content; } catch (_) { return recoveryDraft; } })()}
+                    style={{ ...fieldShell(false), ...text('t7', 'regular', semantic.textSecondary), width: '100%', minHeight: 90, padding: spacing[3], resize: 'vertical' }}/>
+                </details>
               )}
-            </button>
-            {!isReadOnly && !isPending ? (
-              <button className="p-btn" onClick={doPend}
-                style={{
-                  flex: 1, height: 38, background: 'transparent', border: 'none',
-                  borderRadius: 10, color: C.text2, fontSize: 13, fontWeight: 600,
-                  lineHeight: 1.5, fontFamily: FONT, cursor: 'pointer', transition: 'all 0.45s cubic-bezier(0.22,1,0.36,1)',
-                }}
-                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = C.inputBg; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
-              >{t(lang, 'pendingBtn')}</button>
-            ) : (
-              <button className="p-btn" onClick={doRestore}
-                style={{
-                  flex: 1, height: 38, background: C.success + '18', border: 'none',
-                  borderRadius: 10, color: C.success, fontSize: 13, fontWeight: 600,
-                  lineHeight: 1.5, fontFamily: FONT, cursor: 'pointer', transition: 'all 0.45s cubic-bezier(0.22,1,0.36,1)',
-                }}
-                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = C.success + '28'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = C.success + '18'; }}
-              >{t(lang, 'restoreBtn')}</button>
-            )}
-            {!isReadOnly && (
-              <button className="p-btn" onClick={() => onDelete(pin.id)}
-                style={{
-                  flex: 1, height: 38, background: 'transparent', border: 'none',
-                  borderRadius: 10, color: C.error, fontSize: 13, fontWeight: 600,
-                  lineHeight: 1.5, fontFamily: FONT, cursor: 'pointer', transition: 'all 0.45s cubic-bezier(0.22,1,0.36,1)',
-                }}
-                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = C.error + '12'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
-              >{t(lang, 'deleteBtn')}</button>
-            )}
-          </div>
+              <BottomCTA caption={t(lang, 'autosaveCaption')}>
+                <Button display="full" size="large" onClick={doSave}>{t(lang, 'saveBtn')}</Button>
+              </BottomCTA>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -940,7 +936,7 @@ function FileCard({ pageId, pageName, count, isCurrent, onNavigate, onRename, on
   dragPosition?: 'before' | 'after' | null;
   lang: Lang;
 }) {
-  const [menuOpen, setMenuOpen]   = useState(false);
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const [renaming, setRenaming]   = useState(false);
   const [renameVal, setRenameVal] = useState(pageName);
   const [hovered, setHovered]     = useState(false);
@@ -955,76 +951,49 @@ function FileCard({ pageId, pageName, count, isCurrent, onNavigate, onRename, on
     setRenaming(false);
   };
 
+  const dropLine = (edge: 'top' | 'bottom') => (
+    <div style={{ position: 'absolute', [edge]: -spacing[1] - 1, left: 0, right: 0, height: 2,
+      background: C.primary, borderRadius: 2, zIndex: 10, boxShadow: shadow.ring } as React.CSSProperties} />
+  );
+
   return (
-    <div style={{ position: 'relative', marginBottom: 8 }}>
-      {dragPosition === 'before' && (
-        <div style={{ position: 'absolute', top: -2, left: 0, right: 0, height: 2,
-          background: C.primary, borderRadius: 2, zIndex: 10,
-          boxShadow: `0 0 0 3px ${C.blue10}` }} />
-      )}
-      {dragPosition === 'after' && (
-        <div style={{ position: 'absolute', bottom: -2, left: 0, right: 0, height: 2,
-          background: C.primary, borderRadius: 2, zIndex: 10,
-          boxShadow: `0 0 0 3px ${C.blue10}` }} />
-      )}
-    <div
-      className="p-card"
-      draggable={!!onDragStart}
-      onDragStart={onDragStart ? e => { e.stopPropagation(); onDragStart(); } : undefined}
-      onDragOver={onDragOver ? e => {
-        e.stopPropagation();
-        const rect = e.currentTarget.getBoundingClientRect();
-        onDragOver(e, e.clientY < rect.top + rect.height / 2 ? 'before' : 'after');
-      } : undefined}
-      onDrop={onDrop ? e => { e.stopPropagation(); onDrop(); } : undefined}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        borderRadius: 14, background: '#FFFFFF',
-        border: '1.5px solid transparent',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-      }}>
-      {/* Backdrop — closes menu when clicking outside */}
-      {menuOpen && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 49 }} onClick={() => setMenuOpen(false)} />
-      )}
-      <div onClick={renaming ? undefined : onNavigate} style={{
-        display: 'flex', alignItems: 'center', gap: 12,
-        padding: '14px 14px', cursor: renaming ? 'default' : 'pointer',
-      }}>
-        {/* Drag handle */}
-        {onDragStart && (
-          <div style={{
-            flexShrink: 0, width: 12, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            opacity: hovered ? 0.5 : 0, transition: 'opacity 0.2s', cursor: 'grab', marginLeft: -4,
-          }}>
-            <svg width="8" height="12" viewBox="0 0 8 12" fill="none" style={{ color: C.text3 }}>
-              <circle cx="2" cy="2" r="1.3" fill="currentColor"/>
-              <circle cx="6" cy="2" r="1.3" fill="currentColor"/>
-              <circle cx="2" cy="6" r="1.3" fill="currentColor"/>
-              <circle cx="6" cy="6" r="1.3" fill="currentColor"/>
-              <circle cx="2" cy="10" r="1.3" fill="currentColor"/>
-              <circle cx="6" cy="10" r="1.3" fill="currentColor"/>
-            </svg>
-          </div>
-        )}
-        {/* Page icon */}
-        <div style={{
-          width: 36, height: 36, borderRadius: 10, flexShrink: 0,
-          background: isCurrent ? C.blue10 : C.inputBg,
+    <div style={{ position: 'relative', marginBottom: spacing[2] }}>
+      {dragPosition === 'before' && dropLine('top')}
+      {dragPosition === 'after' && dropLine('bottom')}
+      <div
+        className="p-card"
+        draggable={!!onDragStart && !renaming}
+        onDragStart={onDragStart ? e => { e.stopPropagation(); onDragStart(); } : undefined}
+        onDragOver={onDragOver ? e => {
+          e.stopPropagation();
+          const rect = e.currentTarget.getBoundingClientRect();
+          onDragOver(e, e.clientY < rect.top + rect.height / 2 ? 'before' : 'after');
+        } : undefined}
+        onDrop={onDrop ? e => { e.stopPropagation(); onDrop(); } : undefined}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        onClick={renaming ? undefined : onNavigate}
+        style={{
+          display: 'flex', alignItems: 'center', gap: spacing[3], borderRadius: radius.xl,
+          background: hovered && !renaming ? colors.grey50 : colors.background,
+          padding: `${spacing[3]}px ${spacing[2]}px ${spacing[3]}px ${spacing[4]}px`,
+          cursor: renaming ? 'default' : 'pointer', transition: `background .15s ${motion}`,
+        }}>
+        {/* Page icon (doubles as the drag affordance on hover) */}
+        <div aria-hidden="true" style={{
+          width: 40, height: 40, borderRadius: radius.lg, flexShrink: 0,
+          background: isCurrent ? colors.blue50 : semantic.bgSubtle, color: isCurrent ? colors.blue500 : semantic.textTertiary,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <rect x="2.5" y="1.5" width="11" height="13" rx="1.5"
-              stroke={isCurrent ? C.primary : C.text3} strokeWidth="1.4"/>
-            <path d="M5 5.5h6M5 8h6M5 10.5h3.5"
-              stroke={isCurrent ? C.primary : C.text3} strokeWidth="1.2" strokeLinecap="round"/>
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
+            <rect x="2.5" y="1.5" width="11" height="13" rx="1.5" stroke="currentColor" strokeWidth="1.4"/>
+            <path d="M5 5.5h6M5 8h6M5 10.5h3.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
           </svg>
         </div>
         {/* Name area */}
         <div style={{ flex: 1, minWidth: 0 }}>
           {renaming ? (
-            <input ref={inputRef} value={renameVal}
+            <TextInput ref={inputRef} value={renameVal} aria-label={t(lang, 'renameMenuItem')}
               onChange={e => setRenameVal(e.target.value)}
               onKeyDown={e => {
                 if (e.key === 'Enter')  commitRename();
@@ -1032,93 +1001,29 @@ function FileCard({ pageId, pageName, count, isCurrent, onNavigate, onRename, on
               }}
               onBlur={commitRename}
               onClick={e => e.stopPropagation()}
-              style={{
-                width: '100%', fontSize: 14, fontWeight: 600, fontFamily: FONT,
-                color: C.text1, border: `1.5px solid ${C.primary}`, borderRadius: 8,
-                padding: '4px 8px', outline: 'none', background: C.inputBg,
-                boxSizing: 'border-box',
-              }}
+              style={{ height: 40 }}
             />
           ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-              <span style={{
-                fontSize: 14, fontWeight: 600, fontFamily: FONT, color: C.text1, lineHeight: 1.4,
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              }}>{pageName}</span>
-              {isCurrent && (
-                <span style={{
-                  flexShrink: 0, fontSize: 10, fontWeight: 700, fontFamily: FONT,
-                  color: C.primary, background: C.blue10,
-                  padding: '1px 7px', borderRadius: 9999, lineHeight: 1.6,
-                }}>{t(lang, 'currentBadge')}</span>
-              )}
-            </div>
-          )}
-          <span style={{ fontSize: 11, color: C.text3, fontFamily: FONT, lineHeight: 1.5 }}>
-            {t(lang, 'pinCount', count)}
-          </span>
-        </div>
-        {/* Right: more-menu + navigate arrow */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
-          {/* More button */}
-          <div style={{ position: 'relative' }}>
-            <button className="p-btn"
-              onClick={e => { e.stopPropagation(); setMenuOpen(v => !v); }}
-              style={{
-                width: 28, height: 28, borderRadius: 8, border: 'none',
-                background: menuOpen ? C.inputBg : 'transparent',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer', color: C.text3,
-                transition: 'all 0.45s cubic-bezier(0.22,1,0.36,1)',
-              }}
-              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = C.inputBg; }}
-              onMouseLeave={e => { if (!menuOpen) (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
-            >
-              <svg width="3" height="13" viewBox="0 0 3 13" fill="none">
-                <circle cx="1.5" cy="1.5" r="1.5" fill="currentColor"/>
-                <circle cx="1.5" cy="6.5" r="1.5" fill="currentColor"/>
-                <circle cx="1.5" cy="11.5" r="1.5" fill="currentColor"/>
-              </svg>
-            </button>
-            {menuOpen && (
-              <div style={{
-                position: 'absolute', right: 0, top: '100%', marginTop: 4, zIndex: 50,
-                background: C.card, borderRadius: 12, overflow: 'hidden',
-                boxShadow: '0 8px 24px rgba(0,0,0,0.14)', minWidth: 130,
-                border: `1px solid ${C.line}`,
-              }}>
-                <button
-                  onClick={e => { e.stopPropagation(); setRenaming(true); setMenuOpen(false); }}
-                  style={{
-                    width: '100%', padding: '10px 14px', border: 'none', background: 'none',
-                    fontSize: 13, fontWeight: 500, fontFamily: FONT, color: C.text1,
-                    cursor: 'pointer', textAlign: 'left', display: 'block',
-                  }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = C.inputBg; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none'; }}
-                >{t(lang, 'renameMenuItem')}</button>
-                <button
-                  onClick={e => { e.stopPropagation(); setMenuOpen(false); onDelete(); }}
-                  style={{
-                    width: '100%', padding: '10px 14px', border: 'none', background: 'none',
-                    fontSize: 13, fontWeight: 500, fontFamily: FONT, color: C.error,
-                    cursor: 'pointer', textAlign: 'left', display: 'block',
-                  }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = C.error + '12'; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none'; }}
-                >{t(lang, 'deleteMenuItem')}</button>
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: spacing[2] - 2 }}>
+                <span style={{ ...text('t6', 'semibold', C.text1), overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pageName}</span>
+                {isCurrent && <Badge color="blue" size="xsmall">{t(lang, 'currentBadge')}</Badge>}
               </div>
-            )}
-          </div>
-          {/* Navigate chevron */}
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"
-            style={{ color: C.text3, flexShrink: 0 }}>
-            <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.8"
-              strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
+              <span style={text('st12', 'regular', C.text3)}>{t(lang, 'pinCount', count)}</span>
+            </>
+          )}
         </div>
+        {!renaming && <>
+          <IconButton label={t(lang, 'pageMenuTitle')} icon="more" haspopup="menu" expanded={!!menuAnchor}
+            onClick={e => { e.stopPropagation(); setMenuAnchor(e.currentTarget); }} />
+          <span aria-hidden="true" style={{ color: colors.grey400, display: 'flex' }}><Icon name="chevronRight" size={18} /></span>
+        </>}
       </div>
-    </div>
+      <Menu open={!!menuAnchor} anchor={menuAnchor} onClose={() => setMenuAnchor(null)} label={t(lang, 'pageMenuTitle')}
+        items={[
+          { key: 'rename', label: t(lang, 'renameMenuItem'), onSelect: () => setRenaming(true) },
+          { key: 'delete', label: t(lang, 'deleteMenuItem'), tone: 'danger', icon: 'trash', onSelect: onDelete },
+        ]} />
     </div>
   );
 }
@@ -1265,54 +1170,39 @@ function Onboarding({ onDone, lang }: { onDone: () => void; lang: Lang }) {
   const { title, desc, illus } = SLIDES[slide];
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, background: '#FFFFFF',
-      display: 'flex', flexDirection: 'column', fontFamily: FONT,
-      zIndex: 9999, userSelect: 'none',
+    <div role="dialog" aria-modal="true" aria-labelledby="onboarding-title" style={{
+      position: 'fixed', inset: 0, background: colors.background,
+      display: 'flex', flexDirection: 'column', zIndex: z.sheet + 1, userSelect: 'none',
     }}>
       {/* Skip */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '14px 16px 0', flexShrink: 0 }}>
-        <button onClick={onDone}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: C.text3, fontFamily: FONT, padding: '4px 8px', borderRadius: 8, lineHeight: 1.5 }}
-          onMouseEnter={e => (e.currentTarget.style.color = C.text2)}
-          onMouseLeave={e => (e.currentTarget.style.color = C.text3)}
-        >{t(lang, 'onboardSkip')}</button>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', padding: `${spacing[4]}px ${GUTTER}px 0`, flexShrink: 0 }}>
+        <Button size="small" color="light" variant="weak" style={{ background: 'transparent' }} onClick={onDone}>{t(lang, 'onboardSkip')}</Button>
       </div>
 
       {/* Illustration + text (animates together on slide change) */}
       <div key={animKey} className="ob-fade"
-        style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 28px' }}>
+        style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: `0 ${spacing[7]}px` }}>
         {illus}
-        <div style={{ padding: '22px 4px 0', textAlign: 'center' }}>
-          <h2 style={{ margin: '0 0 10px', fontSize: 18, fontWeight: 800, color: C.text1, lineHeight: 1.4, fontFamily: FONT, letterSpacing: '-0.02em' }}>{title}</h2>
-          <p style={{ margin: 0, fontSize: 13, color: C.text2, lineHeight: 1.7, fontFamily: FONT, whiteSpace: 'pre-line' }}>{desc}</p>
+        <div style={{ padding: `${spacing[6]}px ${spacing[1]}px 0`, textAlign: 'center' }}>
+          <h2 id="onboarding-title" style={{ ...text('t4', 'bold', C.text1), margin: `0 0 ${spacing[2]}px`, letterSpacing: '-0.02em' }}>{title}</h2>
+          <p style={{ ...text('t7', 'regular', C.text2), margin: 0, whiteSpace: 'pre-line' }}>{desc}</p>
         </div>
       </div>
 
       {/* Dot indicators */}
-      <div style={{ display: 'flex', justifyContent: 'center', gap: 6, padding: '16px 0', flexShrink: 0 }}>
+      <div role="tablist" aria-label={t(lang, 'onboardNext')} style={{ display: 'flex', justifyContent: 'center', gap: spacing[2] - 2, padding: `${spacing[4]}px 0`, flexShrink: 0 }}>
         {SLIDES.map((_, i) => (
-          <div key={i} onClick={() => goTo(i)} style={{
-            width: slide === i ? 20 : 6, height: 6, borderRadius: 3,
-            background: slide === i ? C.primary : C.line,
-            cursor: 'pointer', transition: 'all 0.3s ease',
+          <button key={i} type="button" role="tab" aria-selected={slide === i} aria-label={`${i + 1} / ${TOTAL}`} onClick={() => goTo(i)} style={{
+            width: slide === i ? 20 : 6, height: 6, borderRadius: radius.full, border: 'none', padding: 0,
+            background: slide === i ? C.primary : colors.grey200, cursor: 'pointer', transition: `all .3s ${motion}`,
           }} />
         ))}
       </div>
 
       {/* Navigation buttons */}
-      <div style={{ display: 'flex', gap: 8, padding: '0 16px 28px', flexShrink: 0 }}>
-        {slide > 0 && (
-          <button onClick={prev} className="p-btn"
-            style={{ height: 44, background: C.inputBg, border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 600, fontFamily: FONT, color: C.text2, cursor: 'pointer', padding: '0 20px', flexShrink: 0 }}>
-            {t(lang, 'onboardPrev')}
-          </button>
-        )}
-        <button onClick={next} className="p-btn"
-          style={{ flex: 1, height: 44, background: C.primary, border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 700, fontFamily: FONT, color: '#FFF', cursor: 'pointer' }}
-          onMouseEnter={e => (e.currentTarget.style.background = C.primaryDark)}
-          onMouseLeave={e => (e.currentTarget.style.background = C.primary)}
-        >{slide === TOTAL - 1 ? t(lang, 'onboardStart') : t(lang, 'onboardNext')}</button>
+      <div style={{ display: 'flex', gap: spacing[2], padding: `0 ${GUTTER}px ${spacing[7]}px`, flexShrink: 0 }}>
+        {slide > 0 && <Button color="light" variant="weak" size="large" onClick={prev}>{t(lang, 'onboardPrev')}</Button>}
+        <Button size="large" display="full" style={{ flex: 1 }} onClick={next}>{slide === TOTAL - 1 ? t(lang, 'onboardStart') : t(lang, 'onboardNext')}</Button>
       </div>
     </div>
   );
@@ -1323,58 +1213,57 @@ function ConfirmModal({ title, message, confirmLabel, danger, onConfirm, onCance
   title: string; message: React.ReactNode; confirmLabel?: string; danger?: boolean;
   onConfirm: () => void; onCancel: () => void; lang: Lang;
 }) {
-  return (
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+  return createPortal(
     <div onClick={onCancel} style={{
-      position: 'fixed', inset: 0, zIndex: 200,
-      background: 'rgba(15,23,32,0.40)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: 20, boxSizing: 'border-box',
+      position: 'fixed', inset: 0, zIndex: z.sheet, background: greyOpacity[500],
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: GUTTER, boxSizing: 'border-box',
     }}>
-      <div onClick={e => e.stopPropagation()} style={{
-        width: '100%', maxWidth: 280, background: C.card, borderRadius: 16,
-        padding: '18px 18px 14px', boxShadow: '0 12px 32px rgba(0,0,0,0.18)',
-        fontFamily: FONT,
+      <div role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" onClick={e => e.stopPropagation()} style={{
+        width: '100%', maxWidth: 320, background: colors.background, borderRadius: radius.xxl,
+        padding: `${spacing[6]}px ${spacing[5]}px ${spacing[4]}px`, boxShadow: shadow.floating,
       }}>
-        <h3 style={{ margin: '0 0 8px', fontSize: 14, fontWeight: 700, color: C.text1, lineHeight: 1.5 }}>
-          {title}
-        </h3>
-        <div style={{ fontSize: 12.5, lineHeight: 1.6, color: C.text2, marginBottom: 16 }}>
-          {message}
-        </div>
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button onClick={onCancel} style={{
-            padding: '8px 14px', borderRadius: 9999, border: 'none',
-            background: C.inputBg, color: C.text2,
-            fontSize: 12.5, fontWeight: 600, fontFamily: FONT, cursor: 'pointer',
-          }}>{t(lang, 'modalCancel')}</button>
-          <button onClick={onConfirm} style={{
-            padding: '8px 14px', borderRadius: 9999, border: 'none',
-            background: danger ? C.error : C.primary, color: '#FFF',
-            fontSize: 12.5, fontWeight: 700, fontFamily: FONT, cursor: 'pointer',
-          }}>{confirmLabel ?? t(lang, 'modalConfirm')}</button>
+        <h3 id="confirm-title" style={{ ...text('t5', 'bold', semantic.textStrong), margin: `0 0 ${spacing[2]}px` }}>{title}</h3>
+        <div style={{ ...text('t7', 'regular', semantic.textTertiary), marginBottom: spacing[6] }}>{message}</div>
+        <div style={{ display: 'flex', gap: spacing[2] }}>
+          <Button color="light" variant="weak" size="large" display="full" style={{ flex: 1 }} onClick={onCancel}>{t(lang, 'modalCancel')}</Button>
+          <Button color={danger ? 'danger' : 'primary'} size="large" display="full" style={{ flex: 1 }} onClick={onConfirm}>{confirmLabel ?? t(lang, 'modalConfirm')}</Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
 // ── App ──────────────────────────────────────────────────────────────────────
 function App() {
   const [lang, setLangState]              = useState<Lang>(getInitialLang());
-  const setLang = (next: Lang) => { setLangState(next); persistLang(next); };
+  const setLang = (next: Lang) => { setLangState(next); persistLang(next); setClientFlag(LANG_FLAG_KEY, next); };
   const [pins, setPins]                   = useState<Pin[]>([]);
   const [hasSelection, setHasSelection]   = useState(false);
   const [expandedId, setExpandedId]       = useState<string | null>(null);
   const [focusedId, setFocusedId]         = useState<string | null>(null);
   const [lastGroup, setLastGroup]         = useState('');
   const [lastCategory, setLastCategory]   = useState<PinCategory>('design');
-  const [error, setError]                 = useState<string | null>(null);
+  const [errorKey, setErrorKey]           = useState(0);
   const [query, setQuery]                 = useState('');
   const [searchFocus, setSearchFocus]     = useState(false);
   const [fileKey, setFileKey]             = useState<string | null>(null);
-  const [codeVersion, setCodeVersion]         = useState<number>(EXPECTED_CODE_VERSION);
+  const [codeVersion, setCodeVersion]         = useState<number>(0);
+  const [safety, setSafety] = useState<SafetyState>({ user: null, admins: [], trash: [], users: [], ready: false });
+  const [manage, setManage] = useState<ManageEntry | null>(null);
+  const [flagsLoaded, setFlagsLoaded] = useState(false);
+  const [pinsLoaded, setPinsLoaded] = useState(false);
+  const [whatsNewOpen, setWhatsNewOpen] = useState<boolean | null>(null);
+  const [history, setHistory] = useState<{ id: string; revisions: PinRevision[] } | null>(null);
+  type ListFilter = 'all' | 'mine' | 'requests' | 'pending' | 'protected';
+  const [listFilter, setListFilter] = useState<ListFilter>('all');
+  const [deletePage, setDeletePage] = useState<string | null>(null);
   const [collapsedPaths, setCollapsedPaths]   = useState<Set<string>>(new Set());
-  const [statusFilter, setStatusFilter]       = useState<'all' | 'pending'>('all');
   const [showOnboarding, setShowOnboarding]   = useState(false);
   const [currentPageId, setCurrentPageId]     = useState<string>('');
   const [currentPageName, setCurrentPageName] = useState<string>('');
@@ -1387,7 +1276,7 @@ function App() {
   const [showKeyPrompt, setShowKeyPrompt] = useState(false);
   const [customKeyUrl, setCustomKeyUrl]   = useState('');
   const [pendingOpenWeb, setPendingOpenWeb] = useState(false);
-  const [toast, setToast]                 = useState<string | null>(null);
+  const [toast, setToast]                 = useState<ToastData | null>(null);
   const [fileOrder, setFileOrder]               = useState<string[]>([]);
   const [groupOrders, setGroupOrders]           = useState<Record<string, string[]>>({});
   const [pinOrders, setPinOrders]               = useState<Record<string, string[]>>({});
@@ -1397,7 +1286,8 @@ function App() {
   const [numberConflict, setNumberConflict]       = useState<{ pin: Pin; conflictPin: Pin; newNumber: number } | null>(null);
   const [showCompactConfirm, setShowCompactConfirm] = useState(false);
   const [pageMenuOpen, setPageMenuOpen]           = useState(false);
-  const [isDevMode, setIsDevMode]                 = useState(false);
+  const [pageMenuAnchor, setPageMenuAnchor]       = useState<HTMLElement | null>(null);
+  const [isDevMode, setIsDevMode]                 = useState(true);
   const focusTimerRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastTimerRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileDragRef        = useRef<string | null>(null);
@@ -1409,10 +1299,13 @@ function App() {
   const langRef            = useRef<Lang>(lang);          // always-current snapshot for the mount-only message handler
   langRef.current = lang;
 
-  const showToast = (msg: string) => {
-    setToast(msg);
+  const safetyRef          = useRef<SafetyState>(safety);
+  safetyRef.current = safety;
+
+  const showToast = (message: string, opts: { tone?: 'error'; action?: ToastData['action'] } = {}) => {
+    setToast({ id: Date.now(), message, ...opts });
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    toastTimerRef.current = setTimeout(() => setToast(null), 2500);
+    toastTimerRef.current = setTimeout(() => setToast(null), opts.action ? 6000 : opts.tone === 'error' ? 5000 : 2500);
   };
 
   const triggerFocus = (id: string) => {
@@ -1455,15 +1348,17 @@ function App() {
           setGroupOrders(msg.groupOrders ?? {});
           setPinOrders(msg.pinOrders ?? {});
           setShowOnboarding(!msg.onboardingDone);
-          setIsDevMode(msg.isDevMode ?? false);
+          setPinsLoaded(true);
+          setIsDevMode(!!msg.isDevMode || !msg.safety?.ready || !msg.safety?.user);
+          if (msg.safety) setSafety({ ...msg.safety, user: msg.isDevMode ? null : msg.safety.user });
           break;
         case 'PAGE_CHANGED':
           setCurrentPageId(msg.pageId);
           setCurrentPageName(msg.pageName ?? '');
           break;
         case 'PIN_ADDED':
-          pinsRef.current = [...pinsRef.current, msg.pin];
-          setPins(prev => [...prev, msg.pin]);
+          pinsRef.current = [...pinsRef.current.filter(p => p.id !== msg.pin.id), msg.pin];
+          setPins(prev => [...prev.filter(p => p.id !== msg.pin.id), msg.pin]);
           setCollapsedPaths(prev => {
             const next = new Set(prev);
             const group = msg.pin.group?.trim();
@@ -1532,11 +1427,35 @@ function App() {
           }
           break;
         }
-        case 'ERROR':         setError(msg.message); setTimeout(() => setError(null), 3000); break;
+        case 'NOTICE':
+          if (msg.undoIds?.length) {
+            const ids = msg.undoIds;
+            showToast(msg.message, { action: { label: t(langRef.current, 'toastUndo'), onClick: () => {
+              ids.forEach(id => { if (safetyRef.current.trash.some(p => p.id === id)) send({ type: 'SAFETY', action: 'restore', id }); });
+              setToast(null);
+            } } });
+          } else showToast(msg.message);
+          break;
+        case 'HISTORY': setHistory({ id: msg.id, revisions: msg.revisions }); break;
+        case 'BACKUP': {
+          const url = URL.createObjectURL(new Blob([msg.data], { type: 'application/json' }));
+          const a = document.createElement('a'); a.href = url; a.download = `smart-pin-backup-${new Date().toISOString().slice(0, 10)}.json`;
+          document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000); break;
+        }
+        case 'CLIENT_FLAGS': {
+          clientFlags.values = { ...clientFlags.values, ...msg.flags };
+          clientFlags.loaded = true;
+          const saved = msg.flags[LANG_FLAG_KEY];
+          if ((saved === 'ko' || saved === 'en') && saved !== langRef.current) setLangState(saved);
+          setFlagsLoaded(true);
+          break;
+        }
+        case 'ERROR':         setErrorKey(k => k + 1); showToast(msg.message, { tone: 'error' }); break;
       }
     };
     window.addEventListener('message', handler);
     send({ type: 'INIT' });
+    send({ type: 'CLIENT_GET', keys: [WHATS_NEW_KEY, FOREIGN_HINT_KEY, LANG_FLAG_KEY] });
     return () => window.removeEventListener('message', handler);
   }, []);
 
@@ -1544,37 +1463,31 @@ function App() {
     send({ type: 'UPDATE_PIN', pin: updated });
     setLastGroup(updated.group ?? '');
     setLastCategory(updated.category);
-    setExpandedId(null);
-    showToast(t(lang, 'toastSaved'));
   };
 
   // Quiet save: debounced while typing, or flushed when a card collapses /
   // another pin opens. No toast, no collapsing — the explicit Save button
   // still does that.
   const handleAutoSave = (updated: Pin) => {
-    send({ type: 'UPDATE_PIN', pin: updated });
+    send({ type: 'UPDATE_PIN', pin: updated, quiet: true });
     setLastGroup(updated.group ?? '');
     setLastCategory(updated.category);
   };
 
   const handleDelete = (id: string) => {
-    // Optimistic update: immediately remove from UI state without waiting for PIN_DELETED
-    pinsRef.current = pinsRef.current.filter(p => p.id !== id);
-    setPins(prev => prev.filter(p => p.id !== id));
-    setExpandedId(null);
     send({ type: 'DELETE_PIN', id });
   };
 
   const navigateTo = (pageId: string) => {
     selectedPageIdRef.current = pageId;
     setNavDir('forward'); setNavKey(k => k + 1);
-    setSelectedPageId(pageId); setQuery(''); setStatusFilter('all');
+    setSelectedPageId(pageId); setQuery(''); setListFilter('all');
   };
 
   const navigateBack = () => {
     selectedPageIdRef.current = null;
     setNavDir('back'); setNavKey(k => k + 1);
-    setSelectedPageId(null); setQuery(''); setStatusFilter('all');
+    setSelectedPageId(null); setQuery(''); setListFilter('all');
   };
 
   const handleRenamePageGroup = (pageId: string, newName: string) => {
@@ -1582,8 +1495,7 @@ function App() {
   };
 
   const handleDeletePageGroup = (pageId: string) => {
-    send({ type: 'DELETE_PAGE_GROUP', pageId });
-    if (selectedPageId === pageId) navigateBack();
+    setDeletePage(pageId);
   };
 
   // ── Page groups derived from pins (actual pageId — never alias) ────────────
@@ -1633,19 +1545,54 @@ function App() {
   );
 
   const q = query.trim().toLowerCase();
-  const pendingCount = useMemo(
-    () => (selectedPage?.pins ?? []).filter(p => p.status === 'pending').length,
-    [selectedPage]
-  );
+  const filterMatches: Record<ListFilter, (p: Pin) => boolean> = {
+    all: () => true,
+    mine: p => isOwner(p, safety.user),
+    requests: p => !!p.requests?.some(r => !r.resolvedAt),
+    pending: p => p.status === 'pending',
+    protected: p => !!p.protected,
+  };
+  const filterCounts = useMemo(() => {
+    const source = selectedPage?.pins ?? [];
+    const count = (k: ListFilter) => source.filter(filterMatches[k]).length;
+    return { mine: count('mine'), requests: count('requests'), pending: count('pending'), protected: count('protected') };
+  }, [selectedPage, safety.user]);
+  // Only offer filters that would return something (plus the active one, so it can be cleared).
+  const filterItems = ([
+    { value: 'all' as const, label: t(lang, 'filterAll') },
+    { value: 'mine' as const, label: t(lang, 'filterMine'), show: !isDevMode && filterCounts.mine > 0 },
+    { value: 'requests' as const, label: t(lang, 'filterRequests'), count: filterCounts.requests, show: filterCounts.requests > 0 },
+    { value: 'pending' as const, label: t(lang, 'filterPending'), count: filterCounts.pending, show: filterCounts.pending > 0 },
+    { value: 'protected' as const, label: t(lang, 'filterProtected'), show: filterCounts.protected > 0 },
+  ]).filter(f => f.value === 'all' || f.show || f.value === listFilter);
   const filtered = useMemo(() => {
-    let source = selectedPage?.pins ?? [];
-    if (statusFilter === 'pending') source = source.filter(p => p.status === 'pending');
+    let source = (selectedPage?.pins ?? []).filter(filterMatches[listFilter]);
     if (!q) return source;
     return source.filter(p =>
       p.title.toLowerCase().includes(q) ||
       p.content.toLowerCase().includes(q) ||
       (p.group ?? '').toLowerCase().includes(q));
-  }, [selectedPage, q, statusFilter]);
+  }, [selectedPage, q, listFilter, safety.user]);
+  const inbox = useMemo(() => inboxItems(pins, safety), [pins, safety]);
+  const requestBadge = inbox.length;
+  const inboxByPin = useMemo(() => inbox.reduce<Record<string, number>>((m, x) => { m[x.pin.id] = (m[x.pin.id] || 0) + 1; return m; }, {}), [inbox]);
+  // Announce comments that arrive while the plugin is open (the 5s poll picks them up).
+  const seenInboxRef = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (!pinsLoaded || !safety.ready) return;
+    const ids = new Set(inbox.map(x => x.request.id));
+    const fresh = seenInboxRef.current ? inbox.filter(x => !seenInboxRef.current!.has(x.request.id) && x.request.actor.id !== safety.user?.id).length : 0;
+    seenInboxRef.current = ids;
+    if (fresh > 0) showToast(t(lang, 'toastNewComment', fresh), { action: { label: t(lang, 'toastView'), onClick: () => { setToast(null); setManage({ screen: 'inbox' }); } } });
+  }, [inbox, pinsLoaded, safety.ready]);
+  // The what's-new walkthrough runs once per Figma user, after first-run onboarding.
+  useEffect(() => {
+    if (whatsNewOpen !== null || !flagsLoaded || !pinsLoaded || showOnboarding || isDevMode) return;
+    setWhatsNewOpen(clientFlags.values[WHATS_NEW_KEY] !== '1');
+  }, [flagsLoaded, pinsLoaded, showOnboarding, isDevMode]);
+  const closeWhatsNew = () => { setWhatsNewOpen(false); setClientFlag(WHATS_NEW_KEY); };
+  const expandedPin = expandedId ? pins.find(p => p.id === expandedId) : undefined;
+  const ctaVisible = !!expandedPin && selectedPageId !== null && !isDevMode && canEdit(expandedPin, safety.user) && !manage;
 
   const allGroups = useMemo(
     () => [...new Set((selectedPage?.pins ?? []).map(p => p.group?.trim() ?? '').filter(Boolean))],
@@ -1692,8 +1639,16 @@ function App() {
 
   // ── Card factory ────────────────────────────────────────────────────────
   const makeCard = (pin: Pin, inGroup = false, draggableHint = false) => (
-    <PinCard key={pin.id} pin={pin} inGroup={inGroup} draggableHint={isDevMode ? false : draggableHint}
-      isReadOnly={isDevMode}
+    <PinCard key={pin.id} pin={pin} inGroup={inGroup} draggableHint={isDevMode || !canEdit(pin, safety.user) ? false : draggableHint}
+      isReadOnly={isDevMode || !canEdit(pin, safety.user)}
+      canDelete={!isDevMode && isOwner(pin, safety.user)}
+      canChangeStatus={!isDevMode && canStatus(pin, safety.user)}
+      canRequest={!isDevMode && safety.ready && !!safety.user}
+      role={isDevMode ? 'dev' : isOwner(pin, safety.user) ? 'owner' : canEdit(pin, safety.user) ? 'editor'
+        : canStatus(pin, safety.user) ? 'assignee' : 'viewer'}
+      onToast={message => showToast(message)}
+      inboxCount={inboxByPin[pin.id]}
+      onManage={entry => setManage({ id: pin.id, ...entry })}
       expanded={expandedId === pin.id} focused={focusedId === pin.id}
       allGroups={allGroups} fileKey={fileKey} searchQuery={query.trim() || undefined} lang={lang}
       onExpand={() => {
@@ -1725,6 +1680,7 @@ function App() {
     if (sorted.length < 2) return sorted.map(pin => makeCard(pin, true));
 
     const handleDrop = (targetId: string) => {
+      if (isDevMode || sorted.some(p => !canEdit(p, safety.user))) return;
       const fromId = pinDragRef.current;
       const pos = dragOverPinInfo?.id === targetId ? dragOverPinInfo.pos : 'before';
       pinDragRef.current = null;
@@ -1752,11 +1708,15 @@ function App() {
       const dragPos = dragOverPinInfo?.id === pin.id ? dragOverPinInfo.pos : null;
       return (
         <div key={pin.id} style={{ position: 'relative' }}
-          draggable={!isExpanded}
+          draggable={!isExpanded && !isDevMode && sorted.every(p => canEdit(p, safety.user))}
           onMouseDownCapture={e => { dragOriginRef.current = e.target as HTMLElement; }}
           onDragStart={e => {
             const origin = dragOriginRef.current;
-            if (origin?.closest('input, textarea, button')) { e.preventDefault(); return; }
+            // The rich text note editor is a contentEditable div, not a
+            // <textarea> — it must be excluded here too, or a text-selection
+            // drag inside it gets misread as a pin-reorder drag.
+            // The collapsed card's title toggle is a <button> but is also the natural grab area.
+            if (origin?.closest('input, textarea, [contenteditable], button:not([data-drag-ok])')) { e.preventDefault(); return; }
             e.stopPropagation();
             pinDragRef.current = pin.id;
           }}
@@ -1786,48 +1746,36 @@ function App() {
   // LAYOUT CONSTANTS (px)
   // OUTER=16: horizontal padding of each root block wrapper
   // INDENT=12: gap from guide line (borderLeft) to child content
-  const OUTER = 16;
+  const OUTER = GUTTER;
   const INDENT = 12;
 
   const groupHeader = (label: string, count: number, path?: string, depth = 0) => {
     const lvl = Math.min(depth, 2) as 0 | 1 | 2;
     const LBL = {
-      0: { fontSize: 12, fontWeight: 800, color: C.text1, spacing: '0.08em', pad: '13px 0 8px' },
-      1: { fontSize: 11, fontWeight: 700, color: C.text2, spacing: '0.06em', pad: '9px 0 6px'  },
-      2: { fontSize: 10, fontWeight: 600, color: C.text3, spacing: '0.04em', pad: '7px 0 4px'  },
+      0: { style: text('t7', 'bold', semantic.textStrong), pad: `${spacing[4]}px 0 ${spacing[2]}px` },
+      1: { style: text('st12', 'semibold', semantic.textSecondary), pad: `${spacing[3]}px 0 ${spacing[2] - 2}px` },
+      2: { style: text('st12', 'medium', semantic.textTertiary), pad: `${spacing[2]}px 0 ${spacing[1]}px` },
     }[lvl];
-    const CHIP = {
-      0: { background: C.primary,   color: '#FFF',    fontSize: 11, fontWeight: 700, padding: '2px 9px'  },
-      1: { background: C.inputBg,   color: C.text2,   fontSize: 11, fontWeight: 600, padding: '1px 8px'  },
-      2: { background: 'transparent', color: C.text3, fontSize: 10, fontWeight: 500, padding: '0 4px'    },
-    }[lvl];
+    const collapsed = !!path && collapsedPaths.has(path);
+    const labelNode = (
+      <>
+        <span style={{ ...LBL.style, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{label}</span>
+        <span style={text('st12', 'medium', semantic.textDisabled)}>{count}</span>
+      </>
+    );
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, padding: LBL.pad }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
-          {path && (
-            <button className="p-btn" onClick={() => togglePath(path)}
-              style={{
-                width: 16, height: 16, flexShrink: 0, background: 'none', border: 'none',
-                cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center',
-                justifyContent: 'center', color: lvl === 0 ? C.text2 : C.text3,
-                transform: collapsedPaths.has(path) ? 'rotate(-90deg)' : 'none',
-                transition: 'transform 0.45s cubic-bezier(0.22,1,0.36,1)',
-              }}>
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <path d="M2.5 4.5l3 3 3-3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </button>
-          )}
-          <span style={{
-            fontSize: LBL.fontSize, fontWeight: LBL.fontWeight, color: LBL.color,
-            textTransform: 'uppercase', letterSpacing: LBL.spacing,
-            fontFamily: FONT, lineHeight: 1.5, whiteSpace: 'nowrap',
-          }}>{label}</span>
-          <div style={{ flex: 1, height: 1, background: lvl === 0 ? C.guideLine : C.line, minWidth: 8 }} />
-        </div>
-        <span style={{
-          flexShrink: 0, fontFamily: FONT, borderRadius: 9999, lineHeight: 1.5, ...CHIP,
-        }}>{t(lang, 'itemCount', count)}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: spacing[1], padding: LBL.pad, minWidth: 0 }}>
+        {path ? (
+          <button type="button" className="tds-press tds-focus" onClick={() => togglePath(path)} aria-expanded={!collapsed}
+            aria-label={`${label} ${t(lang, 'itemCount', count)}`}
+            style={{ display: 'flex', alignItems: 'center', gap: spacing[1] + 2, background: 'none', border: 'none', padding: `${spacing[1]}px ${spacing[1]}px`,
+              margin: `-${spacing[1]}px`, borderRadius: radius.md, cursor: 'pointer', minWidth: 0, maxWidth: '100%' }}>
+            <span style={{ color: semantic.textDisabled, display: 'flex', transform: collapsed ? 'rotate(-90deg)' : 'none', transition: `transform .3s ${motion}` }}>
+              <Icon name="chevronDown" size={14} strokeWidth={2.2} />
+            </span>
+            {labelNode}
+          </button>
+        ) : labelNode}
       </div>
     );
   };
@@ -1908,9 +1856,10 @@ function App() {
           <>
             {/* Drag handle — shown at any depth when draggable */}
             {dragHandlers && (
-              <div style={{ display: 'flex', alignItems: 'center', height: 0, overflow: 'visible', marginBottom: -4 }}>
+              <div className="grp-handle" aria-hidden="true" title={t(lang, 'dragHint')}
+                style={{ position: 'absolute', left: -12, top: spacing[4] + 3, display: 'flex', cursor: 'grab' }}>
                 <svg width="8" height="12" viewBox="0 0 8 12" fill="none"
-                  style={{ color: C.text3, opacity: 0.4, cursor: 'grab', marginLeft: -2 }}>
+                  style={{ color: C.text3 }}>
                   <circle cx="2" cy="2" r="1.3" fill="currentColor"/>
                   <circle cx="6" cy="2" r="1.3" fill="currentColor"/>
                   <circle cx="2" cy="6" r="1.3" fill="currentColor"/>
@@ -1927,7 +1876,7 @@ function App() {
                 paddingLeft: INDENT,
                 marginTop: 2,
                 marginBottom: isRoot ? 4 : 2,
-                borderLeft: `1.5px solid ${C.guideLine}`,
+                borderLeft: `1px solid ${C.guideLine}`,
               }}>
                 {renderPinGroup(node.pins, `${pageId ?? selectedPageId ?? ''}::${node.path}`)}
                 {sortedChildren.length > 0 && (
@@ -1957,7 +1906,7 @@ function App() {
                     boxShadow: `0 0 0 3px ${C.blue10}` }} />
                 )}
                 <div
-                  draggable
+                  draggable className="grp" style={{ position: 'relative' }}
                   onMouseDownCapture={e => { dragOriginRef.current = e.target as HTMLElement; }}
                   onDragStart={e => {
                     const origin = dragOriginRef.current;
@@ -1984,12 +1933,12 @@ function App() {
   const renderPinList = () => {
     if (filtered.length === 0) {
       return (
-        <div style={{ padding: '56px 16px', textAlign: 'center', fontFamily: FONT }}>
-          <div style={{ fontSize: 32, marginBottom: 14 }}>📌</div>
-          <p style={{ fontSize: 14, fontWeight: 600, color: C.text2, lineHeight: 1.6, margin: 0 }}>
-            {q ? t(lang, 'emptySearchTitle', q) : t(lang, 'emptyDefaultTitle').split('\n').map((line, i) => <React.Fragment key={i}>{i > 0 && <br />}{line}</React.Fragment>)}
+        <div style={{ padding: `${spacing[12]}px ${GUTTER}px`, textAlign: 'center' }}>
+          <p style={{ ...text('t6', 'semibold', C.text2), margin: 0, whiteSpace: 'pre-line' }}>
+            {q ? t(lang, 'emptySearchTitle', q) : listFilter !== 'all' ? t(lang, 'emptyFilterTitle') : t(lang, 'emptyDefaultTitle')}
           </p>
-          {!q && <p style={{ fontSize: 12, color: C.text3, lineHeight: 1.6, margin: '6px 0 0', fontFamily: FONT }}>{t(lang, 'emptyHint')}</p>}
+          {!q && listFilter === 'all' && <p style={{ ...text('t7', 'regular', C.text3), margin: `${spacing[1]}px 0 0` }}>{t(lang, 'emptyHint')}</p>}
+          {listFilter !== 'all' && <div style={{ marginTop: spacing[4] }}><Button size="medium" color="light" variant="weak" onClick={() => setListFilter('all')}>{t(lang, 'filterShowAll')}</Button></div>}
         </div>
       );
     }
@@ -2061,330 +2010,157 @@ function App() {
       background: C.bg, fontFamily: FONT,
     }}>
       <ResizeHandle />
+      {manage && <SafetyPanel pins={pins} state={safety} entry={manage} history={history} errorKey={errorKey} send={send}
+        onClose={() => setManage(null)} onToast={(message, tone) => showToast(message, { tone })}
+        onShowWhatsNew={() => { setManage(null); setWhatsNewOpen(true); }} />}
+      {whatsNewOpen && <WhatsNew lang={lang} onDone={closeWhatsNew} />}
+      {deletePage !== null && <ConfirmModal lang={lang} title="이 페이지의 내 핀 삭제" danger
+        message={`내 핀 ${pins.filter(p => p.pageId === deletePage && isOwner(p, safety.user)).length}개를 휴지통으로 이동합니다. 다른 작성자의 핀은 유지됩니다.`}
+        confirmLabel="휴지통으로 이동" onCancel={() => setDeletePage(null)} onConfirm={() => { send({ type: 'DELETE_PAGE_GROUP', pageId: deletePage }); setDeletePage(null); }} />}
 
       {showOnboarding && (
         <Onboarding lang={lang} onDone={() => {
           send({ type: 'ONBOARDING_DONE' });
           setShowOnboarding(false);
+          setWhatsNewOpen(false); setClientFlag(WHATS_NEW_KEY);
         }} />
       )}
 
       {/* ── Header ── */}
-      <div style={{
-        background: '#FFFFFF', borderBottom: `1px solid ${C.line}`,
-        padding: '14px 16px 12px', flexShrink: 0,
-      }}>
+      <header style={{ background: colors.background, flexShrink: 0, paddingBottom: inPinView ? spacing[4] : spacing[2] }}>
         {inPinView ? (
           <>
-            {/* Back row */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
-              <button className="p-btn" onClick={navigateBack}
-                style={{ width: 32, height: 32, borderRadius: 9, border: 'none', background: 'none',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: 'pointer', color: C.text2, flexShrink: 0 }}
-                onMouseEnter={e => (e.currentTarget.style.background = C.bg)}
-                onMouseLeave={e => (e.currentTarget.style.background = 'none')}
-              >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <path d="M10 4l-4 4 4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </button>
-              <span style={{
-                fontSize: 15, fontWeight: 700, fontFamily: FONT, color: C.text1,
-                lineHeight: 1.4, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              }}>{selectedPage?.pageName ?? ''}</span>
-              {selectedPage && (
-                <span style={{ background: C.primary, color: '#FFF', borderRadius: 9999, padding: '2px 9px', fontSize: 11, fontWeight: 700, fontFamily: FONT, lineHeight: 1.5, flexShrink: 0 }}>
-                  {selectedPage.pins.length}
-                </span>
-              )}
-              {/* ⋮ 더보기 메뉴 */}
-              {!isDevMode && <div style={{ position: 'relative', flexShrink: 0 }}>
-                {pageMenuOpen && (
-                  <div style={{ position: 'fixed', inset: 0, zIndex: 49 }} onClick={() => setPageMenuOpen(false)} />
-                )}
-                <button className="p-btn" onClick={() => setPageMenuOpen(v => !v)}
-                  title={t(lang, 'pageMenuTitle')}
-                  style={{
-                    width: 32, height: 32, borderRadius: 9, border: 'none',
-                    background: pageMenuOpen ? C.bg : 'none',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    cursor: 'pointer', color: C.text2,
-                  }}
-                  onMouseEnter={e => (e.currentTarget.style.background = C.bg)}
-                  onMouseLeave={e => { if (!pageMenuOpen) e.currentTarget.style.background = 'none'; }}
-                >
-                  <svg width="3" height="13" viewBox="0 0 3 13" fill="none">
-                    <circle cx="1.5" cy="1.5" r="1.5" fill="currentColor"/>
-                    <circle cx="1.5" cy="6.5" r="1.5" fill="currentColor"/>
-                    <circle cx="1.5" cy="11.5" r="1.5" fill="currentColor"/>
-                  </svg>
-                </button>
-                {pageMenuOpen && (
-                  <div style={{
-                    position: 'absolute', right: 0, top: '100%', marginTop: 4, zIndex: 50,
-                    background: C.card, borderRadius: 12, overflow: 'hidden',
-                    boxShadow: '0 8px 24px rgba(0,0,0,0.14)', minWidth: 140,
-                    border: `1px solid ${C.line}`,
-                  }}>
-                    <button
-                      title={t(lang, 'repositionTitle')}
-                      onClick={() => { setPageMenuOpen(false); if (selectedPageId) send({ type: 'REPOSITION_PINS', pageId: selectedPageId }); }}
-                      style={{
-                        width: '100%', padding: '10px 14px', border: 'none', background: 'none',
-                        fontSize: 13, fontWeight: 500, fontFamily: FONT, color: C.text1,
-                        cursor: 'pointer', textAlign: 'left', display: 'block',
-                      }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = C.inputBg; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none'; }}
-                    >{t(lang, 'repositionBtn')}</button>
-                    <button
-                      title={t(lang, 'compactTitle')}
-                      onClick={() => { setPageMenuOpen(false); setShowCompactConfirm(true); }}
-                      style={{
-                        width: '100%', padding: '10px 14px', border: 'none', background: 'none',
-                        fontSize: 13, fontWeight: 500, fontFamily: FONT, color: C.text1,
-                        cursor: 'pointer', textAlign: 'left', display: 'block',
-                      }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = C.inputBg; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none'; }}
-                    >{t(lang, 'compactBtn')}</button>
-                  </div>
-                )}
-              </div>}
-            </div>
-
-            {/* Dev Mode banner */}
-            {isDevMode && (
-              <div style={{
-                margin: '0 0 10px', padding: '8px 12px', borderRadius: 10,
-                background: 'rgba(255,190,0,0.12)', border: '1px solid rgba(255,190,0,0.35)',
-                display: 'flex', alignItems: 'center', gap: 7,
-              }}>
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
-                  <path d="M8 1.5L1 14.5h14L8 1.5z" stroke="#C47F00" strokeWidth="1.5" strokeLinejoin="round"/>
-                  <path d="M8 6v4" stroke="#C47F00" strokeWidth="1.5" strokeLinecap="round"/>
-                  <circle cx="8" cy="12" r="0.7" fill="#C47F00"/>
-                </svg>
-                <span style={{ fontSize: 11.5, fontWeight: 600, color: '#8A5700', fontFamily: FONT, lineHeight: 1.5 }}>
-                  {t(lang, 'devModeBanner')}
-                </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: spacing[1], minHeight: 56, padding: `${spacing[2]}px ${spacing[3]}px` }}>
+              <IconButton label={t(lang, 'backLabel')} icon="chevronLeft" onClick={navigateBack} color={C.text1} iconSize={22} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <h1 style={{ ...text('t6', 'bold', C.text1), margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {selectedPage?.pageName ?? ''}
+                </h1>
+                {selectedPage && <span style={text('st12', 'regular', C.text3)}>{t(lang, 'pinCount', selectedPage.pins.length)}</span>}
               </div>
-            )}
+              {safety.ready && <IconButton label={t(lang, 'manageTitle')} icon="gear" badge={requestBadge} haspopup="dialog" onClick={() => setManage({})} />}
+              {!isDevMode && (
+                <IconButton label={t(lang, 'pageMenuTitle')} icon="more" haspopup="menu" expanded={pageMenuOpen}
+                  onClick={e => { setPageMenuAnchor(e.currentTarget); setPageMenuOpen(v => !v); }} />
+              )}
+              <Menu open={pageMenuOpen} anchor={pageMenuAnchor} onClose={() => setPageMenuOpen(false)} label={t(lang, 'pageMenuTitle')}
+                items={[
+                  { key: 'reposition', label: t(lang, 'repositionBtn'), description: t(lang, 'repositionTitle'), icon: 'relink',
+                    onSelect: () => { if (selectedPageId) send({ type: 'REPOSITION_PINS', pageId: selectedPageId }); } },
+                  { key: 'compact', label: t(lang, 'compactBtn'), description: t(lang, 'compactTitle'), icon: 'refresh',
+                    onSelect: () => setShowCompactConfirm(true) },
+                ]} />
+            </div>
 
-            {/* Search */}
-            <div style={{ position: 'relative', marginBottom: 10 }}>
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none"
-                style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: C.text3, pointerEvents: 'none' }}>
-                <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.5"/>
-                <path d="M10.5 10.5L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-              </svg>
-              <input type="text" value={query}
-                onChange={e => setQuery(e.target.value)}
-                onFocus={() => setSearchFocus(true)}
-                onBlur={() => setSearchFocus(false)}
-                placeholder={t(lang, 'searchPlaceholder')}
-                style={{
-                  width: '100%', padding: '9px 32px 9px 32px',
-                  border: `1.5px solid ${searchFocus ? C.primary : 'transparent'}`,
-                  borderRadius: 10, fontSize: 13, lineHeight: 1.5,
-                  fontFamily: FONT, color: C.text1,
-                  background: searchFocus ? '#FFFFFF' : C.inputBg,
-                  outline: 'none', boxSizing: 'border-box',
-                  transition: 'all 0.45s cubic-bezier(0.22,1,0.36,1)',
-                }}
-              />
-              {query && (
-                <button onClick={() => setQuery('')}
-                  style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
-                    background: C.line, border: 'none', cursor: 'pointer', color: C.text3,
-                    fontSize: 11, lineHeight: 1, padding: '1px 5px', borderRadius: 9999,
-                    display: 'flex', alignItems: 'center' }}>✕</button>
+            <div style={{ padding: `0 ${GUTTER}px`, display: 'flex', flexDirection: 'column', gap: spacing[3] }}>
+              {isDevMode && <Callout tone="warning">{t(lang, 'devModeBanner')}</Callout>}
+
+              {/* Search */}
+              <div style={{ position: 'relative' }}>
+                <span style={{ position: 'absolute', left: spacing[3], top: '50%', transform: 'translateY(-50%)', color: semantic.textDisabled, display: 'flex', pointerEvents: 'none' }}>
+                  <Icon name="search" size={18} />
+                </span>
+                <input type="search" value={query} aria-label={t(lang, 'searchPlaceholder')}
+                  onChange={e => setQuery(e.target.value)}
+                  onFocus={() => setSearchFocus(true)}
+                  onBlur={() => setSearchFocus(false)}
+                  placeholder={t(lang, 'searchPlaceholder')}
+                  style={{
+                    ...text('st11', 'regular', C.text1), width: '100%', height: 44, boxSizing: 'border-box',
+                    padding: `0 ${spacing[10]}px 0 ${spacing[10]}px`, border: 'none', outline: 'none', borderRadius: radius.lg,
+                    background: semantic.bgSubtle, boxShadow: searchFocus ? `inset 0 0 0 1.5px ${colors.blue500}` : 'none',
+                    transition: `box-shadow .15s ${motion}`, WebkitAppearance: 'none',
+                  }}
+                />
+                {query && (
+                  <span style={{ position: 'absolute', right: spacing[1], top: '50%', transform: 'translateY(-50%)' }}>
+                    <IconButton label={t(lang, 'searchClear')} icon="close" size={32} iconSize={16} onClick={() => setQuery('')} />
+                  </span>
+                )}
+              </div>
+
+              <FilterChips value={listFilter} onChange={setListFilter} items={filterItems} ariaLabel={t(lang, 'filterLabel')} />
+
+              {/* Add Note */}
+              {!isDevMode && (
+                <div>
+                  <Button display="full" size="large" icon="plus" disabled={!hasSelection} variant={ctaVisible ? 'weak' : 'fill'}
+                    onClick={() => send({ type: 'ADD_PIN', category: lastCategory, group: lastGroup })}>{t(lang, 'addNote')}</Button>
+                  <p style={{ ...text('st12', 'regular', hasSelection ? colors.green600 : C.text3), margin: `${spacing[2]}px 0 0`, textAlign: 'center' }}>
+                    {hasSelection ? t(lang, 'selectionSelected') : t(lang, 'selectionNotSelected')}
+                  </p>
+                </div>
               )}
             </div>
-
-            {/* Status filter tabs */}
-            <div style={{ display: 'flex', gap: 4, marginBottom: 10 }}>
-              {([
-                { key: 'all' as const, label: t(lang, 'statusAll') },
-                { key: 'pending' as const, label: t(lang, 'statusPending', pendingCount) },
-              ]).map(({ key, label }) => (
-                <button key={key} className="p-btn" onClick={() => setStatusFilter(key)}
-                  style={{
-                    padding: '4px 12px', borderRadius: 9999,
-                    border: `1.5px solid ${statusFilter === key ? C.primary : C.line}`,
-                    background: statusFilter === key ? C.blue10 : 'transparent',
-                    color: statusFilter === key ? C.primary : C.text3,
-                    fontSize: 11, fontWeight: 600, fontFamily: FONT, cursor: 'pointer',
-                    transition: 'all 0.2s',
-                  }}>
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            {/* Add Note */}
-            {!isDevMode && (
-              <>
-                <button className="p-btn"
-                  onClick={() => send({ type: 'ADD_PIN', category: lastCategory, group: lastGroup })}
-                  disabled={!hasSelection}
-                  style={{
-                    width: '100%', height: 44,
-                    background: hasSelection ? C.primary : C.disabledBg,
-                    color: hasSelection ? '#FFF' : C.disabledText,
-                    border: 'none', borderRadius: 12,
-                    fontSize: 14, fontWeight: 700, lineHeight: 1.5, fontFamily: FONT,
-                    cursor: hasSelection ? 'pointer' : 'default',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                  }}
-                  onMouseEnter={e => { if (hasSelection) (e.currentTarget as HTMLButtonElement).style.background = C.primaryDark; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = hasSelection ? C.primary : C.disabledBg; }}
-                >
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"/>
-                  </svg>
-                  Add Note
-                </button>
-                <p style={{ marginTop: 7, fontSize: 11, textAlign: 'center', fontFamily: FONT, lineHeight: 1.5, color: hasSelection ? C.success : C.text3 }}>
-                  {hasSelection ? t(lang, 'selectionSelected') : t(lang, 'selectionNotSelected')}
-                </p>
-              </>
-            )}
           </>
         ) : (
-          /* File list view: title row only */
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-              <div dangerouslySetInnerHTML={{ __html: resizeSvg(pinSvg, 18) }} style={{ flexShrink: 0, lineHeight: 0 }} />
-              <span style={{ fontSize: 16, fontWeight: 800, fontFamily: FONT, color: C.text1, letterSpacing: '-0.03em', lineHeight: 1.4 }}>
-                Smart pin
-              </span>
-              <button className="p-btn" onClick={() => send({ type: 'INIT' })} title={t(lang, 'refreshTitle')}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4,
-                  display: 'flex', alignItems: 'center', color: C.text3, borderRadius: 6 }}
-                onMouseEnter={e => (e.currentTarget.style.background = C.bg)}
-                onMouseLeave={e => (e.currentTarget.style.background = 'none')}
-              >
-                <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                  <path d="M13.5 8a5.5 5.5 0 11-1.6-3.9M13.5 2v3h-3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </button>
+          /* File list view: title row */
+          <div style={{ display: 'flex', alignItems: 'center', gap: spacing[2], minHeight: 56, padding: `${spacing[2]}px ${spacing[3]}px ${spacing[2]}px ${GUTTER}px` }}>
+            <div dangerouslySetInnerHTML={{ __html: resizeSvg(pinSvg, 20) }} aria-hidden="true" style={{ flexShrink: 0, lineHeight: 0 }} />
+            <h1 style={{ ...text('t5', 'bold', C.text1), margin: 0, letterSpacing: '-0.02em' }}>Smart pin</h1>
+            <IconButton label={t(lang, 'refreshTitle')} icon="refresh" size={32} iconSize={16} onClick={() => send({ type: 'INIT' })} />
+            <span style={{ flex: 1 }} />
+            <div role="radiogroup" aria-label={t(lang, 'langLabel')} style={{ display: 'inline-flex', background: semantic.bgSubtle, borderRadius: radius.full, padding: 2 }}>
+              {(['ko', 'en'] as Lang[]).map(l => (
+                <button key={l} type="button" role="radio" aria-checked={lang === l} className="tds-press" onClick={() => setLang(l)}
+                  style={{
+                    ...text('st12', 'semibold', lang === l ? C.text1 : C.text3), height: 26, padding: `0 ${spacing[2] + 2}px`,
+                    borderRadius: radius.full, border: 'none', cursor: 'pointer',
+                    background: lang === l ? colors.background : 'transparent', boxShadow: lang === l ? shadow.raised : 'none',
+                  }}>{l === 'ko' ? '한' : 'EN'}</button>
+              ))}
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ display: 'inline-flex', background: C.bg, borderRadius: 9999, padding: 2 }}>
-                {(['ko', 'en'] as Lang[]).map(l => (
-                  <button key={l} className="p-btn" onClick={() => setLang(l)}
-                    style={{
-                      padding: '3px 9px', borderRadius: 9999, border: 'none',
-                      background: lang === l ? C.primary : 'transparent',
-                      color: lang === l ? '#FFF' : C.text3,
-                      fontSize: 10.5, fontWeight: 700, fontFamily: FONT, cursor: 'pointer',
-                      transition: 'all 0.2s',
-                    }}>{l === 'ko' ? '한' : 'EN'}</button>
-                ))}
-              </div>
-              {pins.length > 0 && (
-                <span style={{ background: C.primary, color: '#FFF', borderRadius: 9999, padding: '2px 9px', fontSize: 11, fontWeight: 700, fontFamily: FONT, lineHeight: 1.5 }}>
-                  {pins.length}
-                </span>
-              )}
-            </div>
+            {safety.ready && <IconButton label={t(lang, 'manageTitle')} icon="gear" badge={requestBadge} haspopup="dialog" onClick={() => setManage({})} />}
           </div>
         )}
-      </div>
+      </header>
 
       {/* ── Update banner ── */}
       {codeVersion < EXPECTED_CODE_VERSION && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 10,
-          padding: '10px 14px',
-          background: '#FFF8EC',
-          borderBottom: `1px solid #FFD87A`,
-          flexShrink: 0,
-        }}>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
-            <path d="M8 2.5L14 13.5H2L8 2.5Z" stroke="#F5A623" strokeWidth="1.5" strokeLinejoin="round"/>
-            <path d="M8 6.5v3" stroke="#F5A623" strokeWidth="1.6" strokeLinecap="round"/>
-            <circle cx="8" cy="11.2" r="0.8" fill="#F5A623"/>
-          </svg>
-          <span style={{ flex: 1, fontSize: 12, fontFamily: FONT, lineHeight: 1.5, color: '#7A4F00' }}>
-            {t(lang, 'updateBannerPre')}
-            <strong style={{ fontWeight: 700 }}>code.js</strong>{t(lang, 'updateBannerPost')}
-          </span>
-          <a href={UPDATE_URL} target="_blank" rel="noreferrer"
-            style={{
-              flexShrink: 0, fontSize: 12, fontWeight: 700, fontFamily: FONT,
-              color: '#FFFFFF', background: '#F5A623',
-              padding: '5px 11px', borderRadius: 8,
-              textDecoration: 'none', lineHeight: 1.5,
-              transition: 'background 0.2s',
-            }}
-            onMouseEnter={e => (e.currentTarget.style.background = '#D4891C')}
-            onMouseLeave={e => (e.currentTarget.style.background = '#F5A623')}
-          >{t(lang, 'downloadBtn')}</a>
+        <div style={{ background: colors.background, padding: `0 ${GUTTER}px ${spacing[3]}px`, flexShrink: 0 }}>
+          <Callout tone="warning">
+            {t(lang, 'updateBannerPre')}<strong style={{ fontWeight: 700 }}>code.js</strong>{t(lang, 'updateBannerPost')}
+            {' '}<a href={UPDATE_URL} target="_blank" rel="noreferrer" style={{ ...text('t7', 'bold', colors.grey900), textDecoration: 'underline', textUnderlineOffset: 2 }}>{t(lang, 'downloadBtn')}</a>
+          </Callout>
         </div>
       )}
 
       {/* ── File key prompt ── */}
       {showKeyPrompt && !fileKey && (
-        <div style={{ padding: '10px 14px', background: C.blue10, borderBottom: `1px solid ${C.line}` }}>
-          <p style={{ fontSize: 12, fontWeight: 600, color: C.primary, margin: '0 0 7px', lineHeight: 1.5, fontFamily: FONT }}>
-            {t(lang, 'keyPromptLabel')}
-          </p>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <input value={customKeyUrl} onChange={e => setCustomKeyUrl(e.target.value)}
-              placeholder="https://www.figma.com/design/..."
-              style={{ flex: 1, padding: '7px 10px', fontSize: 12, lineHeight: 1.5,
-                borderRadius: 8, border: `1.5px solid ${C.primary}`,
-                outline: 'none', minWidth: 0, fontFamily: FONT,
-                boxSizing: 'border-box', background: C.card, color: C.text1 }} />
-            <button onClick={() => {
-                if (customKeyUrl) {
-                  send({ type: 'SET_CUSTOM_KEY', key: customKeyUrl });
-                  if (pendingOpenWeb) {
-                    const m = customKeyUrl.trim().match(/figma\.com\/(?:file|design|board)\/([^/?]+)/);
-                    const k = m ? m[1] : customKeyUrl.trim();
-                    openWebViewer(k);
+        <div style={{ background: colors.background, padding: `0 ${GUTTER}px ${spacing[4]}px`, flexShrink: 0 }}>
+          <div style={{ background: colors.blue50, borderRadius: radius.lg, padding: spacing[4] }}>
+            <p style={{ ...text('t7', 'semibold', colors.blue700), margin: `0 0 ${spacing[2]}px` }}>{t(lang, 'keyPromptLabel')}</p>
+            <div style={{ display: 'flex', gap: spacing[2] }}>
+              <TextInput value={customKeyUrl} onChange={e => setCustomKeyUrl(e.target.value)} aria-label={t(lang, 'keyPromptLabel')}
+                placeholder="https://www.figma.com/design/..." style={{ flex: 1, minWidth: 0, height: 40, background: colors.background }} />
+              <Button size="medium" onClick={() => {
+                  if (customKeyUrl) {
+                    send({ type: 'SET_CUSTOM_KEY', key: customKeyUrl });
+                    if (pendingOpenWeb) {
+                      const m = customKeyUrl.trim().match(/figma\.com\/(?:file|design|board)\/([^/?]+)/);
+                      const k = m ? m[1] : customKeyUrl.trim();
+                      openWebViewer(k);
+                    }
                   }
-                }
-                setShowKeyPrompt(false);
-                setPendingOpenWeb(false);
-              }}
-              style={{ background: C.primary, color: '#fff', border: 'none', borderRadius: 8, padding: '0 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: FONT }}>
-              {t(lang, 'saveBtnShort')}
-            </button>
-            <button onClick={() => setShowKeyPrompt(false)}
-              style={{ background: 'transparent', color: C.text2, border: 'none', borderRadius: 8, padding: '0 10px', fontSize: 12, cursor: 'pointer', fontFamily: FONT }}>
-              {t(lang, 'modalCancel')}
-            </button>
+                  setShowKeyPrompt(false);
+                  setPendingOpenWeb(false);
+                }}>{t(lang, 'saveBtnShort')}</Button>
+              <Button size="medium" color="light" variant="weak" onClick={() => setShowKeyPrompt(false)}>{t(lang, 'modalCancel')}</Button>
+            </div>
           </div>
         </div>
       )}
-
-      {/* ── Error ── */}
-      {error && (
-        <div style={{ margin: '8px 12px 0', padding: '10px 14px', background: C.error + '12', borderRadius: 12, fontSize: 13, lineHeight: 1.5, fontFamily: FONT, color: C.error }}>
-          {error}
-        </div>
-      )}
-
       {/* ── Content (animated) ── */}
       <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
         <div key={navKey} className={navDir === 'forward' ? 'v-fwd' : 'v-back'}
-          style={{ paddingTop: 12, paddingBottom: 24 }}>
+          style={{ paddingTop: spacing[3], paddingBottom: ctaVisible ? BOTTOM_CTA_SPACE + spacing[4] : spacing[6] }}>
           {!inPinView ? (
             /* ── File list view ── */
-            <div style={{ padding: '0 16px' }}>
+            <div style={{ padding: `0 ${GUTTER}px` }}>
               {mergedPages.length === 0 && !showAddPage && (
-                <div style={{ padding: '40px 0 24px', textAlign: 'center', fontFamily: FONT }}>
-                  <div style={{ fontSize: 32, marginBottom: 14 }}>📌</div>
-                  <p style={{ fontSize: 14, fontWeight: 600, color: C.text2, lineHeight: 1.6, margin: 0 }}>
-                    {t(lang, 'fileListEmptyTitle')}
-                  </p>
-                  <p style={{ fontSize: 12, color: C.text3, lineHeight: 1.6, margin: '6px 0 0', fontFamily: FONT }}>
-                    {t(lang, 'fileListEmptyHint')}
-                  </p>
+                <div style={{ padding: `${spacing[10]}px 0 ${spacing[6]}px`, textAlign: 'center' }}>
+                  <p style={{ ...text('t6', 'semibold', C.text2), margin: 0 }}>{t(lang, 'fileListEmptyTitle')}</p>
+                  <p style={{ ...text('t7', 'regular', C.text3), margin: `${spacing[1]}px 0 0` }}>{t(lang, 'fileListEmptyHint')}</p>
                 </div>
               )}
               {mergedPages.map(pg => (
@@ -2414,31 +2190,13 @@ function App() {
 
               {/* ── 새 파일 추가 form / button ── */}
               {showAddPage ? (
-                <div style={{
-                  borderRadius: 14, background: '#FFFFFF',
-                  border: `1.5px solid ${C.primary}`,
-                  boxShadow: `0 0 0 3px ${C.blue10}`,
-                  padding: '14px 14px 12px', marginBottom: 8,
-                }}>
-                  {/* Current page notice */}
-                  <div style={{
-                    display: 'flex', alignItems: 'flex-start', gap: 7,
-                    padding: '9px 11px', marginBottom: 12,
-                    background: C.blue10, borderRadius: 10,
-                  }}>
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0, marginTop: 1 }}>
-                      <circle cx="8" cy="8" r="6.5" stroke={C.primary} strokeWidth="1.4"/>
-                      <path d="M8 7v4" stroke={C.primary} strokeWidth="1.6" strokeLinecap="round"/>
-                      <circle cx="8" cy="5.2" r="0.8" fill={C.primary}/>
-                    </svg>
-                    <span style={{ fontSize: 11, fontFamily: FONT, lineHeight: 1.55, color: C.primary }}>
-                      {t(lang, 'addPageCurrentNotice', currentPageName || t(lang, 'unknownPageName'))}
-                    </span>
-                  </div>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text3, fontFamily: FONT, marginBottom: 6, letterSpacing: '0.04em' }}>
-                    {t(lang, 'fileNameLabel')}
-                  </label>
-                  <input
+                <div style={{ borderRadius: radius.xl, background: colors.background, padding: spacing[4], marginBottom: spacing[2] }}>
+                  <Callout tone="info" style={{ marginBottom: spacing[4] }}>
+                    {t(lang, 'addPageCurrentNotice', currentPageName || t(lang, 'unknownPageName'))}
+                  </Callout>
+                  <FieldLabel htmlFor="add-page-name">{t(lang, 'fileNameLabel')}</FieldLabel>
+                  <TextInput
+                    id="add-page-name"
                     autoFocus
                     value={addPageName}
                     onChange={e => setAddPageName(e.target.value)}
@@ -2456,18 +2214,12 @@ function App() {
                       if (e.key === 'Escape') { setShowAddPage(false); setAddPageName(''); }
                     }}
                     placeholder={currentPageName || t(lang, 'fileNamePlaceholder')}
-                    style={{
-                      width: '100%', padding: '9px 12px', fontSize: 13, lineHeight: 1.5,
-                      fontFamily: FONT, color: C.text1, border: `1.5px solid ${C.line}`,
-                      borderRadius: 10, outline: 'none', background: C.inputBg,
-                      boxSizing: 'border-box', marginBottom: 6,
-                    }}
                   />
-                  <p style={{ margin: '0 0 12px', fontSize: 11, color: C.text3, fontFamily: FONT, lineHeight: 1.5 }}>
-                    {t(lang, 'fileNameHint')}
-                  </p>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button className="p-btn"
+                  <p style={{ ...text('st12', 'regular', C.text3), margin: `${spacing[2]}px 0 ${spacing[4]}px` }}>{t(lang, 'fileNameHint')}</p>
+                  <div style={{ display: 'flex', gap: spacing[2] }}>
+                    <Button color="light" variant="weak" size="large" display="full" style={{ flex: 1 }}
+                      onClick={() => { setShowAddPage(false); setAddPageName(''); }}>{t(lang, 'modalCancel')}</Button>
+                    <Button size="large" display="full" style={{ flex: 1 }} disabled={!addPageName.trim()}
                       onClick={() => {
                         const name = addPageName.trim();
                         if (!name) return;
@@ -2478,87 +2230,36 @@ function App() {
                         });
                         send({ type: 'ADD_PAGE_STUB', pageName: name });
                         setShowAddPage(false); setAddPageName('');
-                      }}
-                      style={{
-                        flex: 1, height: 40, background: addPageName.trim() ? C.primary : C.disabledBg,
-                        color: addPageName.trim() ? '#FFF' : C.disabledText,
-                        border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700,
-                        fontFamily: FONT, cursor: addPageName.trim() ? 'pointer' : 'default',
-                      }}
-                    >{t(lang, 'addBtn')}</button>
-                    <button className="p-btn"
-                      onClick={() => { setShowAddPage(false); setAddPageName(''); }}
-                      style={{
-                        flex: 1, height: 40, background: C.inputBg, color: C.text2,
-                        border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 600,
-                        fontFamily: FONT, cursor: 'pointer',
-                      }}
-                    >{t(lang, 'modalCancel')}</button>
+                      }}>{t(lang, 'addBtn')}</Button>
                   </div>
                 </div>
               ) : (
-                <button className="p-btn"
-                  onClick={() => { setShowAddPage(true); setAddPageName(currentPageName); }}
-                  style={{
-                    width: '100%', height: 44, background: 'transparent',
-                    border: `1.5px dashed ${C.guideLine}`, borderRadius: 14,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                    fontSize: 13, fontWeight: 600, fontFamily: FONT, color: C.text2,
-                    cursor: 'pointer', marginBottom: 8,
-                    transition: 'all 0.45s cubic-bezier(0.22,1,0.36,1)',
-                  }}
-                  onMouseEnter={e => {
-                    (e.currentTarget as HTMLButtonElement).style.background = C.inputBg;
-                    (e.currentTarget as HTMLButtonElement).style.borderColor = C.primary;
-                    (e.currentTarget as HTMLButtonElement).style.color = C.primary;
-                  }}
-                  onMouseLeave={e => {
-                    (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
-                    (e.currentTarget as HTMLButtonElement).style.borderColor = C.guideLine;
-                    (e.currentTarget as HTMLButtonElement).style.color = C.text2;
-                  }}
-                >
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                    <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                  </svg>
-                  {t(lang, 'addFileBtn')}
-                </button>
+                <Button color="light" variant="weak" size="large" display="full" icon="plus"
+                  style={{ background: colors.background, color: semantic.textSecondary, marginBottom: spacing[2] }}
+                  onClick={() => { setShowAddPage(true); setAddPageName(currentPageName); }}>{t(lang, 'addFileBtn')}</Button>
               )}
 
               {/* ── Dev Mode 웹 뷰어 진입 ── */}
-              <div style={{
-                marginTop: 16,
-                paddingTop: 16,
-                borderTop: `1px solid ${C.guideLine}`,
-              }}>
-                <p style={{
-                  fontSize: 11.5, color: C.text3, fontFamily: FONT,
-                  lineHeight: 1.6, marginBottom: 10, textAlign: 'center',
-                }}>{t(lang, 'devModeSectionNote')}</p>
-                <button className="p-btn"
-                  onClick={() => {
+              <div style={{ marginTop: spacing[6] }}>
+                <button type="button" className="tds-row" onClick={() => {
                     if (!fileKey) { setPendingOpenWeb(true); setShowKeyPrompt(true); return; }
                     openWebViewer();
                   }}
-                  style={{
-                    width: '100%', height: 40,
-                    background: C.blue10, color: C.primary,
-                    border: `1px solid rgba(49,130,246,0.18)`,
-                    borderRadius: 10,
-                    fontSize: 13, fontWeight: 600, fontFamily: FONT,
-                    cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                    transition: 'all 0.2s',
-                  }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(49,130,246,0.16)'; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = C.blue10; }}
-                >
-                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                    <path d="M7 3H3a1 1 0 00-1 1v9a1 1 0 001 1h9a1 1 0 001-1V9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
-                    <path d="M10 2h4v4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M14 2L8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
-                  </svg>
-                  {t(lang, 'webViewBtn')}
+                  style={{ display: 'flex', alignItems: 'center', gap: spacing[3], width: '100%', padding: spacing[4], border: 'none',
+                    borderRadius: radius.xl, background: colors.background, cursor: 'pointer', textAlign: 'left' }}>
+                  <span aria-hidden="true" style={{ width: 40, height: 40, borderRadius: radius.lg, background: colors.blue50, color: colors.blue500,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
+                      <path d="M7 3H3a1 1 0 00-1 1v9a1 1 0 001 1h9a1 1 0 001-1V9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                      <path d="M10 2h4v4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M14 2L8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                    </svg>
+                  </span>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ ...text('st11', 'semibold', C.text1), display: 'block' }}>{t(lang, 'webViewBtn')}</span>
+                    <span style={{ ...text('st12', 'regular', C.text3), display: 'block' }}>{t(lang, 'devModeSectionNote')}</span>
+                  </span>
+                  <span aria-hidden="true" style={{ color: colors.grey400, display: 'flex' }}><Icon name="chevronRight" size={18} /></span>
                 </button>
               </div>
             </div>
@@ -2570,14 +2271,7 @@ function App() {
       </div>
 
       {/* ── Toast ── */}
-      {toast && (
-        <div style={{
-          position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)',
-          background: C.text1, color: '#FFF', padding: '10px 18px', borderRadius: 12,
-          fontSize: 13, lineHeight: 1.5, fontWeight: 600, fontFamily: FONT,
-          zIndex: 1000, boxShadow: '0 8px 24px rgba(0,0,0,0.18)', whiteSpace: 'nowrap',
-        }}>{toast}</div>
-      )}
+      <Toast toast={toast} bottomOffset={ctaVisible ? BOTTOM_CTA_SPACE + spacing[2] : spacing[5]} />
 
       {/* ── Number swap confirm ── */}
       {numberConflict && (

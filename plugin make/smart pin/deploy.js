@@ -3,7 +3,7 @@
  * Smart Pin — Deploy Script
  *
  * 1. dist/ui.html  →  deploy_github/index.html   (GitHub Pages 호스팅용)
- * 2. deploy_figma/ui.html 생성  (리다이렉트 껍데기)
+ * 2. dist/ui.html → deploy_figma/ui.html (버전 일치 UI)
  * 3. manifest.json + dist/code.js  →  deploy_figma/
  */
 
@@ -14,7 +14,6 @@ const ROOT          = __dirname;
 const DIST          = path.join(ROOT, 'dist');
 const DEPLOY_GITHUB = path.join(ROOT, 'deploy_github');
 const DEPLOY_FIGMA  = path.join(ROOT, 'deploy_figma');
-const HOSTED_URL    = 'https://jhlee3663-netizen.github.io/imbc_smart-pin/';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -57,44 +56,14 @@ console.log('\n[1] GitHub Pages 배포 파일 복사');
 ensureDir(DEPLOY_GITHUB);
 copyFile(path.join(DIST, 'ui.html'), path.join(DEPLOY_GITHUB, 'app.html'));
 
-// ── step 2: deploy_figma/ui.html (리다이렉트 껍데기) ─────────────────────────
+// ── step 2: version-matched standalone plugin UI ─────────────────────────
 
-console.log('\n[2] Figma 팀원 배포용 리다이렉트 파일 생성');
+console.log('\n[2] Figma 팀원 배포용 UI 복사');
 ensureDir(DEPLOY_FIGMA);
 
-// iframe + 양방향 메시지 릴레이
-// code.js ↔ wrapper(ui.html) ↔ iframe(GitHub Pages React앱) 간 postMessage 중계
-const redirectHtml =
-`<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <style>
-      * { margin: 0; padding: 0; box-sizing: border-box; }
-      html, body { height: 100%; overflow: hidden; }
-      iframe { width: 100%; height: 100%; border: none; display: block; }
-    </style>
-  </head>
-  <body>
-    <iframe id="f" src="${HOSTED_URL}app.html"></iframe>
-    <script>
-      var iframe = document.getElementById('f');
-      window.addEventListener('message', function(e) {
-        if (e.source === iframe.contentWindow) {
-          // iframe(React앱) → Figma(code.js)
-          parent.postMessage(e.data, '*');
-        } else {
-          // Figma(code.js) → iframe(React앱)
-          if (iframe.contentWindow) {
-            iframe.contentWindow.postMessage(e.data, '*');
-          }
-        }
-      });
-    </script>
-  </body>
-</html>
-`;
-writeFile(path.join(DEPLOY_FIGMA, 'ui.html'), redirectHtml);
+// Permissions and storage format must ship with the matching UI version.
+// A remotely hosted UI can otherwise silently run against an older backend.
+copyFile(path.join(DIST, 'ui.html'), path.join(DEPLOY_FIGMA, 'ui.html'));
 
 // ── step 3: manifest.json + dist/code.js → deploy_figma/ ─────────────────────
 
@@ -108,6 +77,11 @@ manifest.main = 'code.js';
 manifest.ui   = 'ui.html';
 fs.writeFileSync(path.join(DEPLOY_FIGMA, 'manifest.json'), JSON.stringify(manifest, null, 2), 'utf8');
 console.log('  [write] manifest.json (경로 재작성: dist/code.js → code.js, dist/ui.html → ui.html)');
+
+if (process.argv.includes('--local')) {
+  console.log('\n[done] 로컬 배포 파일 준비 완료. GitHub에는 게시하지 않았습니다.');
+  process.exit(0);
+}
 
 // ── step 4: deploy_github/index.html → imbc_smart-pin (GitHub Pages) ─────────
 

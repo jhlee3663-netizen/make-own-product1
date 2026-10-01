@@ -2,6 +2,9 @@
   "name": "smart-pin-spec",
   "version": "1.0.0",
   "scripts": {
+    "test": "node --test tests/*.test.cjs",
+    "typecheck": "tsc --noEmit",
+    "package:local": "npm run build && node deploy.js --local",
     "build": "webpack --mode production && node inline.js",
     "watch": "webpack --mode development --watch",
     "deploy": "node deploy.js",

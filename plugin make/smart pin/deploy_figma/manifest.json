@@ -9,6 +9,9 @@
     "dev"
   ],
   "documentAccess": "dynamic-page",
+  "permissions": [
+    "currentuser"
+  ],
   "networkAccess": {
     "allowedDomains": [
       "https://fonts.googleapis.com",

@@ -1,4 +1,5 @@
-import { Pin, PinCategory, PinAnchor, PageStub, UIMessage, PluginMessage } from './types';
+import { Pin, PinCategory, PinAnchor, PageStub, UIMessage, PluginMessage, PinUser } from './types';
+import { PinStore, canEdit, canTrash, canRestore, isOwner, isAdmin, editablePatch, uid } from './safety';
 
 const NAMESPACE          = 'smart_pin';
 const STORAGE_KEY        = 'smart-pin-v1';
@@ -10,12 +11,24 @@ const GROUP_ORDER_KEY    = 'smart-pin-group-order-v1';
 const PIN_ORDER_KEY      = 'smart-pin-pin-order-v1';
 const ONBOARDING_KEY     = 'smart-pin-onboarding-done';
 const PIN_SIZE = 24;
-const CODE_VERSION = 6;
+const CODE_VERSION = 7;
+const store = new PinStore({
+  keys: () => figma.root.getSharedPluginDataKeys(NAMESPACE).filter(k => !!figma.root.getSharedPluginData(NAMESPACE, k)),
+  get: k => figma.root.getSharedPluginData(NAMESPACE, k),
+  set: (k, value) => figma.root.setSharedPluginData(NAMESPACE, k, value),
+});
+const currentUser = (): PinUser | null => {
+  const u = figma.currentUser;
+  return u?.id && u.name !== 'Anonymous' ? { id: u.id, name: u.name } : null;
+};
+const actor = (): PinUser => {
+  const u = currentUser();
+  if (!u) throw new Error('Figma에 로그인한 뒤 다시 실행해주세요.');
+  return u;
+};
+let loadedSnapshot = new Map<string, string>();
 
-// Figma caps each pluginData entry at 100kB. Budget both UTF-8 bytes and UTF-16
-// code units so the chunk stays under the cap regardless of how Figma measures it.
-const CHUNK_MAX_BYTES = 70 * 1024;
-const CHUNK_MAX_CHARS = 40000;
+// Read-only support for the legacy chunked format during migration.
 const MAX_CHUNKS = 40;
 
 figma.showUI(__html__, { width: 720, height: 960, title: 'Smart Pin' });
@@ -26,8 +39,6 @@ let autoFocusPinId: string | null = null;
 let pinsLoaded = false;
 let pendingSelectionId: string | null = null;
 let onboardingDone = false;
-let lastSharedData = ''; // for real-time sync detection
-let lastMeta = '';       // chunk manifest last written/read by this session
 
 const CAT_COLORS: Record<PinCategory, RGB> = {
   design:   { r: 0.388, g: 0.4,   b: 1.0   },
@@ -56,9 +67,11 @@ function migrateCategory(raw: any): PinCategory {
 }
 
 function parseRawPins(rawData: string): Pin[] {
-  try {
     const data = JSON.parse(rawData);
-    if (!Array.isArray(data)) return [];
+    if (!Array.isArray(data) || data.some(p => !p || typeof p.id !== 'string' || typeof p.title !== 'string' || typeof p.content !== 'string')) {
+      throw new Error('기존 핀 데이터 형식을 확인할 수 없습니다. 원본을 보존하고 중단했습니다.');
+    }
+    if (new Set(data.map(p => p.id)).size !== data.length) throw new Error('중복된 핀 ID가 있습니다. 원본을 보존하고 중단했습니다.');
     return data.map((p: any) => ({
       ...p,
       category: migrateCategory(p.category),
@@ -67,7 +80,6 @@ function parseRawPins(rawData: string): Pin[] {
       pageId: p.pageId ?? '',
       pageName: p.pageName ?? '',
     }));
-  } catch { return []; }
 }
 
 // ─── chunked storage ────────────────────────────
@@ -81,58 +93,6 @@ function hashString(s: string): string {
     h = (h + (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24)) >>> 0;
   }
   return h.toString(36);
-}
-
-function splitIntoChunks(s: string): string[] {
-  const chunks: string[] = [];
-  let start = 0, bytes = 0, chars = 0, i = 0;
-  while (i < s.length) {
-    const code = s.charCodeAt(i);
-    const isPair = code >= 0xd800 && code <= 0xdbff && i + 1 < s.length;
-    const step = isPair ? 2 : 1;
-    const size = code < 0x80 ? 1 : code < 0x800 ? 2 : isPair ? 4 : 3;
-    if (i > start && (bytes + size > CHUNK_MAX_BYTES || chars + step > CHUNK_MAX_CHARS)) {
-      chunks.push(s.slice(start, i));
-      start = i; bytes = 0; chars = 0;
-    }
-    bytes += size; chars += step; i += step;
-  }
-  chunks.push(s.slice(start));
-  return chunks;
-}
-
-function clearChunksFrom(firstUnused: number): void {
-  try {
-    for (const key of figma.root.getSharedPluginDataKeys(NAMESPACE)) {
-      if (key.indexOf(CHUNK_PREFIX) !== 0) continue;
-      const idx = parseInt(key.slice(CHUNK_PREFIX.length), 10);
-      if (!isNaN(idx) && idx >= firstUnused) {
-        figma.root.setSharedPluginData(NAMESPACE, key, '');
-      }
-    }
-  } catch (_) {}
-}
-
-// Returns the manifest written, so callers can keep their sync marker in step.
-function writeChunked(data: string): string {
-  const chunks = splitIntoChunks(data);
-  if (chunks.length > MAX_CHUNKS) {
-    throw new Error('핀 데이터가 저장 한도를 초과했습니다. 오래된 핀을 정리해주세요.');
-  }
-  for (let i = 0; i < chunks.length; i++) {
-    figma.root.setSharedPluginData(NAMESPACE, CHUNK_PREFIX + i, chunks[i]);
-  }
-  const meta = JSON.stringify({ c: chunks.length, h: hashString(data), t: Date.now() });
-  figma.root.setSharedPluginData(NAMESPACE, CHUNK_META_KEY, meta);
-  clearChunksFrom(chunks.length);
-
-  // Keep the legacy single entry usable for older plugin builds while it fits.
-  if (chunks.length === 1) {
-    figma.root.setSharedPluginData(NAMESPACE, STORAGE_KEY, data);
-  } else if (figma.root.getSharedPluginData(NAMESPACE, STORAGE_KEY)) {
-    figma.root.setSharedPluginData(NAMESPACE, STORAGE_KEY, '');
-  }
-  return meta;
 }
 
 // Null means "no chunked data, or it read back inconsistent" — callers must then
@@ -156,45 +116,33 @@ function readChunked(): { data: string; meta: string } | null {
 }
 
 async function load(): Promise<Pin[]> {
-  try {
+  if (!store.ready) {
     const chunked = readChunked();
-    if (chunked) {
-      lastSharedData = chunked.data;
-      lastMeta = chunked.meta;
-      return parseRawPins(chunked.data);
+    if (!chunked && figma.root.getSharedPluginData(NAMESPACE, CHUNK_META_KEY)) {
+      throw new Error('기존 저장 데이터가 불완전합니다. 덮어쓰지 않고 중단했습니다.');
     }
-
-    // Try shared storage first (works across all plugin ID versions)
-    let rawData = figma.root.getSharedPluginData(NAMESPACE, STORAGE_KEY);
-    if (!rawData) {
-      // Migrate from old plugin-specific storage
-      rawData = figma.root.getPluginData(STORAGE_KEY);
-    }
-    if (rawData) {
-      lastSharedData = rawData;
-      if (figma.editorType !== 'dev') {
-        try {
-          lastMeta = writeChunked(rawData);
-          figma.root.setPluginData(STORAGE_KEY, '');
-        } catch (_) {}
-      }
-      return parseRawPins(rawData);
-    }
-    return [];
-  } catch {
-    return [];
+    const raw = chunked?.data || figma.root.getSharedPluginData(NAMESPACE, STORAGE_KEY) || figma.root.getPluginData(STORAGE_KEY);
+    if (raw && !Array.isArray(JSON.parse(raw))) throw new Error('기존 핀 데이터를 읽지 못했습니다.');
+    const legacy = raw ? parseRawPins(raw) : await scanAndRecover();
+    if (figma.editorType === 'dev' || !currentUser()) return legacy;
+    store.migrate(legacy);
   }
+  const active = store.all().filter(p => !p.deletedAt);
+  loadedSnapshot = new Map(active.map(p => [p.id, JSON.stringify(p)]));
+  return active;
 }
 
 async function save(): Promise<void> {
-  if (figma.editorType === 'dev') return;
-  const data = JSON.stringify(pins);
-  try {
-    lastMeta = writeChunked(data);
-    lastSharedData = data;
-  } catch (e: any) {
-    post({ type: 'ERROR', message: e?.message ?? '핀 데이터 저장에 실패했습니다.' });
+  if (figma.editorType === 'dev') throw new Error('읽기 전용 모드입니다.');
+  const u = actor();
+  for (const pin of pins) {
+    if (loadedSnapshot.get(pin.id) === JSON.stringify(pin)) continue;
+    const old = store.get(pin.id);
+    if (old && !canEdit(old, u)) throw new Error('다른 사람의 핀을 변경할 수 없습니다.');
+    const saved = store.commit(old ? pin : { ...pin, author: u, editors: [] }, u, old ? '핀 변경' : '핀 생성', pin.revision);
+    Object.assign(pin, saved);
   }
+  loadedSnapshot = new Map(pins.map(p => [p.id, JSON.stringify(p)]));
 }
 
 // Scan canvas for badge frames to recover lost pin data
@@ -312,11 +260,198 @@ function postPinsLoaded(): void {
     pinOrders: loadPinOrders(),
     onboardingDone: onboardingDone || pins.length > 0,
     isDevMode: figma.editorType === 'dev',
+    safety: { user: currentUser(), admins: store.admins, ready: store.ready,
+      trash: store.ready ? store.all().filter(p => !!p.deletedAt) : [],
+      users: knownUsers(),
+      adminHistory: figma.root.getSharedPluginDataKeys(NAMESPACE).filter(k => k.startsWith('sp2-audit-'))
+        .map(k => JSON.parse(figma.root.getSharedPluginData(NAMESPACE, k))).sort((a, b) => b.at - a.at),
+    },
   });
 }
 
 function selectionInfo(): { hasSelection: boolean } {
   return { hasSelection: figma.currentPage.selection.length === 1 };
+}
+
+function knownUsers(): PinUser[] {
+  const users = new Map<string, PinUser>();
+  const add = (u?: PinUser | null) => { if (u && u.id !== 'system') users.set(u.id, u); };
+  add(currentUser());
+  store.admins.forEach(add);
+  if (store.ready) store.all().forEach(p => {
+    add(p.author); add(p.assignee); p.editors?.forEach(add); p.requests?.forEach(r => add(r.actor));
+  });
+  return [...users.values()];
+}
+function requireEditable(targets: Pin[]): void {
+  if (targets.some(p => !canEdit(p, currentUser()))) throw new Error('다른 작성자의 핀이 포함되어 있어 변경할 수 없습니다.');
+}
+async function refresh(): Promise<void> { pins = await load(); postPinsLoaded(); }
+
+async function trashPins(ids: string[], reason: string, requestId?: string): Promise<void> {
+  const u = actor();
+  const targets = ids.map(id => store.get(id));
+  if (targets.some(p => !p || !canTrash(p, u, store.admins))) throw new Error('삭제할 권한이 없습니다.');
+  const saved: Pin[] = [];
+  try {
+    for (const original of targets as Pin[]) {
+      const p = store.get(original.id)!;
+      const requests = p.requests?.map(r => r.id === requestId ? { ...r, resolvedAt: Date.now(), resolvedBy: u } : r);
+      saved.push(store.commit({ ...p, requests, deletedAt: Date.now(), deletedBy: u, deleteReason: reason }, u, `휴지통 이동: ${reason}`, p.revision));
+    }
+  } finally {
+    // The full text is durable before touching any canvas nodes.
+    for (const p of saved) {
+      try { const node = await figma.getNodeByIdAsync(p.pinNodeId); if (node) node.remove(); } catch (_) {}
+    }
+    await refresh();
+    if (saved.length) post({ type: 'NOTICE', message: `${saved.length}개 핀을 휴지통으로 이동했어요.`, undoIds: saved.map(p => p.id) });
+  }
+}
+
+async function reconnect(pin: Pin, target?: SceneNode): Promise<void> {
+  const existing = await figma.getNodeByIdAsync(pin.pinNodeId);
+  if (existing && !target) return;
+  const node = target || await figma.getNodeByIdAsync(pin.nodeId);
+  if (!node || !('absoluteBoundingBox' in node)) {
+    post({ type: 'NOTICE', message: '내용은 복구됐어요. 대상 레이어를 선택한 뒤 다시 연결해주세요.' });
+    return;
+  }
+  let page: BaseNode | null = node;
+  while (page && page.type !== 'PAGE') page = page.parent;
+  if (!page || page.type !== 'PAGE') throw new Error('연결할 페이지를 찾지 못했습니다.');
+  await figma.setCurrentPageAsync(page);
+  const badge = await createBadge(node as SceneNode, pin.number, pin.category);
+  const badgeNode = await figma.getNodeByIdAsync(badge.pinNodeId);
+  try {
+    badgeNode?.setSharedPluginData(NAMESPACE, 'smartPinId', pin.id);
+    const current = store.get(pin.id)!;
+    store.commit({ ...current, nodeId: node.id, pinNodeId: badge.pinNodeId, anchor: badge.anchor,
+      pageId: page.id, pageName: page.name, badgeMissing: false }, actor(), '배지 다시 연결', current.revision);
+  } catch (e) { badgeNode?.remove(); throw e; }
+  if (existing && target) existing.remove();
+  await updateBadgeColor(store.get(pin.id)!);
+}
+
+async function handleSafety(msg: Extract<UIMessage, { type: 'SAFETY' }>): Promise<void> {
+  if (msg.action === 'export') { post({ type: 'BACKUP', data: store.backup() }); return; }
+  if (msg.action === 'history') { post({ type: 'HISTORY', id: msg.id!, revisions: store.history(msg.id!) }); return; }
+  const u = actor();
+  const admin = isAdmin(store.admins, u);
+  const reason = (msg.reason || '').trim();
+  if (msg.action === 'emptyTrash') {
+    if (!reason || !Array.isArray(msg.value) || !msg.value.length) throw new Error('삭제 대상과 사유를 확인해주세요.');
+    // Only the explicitly confirmed IDs, never new arrivals after the dialog opened.
+    const targets = msg.value.map((id: string) => store.get(id));
+    if (targets.some((p: Pin | undefined) => !p?.deletedAt || (!isOwner(p, u) && (!admin || p.protected)))) throw new Error('영구 삭제할 권한이 없는 핀이 포함되어 있습니다.');
+    for (const p of targets as Pin[]) store.purge(p, u, reason);
+    await refresh(); post({ type: 'NOTICE', message: `${targets.length}개 핀을 영구 삭제했어요. 휴지통에서 복구할 수 없습니다.` }); return;
+  }
+  if (msg.action === 'setupAdmin' || msg.action === 'admins') {
+    if (msg.action === 'setupAdmin' ? store.admins.length > 0 : !admin) throw new Error('관리자 설정 권한이 없습니다.');
+    if (!reason) throw new Error('관리자 변경 사유를 입력해주세요.');
+    const ids = msg.action === 'setupAdmin' ? [u.id] : msg.value;
+    if (!Array.isArray(ids) || !ids.length) throw new Error('관리자는 최소 1명이어야 합니다.');
+    const admins = ids.map(id => knownUsers().find(v => v.id === id));
+    if (admins.some(v => !v)) throw new Error('확인되지 않은 사용자입니다.');
+    figma.root.setSharedPluginData(NAMESPACE, `sp2-audit-${uid()}`, JSON.stringify({ at: Date.now(), actor: u, reason, before: store.admins, after: admins }));
+    store.setAdmins(admins as PinUser[]);
+    await refresh(); return;
+  }
+  if (msg.action === 'import') {
+    if (typeof msg.value !== 'string' || msg.value.length > 5_000_000) throw new Error('백업은 5MB 이하여야 합니다.');
+    const data = JSON.parse(msg.value);
+    if (data.format !== 'SMARTPIN_BACKUP_V2' || !Array.isArray(data.pins) || data.pins.length > 500) throw new Error('지원하지 않는 백업입니다.');
+    for (const p of data.pins) {
+      if (typeof p.title !== 'string' || typeof p.content !== 'string' || !['design', 'descript', 'dev', 'ask'].includes(p.category)) throw new Error('백업 내용이 올바르지 않습니다.');
+    }
+    for (const p of data.pins) {
+      const imported: Pin = { id: `import_${uid()}`, nodeId: '', pinNodeId: '', pageId: figma.currentPage.id,
+        pageName: figma.currentPage.name, number: (store.all().reduce((m, p) => Math.max(m, p.number || 0), 0)) + 1,
+        title: p.title, content: p.content, category: p.category, status: ['todo', 'done', 'pending'].includes(p.status) ? p.status : 'todo',
+        group: typeof p.group === 'string' ? p.group : '', createdAt: Date.now(), author: u, badgeMissing: true };
+      store.commit(imported, u, '백업에서 새 핀으로 가져오기');
+    }
+    await refresh(); post({ type: 'NOTICE', message: '백업을 새 핀으로 가져왔어요. 대상 레이어에 다시 연결해주세요.' }); return;
+  }
+  const p = store.get(msg.id!);
+  if (!p) throw new Error('핀을 찾을 수 없습니다.');
+  if (msg.revision && msg.revision !== p.revision) throw new Error('핀 정보가 변경됐습니다. 최신 상태에서 다시 시도해주세요.');
+  let next = { ...p };
+  const owner = isOwner(p, u);
+  const targetUser = () => {
+    const target = knownUsers().find(v => v.id === msg.value);
+    if (!target) throw new Error('확인되지 않은 사용자입니다.');
+    return target;
+  };
+  switch (msg.action) {
+    case 'restore': {
+      if (!canRestore(p, u, store.admins)) throw new Error('복구할 권한이 없습니다.');
+      next = { ...p, deletedAt: undefined, deletedBy: undefined, deleteReason: undefined, badgeMissing: true };
+      const all = store.all();
+      if (all.some(other => other.id !== p.id && !other.deletedAt && other.number === p.number)) {
+        next.number = all.reduce((max, other) => Math.max(max, other.number || 0), 0) + 1;
+      }
+      const restored = store.commit(next, u, '휴지통에서 복구', p.revision);
+      await reconnect(restored);
+      await refresh(); post({ type: 'NOTICE', message: '핀을 복구했어요.' }); return;
+    }
+    case 'purge':
+      if (!p.deletedAt || (!owner && !admin) || !reason || (p.protected && !owner)) throw new Error('영구 삭제 권한과 사유를 확인해주세요.');
+      store.purge(p, u, reason); await refresh(); post({ type: 'NOTICE', message: '영구 삭제했어요. 휴지통에서는 복구할 수 없습니다.' }); return;
+    case 'protect':
+      if (!owner || p.deletedAt) throw new Error('작성자만 보호 설정을 변경할 수 있습니다.');
+      next.protected = !!msg.value; break;
+    case 'editors':
+      if (!owner || p.deletedAt || !Array.isArray(msg.value)) throw new Error('작성자만 공동 편집자를 지정할 수 있습니다.');
+      const editors = msg.value.map((id: string) => knownUsers().find(v => v.id === id));
+      if (editors.some((v: PinUser | undefined) => !v)) throw new Error('확인되지 않은 사용자입니다.');
+      next.editors = editors as PinUser[];
+      break;
+    case 'assignee':
+      if (!owner || p.deletedAt) throw new Error('작성자만 담당자를 지정할 수 있습니다.');
+      next.assignee = msg.value ? targetUser() : undefined; break;
+    case 'transfer':
+      if ((!owner && !admin) || !reason || p.deletedAt) throw new Error('소유권 변경 권한과 사유를 확인해주세요.');
+      next.author = targetUser(); next.editors = []; next.assignee = undefined; break;
+    case 'request': {
+      if (p.deletedAt) throw new Error('휴지통의 핀에는 요청을 남길 수 없습니다.');
+      if (!['comment', 'edit', 'delete', 'claim'].includes(msg.value?.kind) || typeof msg.value?.text !== 'string' || !msg.value.text.trim() || msg.value.text.length > 4000) throw new Error('의견이나 요청 내용을 4,000자 이내로 입력해주세요.');
+      if (msg.value.kind === 'claim' && p.author) throw new Error('이미 작성자가 지정된 핀입니다.');
+      next.requests = [...(p.requests || []), { id: uid(), actor: u, at: Date.now(), kind: msg.value.kind, text: msg.value.text.trim() }];
+      break;
+    }
+    case 'resolve': {
+      if ((!owner && !admin) || !reason) throw new Error('요청 처리 권한과 사유를 확인해주세요.');
+      const request = p.requests?.find(r => r.id === msg.value?.id);
+      if (!request || request.resolvedAt) throw new Error('이미 처리된 요청입니다.');
+      if (msg.value.accept && request.kind === 'delete') {
+        await trashPins([p.id], `삭제 요청 승인: ${reason}`, request.id); return;
+      }
+      if (msg.value.accept && request.kind === 'claim') {
+        if (!admin || p.author) throw new Error('관리자만 기존 핀의 작성자를 지정할 수 있습니다.');
+        next.author = request.actor;
+      }
+      next.requests = p.requests!.map(r => r.id === request.id ? { ...r, resolvedAt: Date.now(), resolvedBy: u } : r);
+      break;
+    }
+    case 'rollback': {
+      if (!canEdit(p, u) || !reason) throw new Error('내용 복원 권한과 사유를 확인해주세요.');
+      const revision = store.history(p.id).find(r => r.id === msg.value);
+      if (!revision) throw new Error('수정 이력을 찾지 못했습니다.');
+      const old = revision.pin;
+      next = { ...p, title: old.title, content: old.content, category: old.category, status: old.status, group: old.group };
+      break;
+    }
+    case 'relink':
+      if (!canEdit(p, u)) throw new Error('다시 연결할 권한이 없습니다.');
+      if (figma.currentPage.selection.length !== 1) throw new Error('연결할 레이어 하나를 선택해주세요.');
+      await reconnect(p, figma.currentPage.selection[0]); await refresh(); return;
+    default: throw new Error('지원하지 않는 작업입니다.');
+  }
+  const labels: Record<string, string> = { protect: next.protected ? '보호 잠금' : '보호 해제', editors: '공동 편집자 변경', assignee: '담당자 변경', transfer: '소유권 이전', request: '의견 / 요청 등록', resolve: '요청 처리', rollback: '이전 내용으로 복원' };
+  store.commit(next, u, `${labels[msg.action]}${reason ? ': ' + reason : ''}`, p.revision);
+  await refresh(); post({ type: 'NOTICE', message: '반영했어요.' });
 }
 
 function checkAutoFocus(): void {
@@ -469,30 +604,8 @@ async function repositionPins(pageId: string): Promise<{ moved: number; total: n
 
 // ─── init ───────────────────────────────────────
 
-(async () => {
+const initialized = (async () => {
   pins = await load();
-
-  // If no stored data found, scan canvas badges to recover
-  if (pins.length === 0) {
-    pins = await scanAndRecover();
-    if (pins.length > 0) {
-      await save(); // persist recovered data
-    }
-  }
-
-  // Filter orphaned badges (badge node deleted from canvas)
-  // Only save if we actually removed some — never save an all-zero result to avoid data wipe
-  if (pins.length > 0) {
-    const nodeChecks = await Promise.all(pins.map(p => figma.getNodeByIdAsync(p.pinNodeId)));
-    const filtered = pins.filter((_, i) => nodeChecks[i] !== null);
-    if (filtered.length > 0 && filtered.length < pins.length) {
-      pins = filtered;
-      await save();
-    } else if (filtered.length > 0) {
-      pins = filtered;
-    }
-    // If filtered.length === 0, keep original pins (suspicious — don't wipe data)
-  }
 
   pinsLoaded = true;
   pageStubs = loadStubs();
@@ -515,6 +628,7 @@ async function repositionPins(pageId: string): Promise<{ moved: number; total: n
     post({ type: 'AUTO_FOCUS', id: autoFocusPinId });
   }
 })();
+initialized.catch(e => post({ type: 'ERROR', message: String(e.message || e) }));
 
 // ─── selection listener ─────────────────────────
 
@@ -537,50 +651,21 @@ figma.on('selectionchange', () => {
 
 // ─── real-time sync: detect pins added by other users ───────────────────────
 
-setInterval(() => {
+let workQueue = Promise.resolve();
+function enqueue(work: () => Promise<void>): void {
+  workQueue = workQueue.then(work).catch(async e => {
+    post({ type: 'ERROR', message: String(e.message || e) });
+    try { pins = await load(); postPinsLoaded(); } catch (_) { /* preserve last UI on read failure */ }
+  });
+}
+setInterval(() => enqueue(async () => {
   if (!pinsLoaded) return;
-
-  const meta = figma.root.getSharedPluginData(NAMESPACE, CHUNK_META_KEY);
-  if (meta) {
-    if (meta === lastMeta) return;
-    // Null here usually means another editor is mid-write; retry on the next tick.
-    const chunked = readChunked();
-    if (!chunked) return;
-    lastMeta = chunked.meta;
-    lastSharedData = chunked.data;
-    const freshPins = parseRawPins(chunked.data);
-    if (freshPins.length > 0) {
-      pins = freshPins;
-      postPinsLoaded();
-    }
-    return;
-  }
-
-  // File still on the legacy single-entry format (edited by an older build).
-  const currentData = figma.root.getSharedPluginData(NAMESPACE, STORAGE_KEY);
-  if (currentData && currentData !== lastSharedData) {
-    lastSharedData = currentData;
-    const freshPins = parseRawPins(currentData);
-    if (freshPins.length > 0) {
-      pins = freshPins;
-      postPinsLoaded();
-    }
-  }
-}, 5000);
-
-// ─── poll for externally deleted pin badges ───────
-
-setInterval(async () => {
-  if (!pinsLoaded || pins.length === 0) return;
-  const nodeChecks = await Promise.all(pins.map(p => figma.getNodeByIdAsync(p.pinNodeId)));
-  const toDelete = pins.filter((p, i) => nodeChecks[i] === null);
-  if (toDelete.length === 0) return;
-  if (toDelete.length === pins.length) return; // all gone — suspicious, skip
-  const deletedIds = new Set(toDelete.map(p => p.pinNodeId));
-  pins = pins.filter(p => !deletedIds.has(p.pinNodeId));
-  save();
-  toDelete.forEach(p => post({ type: 'PIN_DELETED', id: p.id }));
-}, 5000);
+  pins = await load();
+  // A missing canvas badge does NOT prove who deleted it. Keep the original
+  // text active and offer reconnection; never attribute deletion to the observer.
+  for (const p of pins) p.badgeMissing = !(await figma.getNodeByIdAsync(p.pinNodeId));
+  postPinsLoaded();
+}), 5000);
 
 // ─── page change listener ────────────────────────
 
@@ -591,14 +676,18 @@ figma.on('currentpagechange', () => {
 
 // ─── message handler ────────────────────────────
 
-figma.ui.onmessage = async (msg: UIMessage) => {
+async function handleMessage(msg: UIMessage): Promise<void> {
+  await initialized;
+  if (!['INIT', 'FOCUS_PIN', 'RESIZE', 'OPEN_WEB_VIEWER', 'CLIENT_GET', 'CLIENT_SET'].includes(msg.type)) {
+    if (msg.type === 'SAFETY' && ['history', 'export'].includes(msg.action)) { /* read only */ }
+    else {
+      if (figma.editorType === 'dev') throw new Error('읽기 전용 모드입니다.');
+      actor();
+    }
+  }
+  pins = await load();
   switch (msg.type) {
     case 'INIT': {
-      pins = await load();
-      if (pins.length === 0) {
-        pins = await scanAndRecover();
-        if (pins.length > 0) await save();
-      }
       pageStubs = loadStubs();
       const storedOD = figma.root.getSharedPluginData(NAMESPACE, ONBOARDING_KEY)
                     || figma.root.getPluginData(ONBOARDING_KEY);
@@ -622,7 +711,7 @@ figma.ui.onmessage = async (msg: UIMessage) => {
       const rawCat = msg.category ?? 'design';
       const category: PinCategory = (rawCat in CAT_COLORS) ? rawCat : 'design';
       try {
-        const validNums = pins.map(p => p.number).filter((n): n is number => typeof n === 'number' && !isNaN(n));
+        const validNums = store.all().map(p => p.number).filter((n): n is number => typeof n === 'number' && !isNaN(n));
         const num = validNums.length > 0 ? Math.max(...validNums) + 1 : 1;
         const { pinNodeId, anchor } = await createBadge(node, num, category);
         const pin: Pin = {
@@ -654,34 +743,21 @@ figma.ui.onmessage = async (msg: UIMessage) => {
     }
 
     case 'UPDATE_PIN': {
-      let idx = pins.findIndex(p => p.id === msg.pin.id);
-      if (idx === -1) {
-        pins = await load();
-        idx = pins.findIndex(p => p.id === msg.pin.id);
-      }
-      if (idx !== -1) {
-        const inCat = msg.pin.category;
-        const safeCat: PinCategory = (inCat in CAT_COLORS) ? inCat : 'design';
-        const updated: Pin = { ...msg.pin, category: safeCat, updatedAt: new Date().toISOString() };
-        pins[idx] = updated;
-        await save();
-        await updateBadgeColor(updated);
-        post({ type: 'PIN_UPDATED', pin: updated });
-      }
+      const old = store.get(msg.pin.id);
+      if (!old) throw new Error('핀을 찾을 수 없습니다.');
+      const next = editablePatch(old, msg.pin, currentUser());
+      const updated = JSON.stringify(old) === JSON.stringify(next) ? old : store.commit(next, actor(), '내용 / 상태 변경', old.revision);
+      await updateBadgeColor(updated);
+      post({ type: 'PIN_UPDATED', pin: updated });
+      if (!msg.quiet) post({ type: 'NOTICE', message: '저장했어요.' });
       break;
     }
 
     case 'DELETE_PIN': {
-      const pin = pins.find(p => p.id === msg.id);
-      if (pin) {
-        const node = await figma.getNodeByIdAsync(pin.pinNodeId);
-        if (node) (node as SceneNode).remove();
-        pins = pins.filter(p => p.id !== msg.id);
-        await save();
-        post({ type: 'PIN_DELETED', id: msg.id });
-      }
+      await trashPins([msg.id], '작성자 삭제');
       break;
     }
+    case 'SAFETY': await handleSafety(msg); break;
 
     case 'FOCUS_PIN': {
       const pin = pins.find(p => p.pinNodeId === msg.pinNodeId);
@@ -715,6 +791,7 @@ figma.ui.onmessage = async (msg: UIMessage) => {
     }
 
     case 'RENAME_PAGE_GROUP': {
+      requireEditable(pins.filter(p => p.pageId === msg.pageId));
       pins = pins.map(p =>
         p.pageId === msg.pageId ? { ...p, pageName: msg.newName } : p
       );
@@ -728,18 +805,9 @@ figma.ui.onmessage = async (msg: UIMessage) => {
     }
 
     case 'DELETE_PAGE_GROUP': {
-      const toDelete = pins.filter(p => p.pageId === msg.pageId);
-      for (const pin of toDelete) {
-        try {
-          const node = await figma.getNodeByIdAsync(pin.pinNodeId);
-          if (node) (node as SceneNode).remove();
-        } catch (_) {}
-      }
-      pins = pins.filter(p => p.pageId !== msg.pageId);
-      pageStubs = pageStubs.filter(s => s.pageId !== msg.pageId);
-      await save();
-      saveStubs();
-      postPinsLoaded();
+      const targets = pins.filter(p => p.pageId === msg.pageId && isOwner(p, currentUser()));
+      if (!targets.length) throw new Error('이 페이지에 삭제할 내 핀이 없습니다.');
+      await trashPins(targets.map(p => p.id), '페이지에서 내 핀 일괄 삭제');
       break;
     }
 
@@ -768,6 +836,24 @@ figma.ui.onmessage = async (msg: UIMessage) => {
       break;
     }
 
+    // The UI iframe is sandboxed without same-origin, so localStorage is not
+    // available there; per-user UI flags live in figma.clientStorage instead.
+    case 'CLIENT_GET': {
+      const flags: Record<string, string> = {};
+      const keys = Array.isArray(msg.keys) ? msg.keys.filter(k => typeof k === 'string' && k.length <= 64).slice(0, 20) : [];
+      for (const k of keys) {
+        try { const v = figma.clientStorage ? await figma.clientStorage.getAsync(`ui:${k}`) : undefined; flags[k] = typeof v === 'string' ? v : ''; }
+        catch (_) { flags[k] = ''; }
+      }
+      post({ type: 'CLIENT_FLAGS', flags });
+      break;
+    }
+    case 'CLIENT_SET': {
+      if (typeof msg.key !== 'string' || msg.key.length > 64 || typeof msg.value !== 'string' || msg.value.length > 2000) break;
+      try { if (figma.clientStorage) await figma.clientStorage.setAsync(`ui:${msg.key}`, msg.value); } catch (_) {}
+      break;
+    }
+
     case 'ONBOARDING_DONE': {
       onboardingDone = true;
       figma.root.setSharedPluginData(NAMESPACE, ONBOARDING_KEY, 'true');
@@ -775,12 +861,15 @@ figma.ui.onmessage = async (msg: UIMessage) => {
     }
 
     case 'REPOSITION_PINS': {
+      requireEditable(pins.filter(p => p.pageId === msg.pageId));
       const { moved, total } = await repositionPins(msg.pageId);
       post({ type: 'REPOSITION_DONE', pageId: msg.pageId, moved, total });
       break;
     }
 
     case 'REORDER_PINS': {
+      requireEditable(msg.order.map(id => pins.find(p => p.id === id)).filter((p): p is Pin => !!p));
+      requireEditable(msg.renumbers.map(r => pins.find(p => p.id === r.id)).filter((p): p is Pin => !!p));
       const orders = loadPinOrders();
       orders[msg.orderKey] = msg.order;
       figma.root.setSharedPluginData(NAMESPACE, PIN_ORDER_KEY, JSON.stringify(orders));
@@ -804,6 +893,8 @@ figma.ui.onmessage = async (msg: UIMessage) => {
     case 'SET_PIN_NUMBER': {
       const pin = pins.find(p => p.id === msg.id);
       if (!pin) break;
+      if (!Number.isInteger(msg.number) || msg.number < 1) throw new Error('올바른 번호를 입력해주세요.');
+      requireEditable([pin, ...pins.filter(p => p.id === msg.swapWithId)]);
       const changed: Pin[] = [];
       if (msg.swapWithId) {
         const other = pins.find(p => p.id === msg.swapWithId);
@@ -836,6 +927,7 @@ figma.ui.onmessage = async (msg: UIMessage) => {
     }
 
     case 'COMPACT_NUMBERS': {
+      requireEditable(pins);
       await figma.loadAllPagesAsync();
       const sorted = [...pins].sort((a, b) => {
         const an = typeof a.number === 'number' && !isNaN(a.number) ? a.number : Infinity;
@@ -856,4 +948,5 @@ figma.ui.onmessage = async (msg: UIMessage) => {
       break;
     }
   }
-};
+}
+figma.ui.onmessage = (msg: UIMessage) => enqueue(() => handleMessage(msg));

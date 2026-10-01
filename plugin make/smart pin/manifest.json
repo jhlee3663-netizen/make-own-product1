@@ -6,6 +6,7 @@
   "ui": "dist/ui.html",
   "editorType": ["figma", "dev"],
   "documentAccess": "dynamic-page",
+  "permissions": ["currentuser"],
   "networkAccess": {
     "allowedDomains": [
       "https://fonts.googleapis.com",

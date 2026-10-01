@@ -5,6 +5,7 @@
     "module": "CommonJS",
     "jsx": "react",
     "strict": true,
+    "skipLibCheck": true,
     "esModuleInterop": true,
     "typeRoots": ["./node_modules/@figma", "./node_modules/@types"]
   },
