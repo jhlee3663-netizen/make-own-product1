@@ -7,11 +7,11 @@ import Toast from '../common/Toast';
 import { shareText, buildDietShareText } from '../../utils/share';
 
 function getChip(kcal, goal) {
-  if (!goal) return { label: '성공 🔥', color: '#7E7EFF', bg: 'rgba(0,84,209,0.1)' };
+  if (!goal) return { label: '성공 🔥', color: '#7171FF', bg: 'rgba(0,84,209,0.1)' };
   const ratio = kcal / goal;
   if (ratio > 1.1) return { label: '과식했어요 😅', color: '#e05a2b', bg: 'rgba(255,80,80,0.1)' };
   if (ratio < 1.0) return { label: '더 먹어요 🍚', color: '#008dcf', bg: 'rgba(0,152,178,0.1)' };
-  return { label: '성공 🔥', color: '#7E7EFF', bg: 'rgba(0,84,209,0.1)' };
+  return { label: '성공 🔥', color: '#7171FF', bg: 'rgba(0,84,209,0.1)' };
 }
 
 const enteredCards = new Set();

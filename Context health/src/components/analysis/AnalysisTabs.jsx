@@ -12,7 +12,7 @@ const TABS = [
   { id: 'workout', label: '운동' },
 ];
 
-const BRAND = '#7E7EFF';
+const BRAND = '#7171FF';
 const kg = (v, digits = 1) => `${v.toFixed(digits)}kg`;
 const num = v => String(Math.round(v * 10) / 10);
 const signed = (v, digits = 1) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(digits)}`;

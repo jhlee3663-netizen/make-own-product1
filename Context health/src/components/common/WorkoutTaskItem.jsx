@@ -253,7 +253,7 @@ const WorkoutTaskItem = ({ title, body, onTitleChange, onBodyChange, onBodyBlur,
               setEditingBody(true);
             }}
             placeholder="운동의 무게와 세트수 등 편하게 적어주세요"
-            className={`font-pretendard text-body-s font-medium tracking-[-0.35px] leading-5 bg-transparent border-none outline-none w-full p-0 placeholder:text-ui-4/70 ${isAI ? 'text-[#7E7EFF]' : 'text-typo-secondary'}`}
+            className={`font-pretendard text-body-s font-medium tracking-[-0.35px] leading-5 bg-transparent border-none outline-none w-full p-0 placeholder:text-ui-4/70 ${isAI ? 'text-[#7171FF]' : 'text-typo-secondary'}`}
           />
         ) : (
           <div className="flex flex-col gap-1 cursor-text" onClick={() => setEditingBody(true)}>

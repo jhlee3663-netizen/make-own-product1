@@ -32,7 +32,7 @@ import {
 
 const TEXT_COLORS = [
   '#171719', '#e03e52', '#f07800', '#d4a017',
-  '#1a9e5c', '#7E7EFF', '#8b5cf6', '#868e96',
+  '#1a9e5c', '#7171FF', '#8b5cf6', '#868e96',
 ];
 const HIGHLIGHT_COLORS = [
   'transparent', '#fef08a', '#bbf7d0', '#d4d4ff',
@@ -1380,7 +1380,7 @@ JSON 형식으로만 반환해줘:
                         key={c}
                         onMouseDown={(e) => { e.preventDefault(); applyTextColor(c); }}
                         className="w-6 h-6 rounded-full border-2 transition-transform hover:scale-110"
-                        style={{ background: c, borderColor: currentTextColor === c ? '#7E7EFF' : 'transparent' }}
+                        style={{ background: c, borderColor: currentTextColor === c ? '#7171FF' : 'transparent' }}
                       />
                     ))}
                   </div>
@@ -1402,7 +1402,7 @@ JSON 형식으로만 반환해줘:
                         key={c}
                         onMouseDown={(e) => { e.preventDefault(); applyHighlight(c); }}
                         className="w-6 h-6 rounded-full border-2 transition-transform hover:scale-110"
-                        style={{ background: c === 'transparent' ? 'white' : c, borderColor: currentHighlight === c ? '#7E7EFF' : '#dee2e6' }}
+                        style={{ background: c === 'transparent' ? 'white' : c, borderColor: currentHighlight === c ? '#7171FF' : '#dee2e6' }}
                       />
                     ))}
                   </div>

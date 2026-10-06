@@ -385,7 +385,7 @@ export default function MyPageScreen({ user, profile, onProfileSave, onNavChange
                     </div>
                     {form.activityLevel === id && (
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                        <path d="M20 6L9 17L4 12" stroke="#7E7EFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        <path d="M20 6L9 17L4 12" stroke="#7171FF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                       </svg>
                     )}
                   </Pressable>

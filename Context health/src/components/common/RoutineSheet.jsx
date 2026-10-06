@@ -141,7 +141,7 @@ export default function RoutineSheet({ uid, onClose, workoutLogs, dietLogs, onNa
                   <div
                     key={key}
                     className={`flex items-center gap-3 px-4 py-3 rounded-2xl ${isCurrentDay ? 'ring-1 ring-brand/30' : ''}`}
-                    style={{ background: isCurrentDay ? 'rgba(126,126,255,0.06)' : 'rgba(0,0,0,0.03)' }}
+                    style={{ background: isCurrentDay ? 'rgba(113,113,255,0.06)' : 'rgba(0,0,0,0.03)' }}
                   >
                     <span className={`w-5 text-center font-pretendard text-[13px] font-bold tracking-[-0.3px] flex-none ${isCurrentDay ? 'text-brand' : 'text-typo-alternative'}`}>
                       {day}

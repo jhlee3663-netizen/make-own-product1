@@ -7,8 +7,8 @@ export default {
   theme: {
     extend: {
       colors: {
-        brand: '#7E7EFF',
-        'brand-light': 'rgba(126, 126, 255, 0.1)',
+        brand: '#7171FF',
+        'brand-light': 'rgba(113, 113, 255, 0.1)',
         cyan: '#008dcf',
         'red-orange': '#c94a00',
         ui: {

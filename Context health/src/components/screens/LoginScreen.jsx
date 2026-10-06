@@ -331,7 +331,7 @@ export default function LoginScreen({ onLogin }) {
   if (socialCallbackPending) {
     return (
       <div className="h-full flex items-center justify-center bg-white">
-        <div className="w-8 h-8 border-2 border-[#7E7EFF]/20 border-t-[#7E7EFF] rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-[#7171FF]/20 border-t-[#7171FF] rounded-full animate-spin" />
       </div>
     );
   }
@@ -408,7 +408,7 @@ export default function LoginScreen({ onLogin }) {
             <Pressable
               pressScale={0.98}
               onClick={handleCopyLink}
-              className="w-full h-[48px] mt-4 rounded-[12px] bg-[#7E7EFF] text-white font-pretendard font-semibold text-[14px] tracking-[-0.35px]"
+              className="w-full h-[48px] mt-4 rounded-[12px] bg-[#7171FF] text-white font-pretendard font-semibold text-[14px] tracking-[-0.35px]"
             >
               {copied ? '링크가 복사되었습니다' : '링크 복사하기'}
             </Pressable>

@@ -46,7 +46,7 @@ function getChipType(kcal, goal) {
 
 const CHIP = {
   success: { label: '오늘도 성공! 🔥', bg: 'rgba(26,158,92,0.1)',   color: '#1a9e5c' },
-  going:   { label: '좀만 더! 🤯',     bg: 'rgba(126,126,255,0.1)',  color: '#7E7EFF' },
+  going:   { label: '좀만 더! 🤯',     bg: 'rgba(113,113,255,0.1)',  color: '#7171FF' },
   low:     { label: '더 먹어요 🍚',    bg: 'rgba(240,120,0,0.1)',   color: '#f07800' },
   over:    { label: '초과했어요 😅',   bg: 'rgba(224,62,82,0.1)',   color: '#e03e52' },
 };
@@ -992,7 +992,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
               className="h-full rounded-full transition-all duration-700 ease-out"
               style={{
                 width: `${Math.min((totals.kcal / goalKcal) * 100, 100)}%`,
-                background: totals.kcal > goalKcal * 1.1 ? '#e03e52' : totals.kcal >= goalKcal * 0.95 ? '#1a9e5c' : '#7E7EFF',
+                background: totals.kcal > goalKcal * 1.1 ? '#e03e52' : totals.kcal >= goalKcal * 0.95 ? '#1a9e5c' : '#7171FF',
               }}
             />
           </div>
@@ -1043,14 +1043,14 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
                 </h3>
                 <div className="flex items-center gap-2">
                   {secKcal > 0 && (
-                    <span className="font-pretendard font-semibold text-[14px] text-[#7E7EFF] tracking-[-0.35px]">
+                    <span className="font-pretendard font-semibold text-[14px] text-[#7171FF] tracking-[-0.35px]">
                       {secKcal.toLocaleString()} kcal
                     </span>
                   )}
                 </div>
               </div>
               {secKcal > 0 && (
-                <p className="font-pretendard font-medium text-[12px] leading-[16px] tracking-[-0.3px] text-[#7E7EFF]/40 m-0 -mt-1">
+                <p className="font-pretendard font-medium text-[12px] leading-[16px] tracking-[-0.3px] text-[#7171FF]/40 m-0 -mt-1">
                   총 탄 {secTotals.carb}g · 단 {secTotals.protein}g · 지 {secTotals.fat}g
                 </p>
               )}
@@ -1069,7 +1069,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
                         >
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5 min-w-0">
-                              <span className="shrink-0 px-1.5 py-0.5 rounded-[6px] bg-[#eef4ff] font-pretendard font-semibold text-[10px] text-[#7E7EFF]">직접 입력</span>
+                              <span className="shrink-0 px-1.5 py-0.5 rounded-[6px] bg-[#eef4ff] font-pretendard font-semibold text-[10px] text-[#7171FF]">직접 입력</span>
                               <span className="font-pretendard font-semibold text-[14px] text-[#495057] tracking-[-0.35px] truncate">{item.name}</span>
                             </div>
                             <p className="font-pretendard text-[11px] text-[#868e96] tracking-[-0.2px] mt-1 m-0 truncate">
@@ -1108,7 +1108,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
                           {gramsKnown && (
                             <button
                               onClick={() => handleSwitchPortionMode(sec.id, item.id)}
-                              className="font-pretendard font-semibold text-[11px] text-[#7E7EFF] tracking-[-0.2px] mt-1 border-b border-dashed border-[#9bb9f4]"
+                              className="font-pretendard font-semibold text-[11px] text-[#7171FF] tracking-[-0.2px] mt-1 border-b border-dashed border-[#9bb9f4]"
                               aria-label={`${getPortionDisplayName(item.name)} ${mode === 'count' ? '정확한 무게로 전환' : '개수로 전환'}`}
                             >
                               {mode === 'count'
@@ -1144,7 +1144,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
               {/* 입력 폼 */}
               <div className="mt-1 flex items-center gap-2">
                 {/* 텍스트 입력 + 검색 */}
-                <div className="flex-1 flex items-center gap-1 bg-white rounded-[12px] pl-3 pr-1.5 py-2 min-h-[44px] border border-[#dee2e6] focus-within:border-[#7E7EFF] transition-colors shadow-sm">
+                <div className="flex-1 flex items-center gap-1 bg-white rounded-[12px] pl-3 pr-1.5 py-2 min-h-[44px] border border-[#dee2e6] focus-within:border-[#7171FF] transition-colors shadow-sm">
                   <AutoTextarea
                     value={inputValue}
                     onChange={e => setAiInputs(p => ({ ...p, [sec.id]: e.target.value }))}
@@ -1180,7 +1180,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
                   <Pressable
                     pressScale={0.95}
                     onClick={() => handleOpenManualMacro(sec.id)}
-                    className="flex-none px-2.5 py-1 bg-[#f5f8ff] border border-[#bfd2f8] rounded-full font-pretendard font-semibold text-[12px] text-[#7E7EFF] tracking-[-0.3px] whitespace-nowrap hover:bg-[#eef4ff]"
+                    className="flex-none px-2.5 py-1 bg-[#f5f8ff] border border-[#bfd2f8] rounded-full font-pretendard font-semibold text-[12px] text-[#7171FF] tracking-[-0.3px] whitespace-nowrap hover:bg-[#eef4ff]"
                   >
                     + 영양정보 직접 입력
                   </Pressable>
@@ -1202,7 +1202,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
         {saving && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm">
             <div className="bg-white px-6 py-4 rounded-xl shadow-lg flex items-center gap-3">
-              <div className="w-5 h-5 border-2 border-[#7E7EFF]/30 border-t-[#7E7EFF] rounded-full animate-spin" />
+              <div className="w-5 h-5 border-2 border-[#7171FF]/30 border-t-[#7171FF] rounded-full animate-spin" />
               <span className="font-pretendard text-[14px] font-semibold text-[#171a1d]">저장 중...</span>
             </div>
           </div>
@@ -1215,7 +1215,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
           pressScale={0.97}
           onClick={handleSaveClick}
           disabled={saving}
-          className="w-full h-[56px] bg-[#7E7EFF] rounded-2xl font-pretendard font-bold text-[16px] text-white tracking-[-0.4px] disabled:opacity-40"
+          className="w-full h-[56px] bg-[#7171FF] rounded-2xl font-pretendard font-bold text-[16px] text-white tracking-[-0.4px] disabled:opacity-40"
         >
           저장하기
         </Pressable>
@@ -1237,12 +1237,12 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
                 onChange={e => setSearchQuery(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleFoodSearch()}
                 placeholder="식품명 + 수량 (예: 닭가슴살 200g)"
-                className="flex-1 min-w-0 bg-[#f8f9fa] rounded-[10px] px-4 py-2.5 font-pretendard text-[14px] text-[#171a1d] outline-none border border-transparent focus:border-[#7E7EFF] transition-colors placeholder:text-[#adb5bd]"
+                className="flex-1 min-w-0 bg-[#f8f9fa] rounded-[10px] px-4 py-2.5 font-pretendard text-[14px] text-[#171a1d] outline-none border border-transparent focus:border-[#7171FF] transition-colors placeholder:text-[#adb5bd]"
               />
               <button
                 onClick={handleFoodSearch}
                 disabled={searching || !searchQuery.trim()}
-                className="shrink-0 bg-[#7E7EFF] text-white font-pretendard font-semibold text-[13px] px-4 rounded-[10px] disabled:opacity-40 flex items-center justify-center min-w-[56px]"
+                className="shrink-0 bg-[#7171FF] text-white font-pretendard font-semibold text-[13px] px-4 rounded-[10px] disabled:opacity-40 flex items-center justify-center min-w-[56px]"
               >
                 {searching
                   ? <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
@@ -1257,7 +1257,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
                   <button
                     onClick={handleUseAiEstimate}
                     disabled={estimatingSearch}
-                    className="font-pretendard font-semibold text-[12px] text-[#7E7EFF] disabled:opacity-40"
+                    className="font-pretendard font-semibold text-[12px] text-[#7171FF] disabled:opacity-40"
                   >
                     {estimatingSearch ? '추정 중...' : 'AI 추정값 사용'}
                   </button>
@@ -1272,10 +1272,10 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
                         </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <span className="font-pretendard font-bold text-[13px] text-[#7E7EFF]">{food.kcal} kcal</span>
+                        <span className="font-pretendard font-bold text-[13px] text-[#7171FF]">{food.kcal} kcal</span>
                         <button
                           onClick={() => handleAddSearchItem(normalizeSearchItem(food))}
-                          className="w-8 h-8 bg-[#7E7EFF] text-white rounded-full flex items-center justify-center font-bold text-[18px] leading-none"
+                          className="w-8 h-8 bg-[#7171FF] text-white rounded-full flex items-center justify-center font-bold text-[18px] leading-none"
                         >
                           +
                         </button>
@@ -1287,7 +1287,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
             )}
 
             {searchResult && (
-              <div className="mb-4 p-3 border border-[#7E7EFF]/30 rounded-[12px] bg-[#eef4ff]">
+              <div className="mb-4 p-3 border border-[#7171FF]/30 rounded-[12px] bg-[#eef4ff]">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     <p className="font-pretendard font-semibold text-[14px] text-[#171a1d] m-0 truncate">{searchResult.name}</p>
@@ -1297,9 +1297,9 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
                     </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className="font-pretendard font-bold text-[14px] text-[#7E7EFF]">{searchResult.kcal} kcal</span>
+                    <span className="font-pretendard font-bold text-[14px] text-[#7171FF]">{searchResult.kcal} kcal</span>
                     <button onClick={handleAddSearchResult}
-                      className="bg-[#7E7EFF] text-white font-pretendard font-semibold text-[12px] px-3 py-1.5 rounded-full">
+                      className="bg-[#7171FF] text-white font-pretendard font-semibold text-[12px] px-3 py-1.5 rounded-full">
                       추가
                     </button>
                   </div>
@@ -1320,10 +1320,10 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
                         </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <span className="font-pretendard font-bold text-[13px] text-[#7E7EFF]">{food.kcal} kcal</span>
+                        <span className="font-pretendard font-bold text-[13px] text-[#7171FF]">{food.kcal} kcal</span>
                         <button
                           onClick={() => { handleAddRecentFood(searchModal, food); handleCloseSearchModal(); }}
-                          className="w-8 h-8 bg-[#7E7EFF] text-white rounded-full flex items-center justify-center font-bold text-[18px] leading-none"
+                          className="w-8 h-8 bg-[#7171FF] text-white rounded-full flex items-center justify-center font-bold text-[18px] leading-none"
                         >
                           +
                         </button>
@@ -1364,7 +1364,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
                 value={manualMacroForm.name}
                 onChange={e => setManualMacroForm(prev => ({ ...prev, name: e.target.value }))}
                 placeholder={`예: 뷔페, 회식 · 비우면 '${manualMacroSectionName} 직접 기록'`}
-                className="w-full h-11 bg-white rounded-[11px] px-3 font-pretendard text-[14px] text-[#171a1d] outline-none border border-[#dee2e6] focus:border-[#7E7EFF] transition-colors placeholder:text-[#adb5bd]"
+                className="w-full h-11 bg-white rounded-[11px] px-3 font-pretendard text-[14px] text-[#171a1d] outline-none border border-[#dee2e6] focus:border-[#7171FF] transition-colors placeholder:text-[#adb5bd]"
               />
             </div>
 
@@ -1376,12 +1376,12 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
                   onChange={e => setManualMacroForm(prev => ({ ...prev, paste: e.target.value }))}
                   placeholder="예: 1200kcal, 탄수화물 130g, 단백질 70g, 지방 45g"
                   rows={3}
-                  className="w-full min-h-[72px] resize-none bg-[#f8faff] rounded-[12px] pl-3 pr-[78px] py-2.5 font-pretendard text-[13px] leading-[19px] text-[#495057] outline-none border border-[#cfdcf4] focus:border-[#7E7EFF] transition-colors placeholder:text-[#adb5bd]"
+                  className="w-full min-h-[72px] resize-none bg-[#f8faff] rounded-[12px] pl-3 pr-[78px] py-2.5 font-pretendard text-[13px] leading-[19px] text-[#495057] outline-none border border-[#cfdcf4] focus:border-[#7171FF] transition-colors placeholder:text-[#adb5bd]"
                 />
                 <button
                   onClick={handleParseManualMacroPaste}
                   disabled={!manualMacroForm.paste.trim()}
-                  className="absolute right-2 bottom-2 h-8 px-2.5 rounded-[8px] bg-[#e7efff] font-pretendard font-semibold text-[11px] text-[#7E7EFF] disabled:opacity-40"
+                  className="absolute right-2 bottom-2 h-8 px-2.5 rounded-[8px] bg-[#e7efff] font-pretendard font-semibold text-[11px] text-[#7171FF] disabled:opacity-40"
                 >
                   자동 입력
                 </button>
@@ -1395,7 +1395,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
                 { key: 'protein', label: '단백질', unit: 'g' },
                 { key: 'fat', label: '지방', unit: 'g' },
               ].map(({ key, label, unit }) => (
-                <label key={key} className="relative block rounded-[12px] border border-[#e1e5ea] px-3 pt-2 pb-1.5 focus-within:border-[#7E7EFF] transition-colors">
+                <label key={key} className="relative block rounded-[12px] border border-[#e1e5ea] px-3 pt-2 pb-1.5 focus-within:border-[#7171FF] transition-colors">
                   <span className="block font-pretendard text-[10px] font-medium text-[#868e96]">{label}</span>
                   <input
                     type="number"
@@ -1412,7 +1412,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
 
             <div className="mt-3 px-3 py-2.5 rounded-[10px] bg-[#f5f8ff] flex items-center justify-between gap-3">
               <span className="font-pretendard text-[11px] text-[#64748b]">탄단지 기준 계산 열량</span>
-              <span className="font-pretendard font-semibold text-[11px] text-[#7E7EFF]">약 {manualMacroCalculatedKcal.toLocaleString()} kcal</span>
+              <span className="font-pretendard font-semibold text-[11px] text-[#7171FF]">약 {manualMacroCalculatedKcal.toLocaleString()} kcal</span>
             </div>
 
             <div className="mt-4 flex gap-2">
@@ -1427,7 +1427,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
               <button
                 onClick={handleSaveManualMacro}
                 disabled={!manualMacroCanSave}
-                className="flex-1 h-[50px] rounded-[13px] bg-[#7E7EFF] font-pretendard font-semibold text-[15px] text-white disabled:opacity-40"
+                className="flex-1 h-[50px] rounded-[13px] bg-[#7171FF] font-pretendard font-semibold text-[15px] text-white disabled:opacity-40"
               >
                 {manualMacroTarget.itemId ? '수정 완료' : `${manualMacroSectionName}에 추가`}
               </button>
@@ -1471,13 +1471,13 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
                       onChange={e => setGoalInput(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && handleGoalSave()}
                       placeholder="목표 칼로리"
-                      className="flex-1 bg-[#f8f9fa] rounded-[10px] px-4 py-2.5 font-pretendard text-[14px] text-[#171a1d] outline-none border border-transparent focus:border-[#7E7EFF] transition-colors"
+                      className="flex-1 bg-[#f8f9fa] rounded-[10px] px-4 py-2.5 font-pretendard text-[14px] text-[#171a1d] outline-none border border-transparent focus:border-[#7171FF] transition-colors"
                       autoFocus
                     />
                     <span className="font-pretendard text-[13px] text-[#adb5bd] self-center">kcal</span>
                     <button
                       onClick={handleGoalSave}
-                      className="bg-[#7E7EFF] text-white font-pretendard font-semibold text-[13px] px-4 rounded-[10px]"
+                      className="bg-[#7171FF] text-white font-pretendard font-semibold text-[13px] px-4 rounded-[10px]"
                     >
                       확인
                     </button>
@@ -1558,7 +1558,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <p className="font-pretendard font-semibold text-[14px] text-[#171a1d] m-0 truncate">{food.name}</p>
-                        <span className={`shrink-0 rounded-full px-1.5 py-0.5 font-pretendard text-[10px] font-medium ${food.source === 'custom' ? 'bg-[#eef4ff] text-[#7E7EFF]' : 'bg-[#f1f3f5] text-[#868e96]'}`}>
+                        <span className={`shrink-0 rounded-full px-1.5 py-0.5 font-pretendard text-[10px] font-medium ${food.source === 'custom' ? 'bg-[#eef4ff] text-[#7171FF]' : 'bg-[#f1f3f5] text-[#868e96]'}`}>
                           {food.source === 'custom' ? '내 등록' : '기록 음식'}
                         </span>
                       </div>
@@ -1566,7 +1566,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
                         탄 {Number(food.carb || 0)}g · 단 {Number(food.protein || 0)}g · 지 {Number(food.fat || 0)}g
                       </p>
                     </div>
-                    <span className="font-pretendard font-bold text-[13px] text-[#7E7EFF] shrink-0">{Number(food.kcal || 0).toLocaleString()} kcal</span>
+                    <span className="font-pretendard font-bold text-[13px] text-[#7171FF] shrink-0">{Number(food.kcal || 0).toLocaleString()} kcal</span>
                   </div>
                 ))}
               </div>
@@ -1593,7 +1593,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
               <input
                 value={addForm.name}
                 onChange={e => setAddForm(p => ({ ...p, name: e.target.value }))}
-                className="w-full bg-[#f8f9fa] rounded-[8px] px-3 py-2.5 font-pretendard text-[14px] text-[#171a1d] tracking-[-0.35px] outline-none border border-transparent focus:border-[#7E7EFF] transition-colors"
+                className="w-full bg-[#f8f9fa] rounded-[8px] px-3 py-2.5 font-pretendard text-[14px] text-[#171a1d] tracking-[-0.35px] outline-none border border-transparent focus:border-[#7171FF] transition-colors"
                 autoFocus
               />
             </div>
@@ -1612,7 +1612,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
                       min="0"
                       value={addForm[key]}
                       onChange={e => setAddForm(p => ({ ...p, [key]: e.target.value }))}
-                      className="w-full bg-[#f8f9fa] rounded-[8px] px-2 py-2 font-pretendard text-[13px] text-[#171a1d] outline-none border border-transparent focus:border-[#7E7EFF] transition-colors"
+                      className="w-full bg-[#f8f9fa] rounded-[8px] px-2 py-2 font-pretendard text-[13px] text-[#171a1d] outline-none border border-transparent focus:border-[#7171FF] transition-colors"
                     />
                     <span className="absolute right-1.5 top-1/2 -translate-y-1/2 font-pretendard text-[10px] text-[#adb5bd]">{unit}</span>
                   </div>
@@ -1622,7 +1622,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
             <button
               onClick={handleSaveCustomFood}
               disabled={!addForm.name.trim() || Number(addForm.kcal) <= 0 || !isValidNutritionInput(addForm)}
-              className="w-full bg-[#7E7EFF] text-white font-pretendard font-semibold text-[16px] tracking-[-0.4px] py-3.5 rounded-[12px] transition-opacity hover:opacity-90 active:opacity-80 disabled:opacity-40"
+              className="w-full bg-[#7171FF] text-white font-pretendard font-semibold text-[16px] tracking-[-0.4px] py-3.5 rounded-[12px] transition-opacity hover:opacity-90 active:opacity-80 disabled:opacity-40"
             >
               저장
             </button>
@@ -1643,7 +1643,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
               <input
                 value={editForm.name}
                 onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))}
-                className="w-full bg-[#f8f9fa] rounded-[8px] px-3 py-2.5 font-pretendard text-[14px] text-[#171a1d] tracking-[-0.35px] outline-none border border-transparent focus:border-[#7E7EFF] transition-colors"
+                className="w-full bg-[#f8f9fa] rounded-[8px] px-3 py-2.5 font-pretendard text-[14px] text-[#171a1d] tracking-[-0.35px] outline-none border border-transparent focus:border-[#7171FF] transition-colors"
               />
             </div>
             <div className="grid grid-cols-4 gap-2 mb-6">
@@ -1661,7 +1661,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
                       min="0"
                       value={editForm[key]}
                       onChange={e => setEditForm(p => ({ ...p, [key]: e.target.value }))}
-                      className="w-full bg-[#f8f9fa] rounded-[8px] px-2 py-2 font-pretendard text-[13px] text-[#171a1d] outline-none border border-transparent focus:border-[#7E7EFF] transition-colors"
+                      className="w-full bg-[#f8f9fa] rounded-[8px] px-2 py-2 font-pretendard text-[13px] text-[#171a1d] outline-none border border-transparent focus:border-[#7171FF] transition-colors"
                     />
                     <span className="absolute right-1.5 top-1/2 -translate-y-1/2 font-pretendard text-[10px] text-[#adb5bd]">{unit}</span>
                   </div>
@@ -1670,7 +1670,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
             </div>
             <button
               onClick={handleSaveEdit}
-              className="w-full bg-[#7E7EFF] text-white font-pretendard font-semibold text-[16px] tracking-[-0.4px] py-3.5 rounded-[12px] transition-opacity hover:opacity-90 active:opacity-80"
+              className="w-full bg-[#7171FF] text-white font-pretendard font-semibold text-[16px] tracking-[-0.4px] py-3.5 rounded-[12px] transition-opacity hover:opacity-90 active:opacity-80"
             >
               수정 완료
             </button>

@@ -51,7 +51,7 @@ export default function BottomNav({ activeId = 'home', onChange, onMemo }) {
       <div
         role="menu"
         aria-hidden={!memoOpen}
-        className={`absolute bottom-[78px] left-1/2 -translate-x-1/2 z-[40] memo-menu${memoOpen ? ' open' : ''} flex items-center rounded-lg shadow-[0_0_6px_rgba(0,0,0,0.04)] bg-[linear-gradient(164deg,#228bed_0%,#c509d6_100%)]`}
+        className={`absolute bottom-[76px] left-1/2 -translate-x-1/2 z-[40] memo-menu${memoOpen ? ' open' : ''} flex items-center rounded-lg shadow-[0_0_12px_rgba(0,0,0,0.04)] bg-[linear-gradient(105deg,#3aa0ff_0%,#f152ff_100%)]`}
       >
         <button role="menuitem" tabIndex={memoOpen ? 0 : -1} onClick={() => pickMemo('workout')} className="px-5 py-2 font-pretendard font-semibold text-body-m text-white tracking-[-0.4px] whitespace-nowrap active:opacity-60">운동</button>
         <span className="w-px h-5 bg-white" aria-hidden="true" />
@@ -63,7 +63,9 @@ export default function BottomNav({ activeId = 'home', onChange, onMemo }) {
         onClick={() => setMemoOpen(open => !open)}
         aria-label="기록 추가"
         aria-expanded={memoOpen}
-        className="absolute bottom-[16px] left-1/2 -ml-[28px] z-[40] w-[56px] h-[56px] bg-brand rounded-full flex items-center justify-center shadow-[0_0_17px_rgba(0,0,0,0.04)] border-none"
+        className={`absolute bottom-[16px] left-1/2 -ml-[28px] z-[40] w-[56px] h-[56px] rounded-full flex items-center justify-center shadow-[0_0_17px_rgba(0,0,0,0.04)] border-none ${
+          memoOpen ? 'bg-[linear-gradient(135deg,#3aa0ff_0%,#f152ff_100%)]' : 'bg-brand'
+        }`}
       >
         <IcPencil size={22} color="#f8f9fa" />
       </Pressable>

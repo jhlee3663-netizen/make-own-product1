@@ -529,7 +529,7 @@ function App() {
   if (user === undefined || (user && !userDataReady)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white">
-        <div className="w-8 h-8 border-2 border-[#7E7EFF]/20 border-t-[#7E7EFF] rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-[#7171FF]/20 border-t-[#7171FF] rounded-full animate-spin" />
       </div>
     );
   }

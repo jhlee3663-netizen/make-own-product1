@@ -175,7 +175,7 @@ export default function CoachListScreen({ rooms, roomMeta, onOpenRoom, onStartNe
                 <div className="pt-5 flex flex-col gap-2">
                   <button
                     onClick={() => { const id = roomMenu.id; setRoomMenu(null); setSidebarOpen(false); onOpenRoom(id); }}
-                    className="w-full h-12 rounded-[14px] bg-[#7E7EFF] font-pretendard text-[15px] font-semibold text-white active:opacity-80"
+                    className="w-full h-12 rounded-[14px] bg-[#7171FF] font-pretendard text-[15px] font-semibold text-white active:opacity-80"
                   >
                     대화 열기
                   </button>

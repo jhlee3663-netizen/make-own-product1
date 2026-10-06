@@ -533,7 +533,7 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
             top: -570,
             left: '50%',
             marginLeft: -700,
-            background: 'radial-gradient(circle, rgba(126,126,255,0.13) 0%, transparent 70%)',
+            background: 'radial-gradient(circle, rgba(113,113,255,0.13) 0%, transparent 70%)',
             animation: 'pullRefreshRipple 0.85s cubic-bezier(0.2, 0.8, 0.2, 1) forwards',
             zIndex: 10,
           }}

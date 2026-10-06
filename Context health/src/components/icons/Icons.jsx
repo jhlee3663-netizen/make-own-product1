@@ -1,7 +1,7 @@
 import React from 'react';
 
 export const IcHome = ({ active, size = 24 }) => (
-  <svg width={size} height={size} viewBox="-3 -3 24 24" fill={active ? "#7E7EFF" : "#dee2e6"}>
+  <svg width={size} height={size} viewBox="-3 -3 24 24" fill={active ? "#7171FF" : "#dee2e6"}>
     <path fillRule="evenodd" clipRule="evenodd" d="M8.45.187C8.774-.062 9.226-.062 9.55.187l8.1 6.253C17.87 6.61 18 6.874 18 7.152v9.048C18 17.194 17.193 18 16.199 18H10.8v-4.31a.9.9 0 0 0-.9-.9H8.1a.9.9 0 0 0-.9.9V18H1.8C.806 18 0 17.194 0 16.2V7.152c0-.279.13-.541.35-.712L8.45.187Z" />
   </svg>
 );
@@ -10,8 +10,8 @@ export const IcChat = ({ active, size = 22 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
     <path
       d="M21 15C21 15.5304 20.7893 16.0391 20.4142 16.4142C20.0391 16.7893 19.5304 17 19 17H7L3 21V5C3 4.46957 3.21071 3.96086 3.58579 3.58579C3.96086 3.21071 4.46957 3 5 3H19C19.5304 3 20.0391 3.21071 20.4142 3.58579C20.7893 3.96086 21 4.46957 21 5V15Z"
-      fill={active ? "#7E7EFF" : "none"}
-      stroke={active ? "#7E7EFF" : "#adb5bd"}
+      fill={active ? "#7171FF" : "none"}
+      stroke={active ? "#7171FF" : "#adb5bd"}
       strokeWidth="1.8"
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -34,7 +34,7 @@ export const IcChat = ({ active, size = 22 }) => (
 );
 
 export const IcUser = ({ active, size = 18 }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill={active ? "#7E7EFF" : "#dee2e6"}>
+  <svg width={size} height={size} viewBox="0 0 24 24" fill={active ? "#7171FF" : "#dee2e6"}>
     <path d="M7.09 7.91C7.09 5.2 9.29 3 12 3s4.91 2.2 4.91 4.91-2.2 4.91-4.91 4.91S7.09 10.62 7.09 7.91Z" />
     <path d="M3 21c0-3.615 4.03-6.546 9-6.546S21 17.385 21 21H3Z" />
   </svg>
@@ -43,7 +43,7 @@ export const IcUser = ({ active, size = 18 }) => (
 export const IcAnalysis = ({ active, size = 24 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
     {active ? (
-      <path transform="translate(1.25 1.25)" d="M15.75 0C18.9256 0 21.5 2.57436 21.5 5.75V15.75C21.5 18.9256 18.9256 21.5 15.75 21.5H5.75C2.57436 21.5 0 18.9256 0 15.75V5.75C0 2.57436 2.57436 0 5.75 0H15.75ZM12.7705 7C12.4941 6.99244 12.2358 7.13787 12.0986 7.37793L8.70117 13.3242L7.37402 11.334C7.23492 11.1253 7.00076 11 6.75 11H4.75C4.33579 11 4 11.3358 4 11.75C4 12.1642 4.33579 12.5 4.75 12.5H6.34863L8.12598 15.166C8.27008 15.3822 8.51577 15.5088 8.77539 15.5C9.03517 15.4911 9.2724 15.3478 9.40137 15.1221L12.7061 9.33887L14.0791 12.085C14.2061 12.339 14.4659 12.5 14.75 12.5H16.75C17.1642 12.5 17.5 12.1642 17.5 11.75C17.5 11.3358 17.1642 11 16.75 11H15.2139L13.4209 7.41504C13.2972 7.16764 13.047 7.00767 12.7705 7Z" fill="#7E7EFF" />
+      <path transform="translate(1.25 1.25)" d="M15.75 0C18.9256 0 21.5 2.57436 21.5 5.75V15.75C21.5 18.9256 18.9256 21.5 15.75 21.5H5.75C2.57436 21.5 0 18.9256 0 15.75V5.75C0 2.57436 2.57436 0 5.75 0H15.75ZM12.7705 7C12.4941 6.99244 12.2358 7.13787 12.0986 7.37793L8.70117 13.3242L7.37402 11.334C7.23492 11.1253 7.00076 11 6.75 11H4.75C4.33579 11 4 11.3358 4 11.75C4 12.1642 4.33579 12.5 4.75 12.5H6.34863L8.12598 15.166C8.27008 15.3822 8.51577 15.5088 8.77539 15.5C9.03517 15.4911 9.2724 15.3478 9.40137 15.1221L12.7061 9.33887L14.0791 12.085C14.2061 12.339 14.4659 12.5 14.75 12.5H16.75C17.1642 12.5 17.5 12.1642 17.5 11.75C17.5 11.3358 17.1642 11 16.75 11H15.2139L13.4209 7.41504C13.2972 7.16764 13.047 7.00767 12.7705 7Z" fill="#7171FF" />
     ) : (
       <path d="M4.25 13H8L10 16L14 9L16 13H20.75" stroke="#dee2e6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     )}
@@ -51,7 +51,7 @@ export const IcAnalysis = ({ active, size = 24 }) => (
 );
 
 export const IcGenerate = ({ active, size = 24 }) => {
-  const c = active ? "#7E7EFF" : "#dee2e6";
+  const c = active ? "#7171FF" : "#dee2e6";
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <path d="M10.577 4.392C10.938 2.9 13.062 2.9 13.424 4.392L14.42 8.501C14.55 9.035 14.966 9.45 15.5 9.581L19.608 10.577C21.1 10.938 21.1 13.062 19.608 13.424L15.5 14.42C14.966 14.55 14.55 14.966 14.42 15.5L13.424 19.608C13.062 21.1 10.938 21.1 10.577 19.608L9.581 15.5C9.45 14.966 9.035 14.55 8.501 14.42L4.392 13.424C2.9 13.062 2.9 10.938 4.392 10.577L8.501 9.581C9.035 9.45 9.45 9.035 9.581 8.501L10.577 4.392Z" fill={c} />
@@ -84,10 +84,10 @@ export const IcMore = ({ size = 24 }) => (
 );
 
 export const IcKeyboard = ({ size = 24, active = false }) => {
-  const c = active ? '#7E7EFF' : '#171719';
+  const c = active ? '#7171FF' : '#171719';
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <rect x="2" y="6" width="20" height="13" rx="2" stroke={c} strokeWidth="1.5" fill={active ? 'rgba(126,126,255,0.12)' : 'none'} />
+      <rect x="2" y="6" width="20" height="13" rx="2" stroke={c} strokeWidth="1.5" fill={active ? 'rgba(113,113,255,0.12)' : 'none'} />
       <rect x="5" y="10" width="2" height="2" rx=".5" fill={c} />
       <rect x="9" y="10" width="2" height="2" rx=".5" fill={c} />
       <rect x="13" y="10" width="2" height="2" rx=".5" fill={c} />

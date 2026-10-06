@@ -75,8 +75,8 @@ const WorkoutCard = ({ data, perfGrade = 'success', onCardClick, onDelete, onCha
           {/* Header */}
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
-              <div className={`px-2 py-1 rounded-[8px] ${perfGrade === 'meh' ? 'bg-[#f07800]/10' : 'bg-[#7E7EFF]/10'}`}>
-                <p className={`font-pretendard text-[13px] tracking-[-0.325px] whitespace-nowrap ${perfGrade === 'meh' ? 'text-[#f07800]' : 'text-[#7E7EFF]'}`}>
+              <div className={`px-2 py-1 rounded-[8px] ${perfGrade === 'meh' ? 'bg-[#f07800]/10' : 'bg-[#7171FF]/10'}`}>
+                <p className={`font-pretendard text-[13px] tracking-[-0.325px] whitespace-nowrap ${perfGrade === 'meh' ? 'text-[#f07800]' : 'text-[#7171FF]'}`}>
                   {perfGrade === 'meh' ? '아쉬워요 💭' : '성공 🔥'}
                 </p>
               </div>
