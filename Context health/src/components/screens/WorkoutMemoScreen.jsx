@@ -4,10 +4,12 @@ import WorkoutTaskItem from '../common/WorkoutTaskItem';
 import Button from '../common/Button';
 import ConfirmModal from '../common/ConfirmModal';
 import Pressable from '../common/Pressable';
+import Toast from '../common/Toast';
 import { db } from '../../lib/firebase';
+import { clearRecordDraft, loadRecordDraft, saveRecordDraft, withSaveTimeout } from '../../lib/recordDrafts';
 import {
   collection,
-  addDoc,
+  setDoc,
   updateDoc,
   doc,
   serverTimestamp,
@@ -15,10 +17,12 @@ import {
   where,
   orderBy,
   limit,
-  getDocs
+  getDocs,
+  runTransaction
 } from 'firebase/firestore';
-import { parseVolume, sumReps } from '../../utils/utils';
-import { filterBodyParts, BODYWEIGHT_BASES } from '../../utils/exerciseData';
+import { buildWorkoutSummaryMessage, findComparableLastVolumeFromLogs, formatCardioDuration, parseCardioMinutes, parseVolume, parseVolumeFromBody, sumReps } from '../../utils/utils';
+import { generateContent, extractText } from '../../lib/aiClient';
+import { BODY_PARTS, filterBodyParts, BODYWEIGHT_BASES } from '../../utils/exerciseData';
 import {
   Bold, Italic, Underline, Strikethrough,
   AlignLeft, AlignCenter, AlignRight,
@@ -28,10 +32,10 @@ import {
 
 const TEXT_COLORS = [
   '#171719', '#e03e52', '#f07800', '#d4a017',
-  '#1a9e5c', '#0066ff', '#8b5cf6', '#868e96',
+  '#1a9e5c', '#7E7EFF', '#8b5cf6', '#868e96',
 ];
 const HIGHLIGHT_COLORS = [
-  'transparent', '#fef08a', '#bbf7d0', '#bfdbfe',
+  'transparent', '#fef08a', '#bbf7d0', '#d4d4ff',
   '#fecaca', '#e9d5ff', '#fed7aa',
 ];
 
@@ -43,7 +47,7 @@ const SUMMARY_SET_TYPES = [
   { pattern: /\(저\s*중량\)|저중량/gi, label: '저중량고반복', color: '#2e7d32' },
 ];
 
-const GEMINI_KEY = import.meta.env.VITE_GEMINI_KEY;
+const BODY_PART_OPTIONS = BODY_PARTS.join(', ');
 
 function groupBySupersets(items) {
   const groups = [];
@@ -68,6 +72,20 @@ function groupBySupersets(items) {
 const createEmptyWorkoutSections = () => [
   { id: 1, part: "", items: [] }
 ];
+
+function normalizeWorkoutSections(initialData) {
+  if (!initialData?.sections?.length) return createEmptyWorkoutSections();
+  return initialData.sections.map((s, i) => ({
+    id: i + 1,
+    part: s.part || '',
+    items: (s.items || []).map((it, j) => ({
+      id: j + 1,
+      title: it.title || '',
+      body: it.body || '',
+      supersetGroup: it.supersetGroup ?? null,
+    })),
+  }));
+}
 
 function RichToolbarBtn({ active, onClick, children, title }) {
   return (
@@ -183,18 +201,43 @@ function SummaryBodyRenderer({ body, note }) {
   );
 }
 
-export default function WorkoutMemoScreen({ onBack, onSave, initialData, uid, profile, onOpenCoachWithMessage }) {
-  const originalSectionsRef = useRef(null);
+/* 운동 전 식사 상태. Claude 커넥터(functions/mcp/tools.js)가 같은 코드를 읽는다. */
+const PRE_WORKOUT_MEAL_OPTIONS = [
+  { id: 'fasted', label: '공복' },
+  { id: 'carb_lt1h', label: '탄수 후 1시간 이내' },
+  { id: 'carb_1_2h', label: '탄수 후 1~2시간' },
+  { id: 'carb_gt2h', label: '탄수 후 2시간+' },
+];
+
+/* 동일 문서에 대해 백그라운드 AI 정리가 중복 실행되는 것을 막는다 (재저장/재진입 시 두 작업이 서로의 aiStatus 쓰기를 덮어써 processing에 멈추는 문제 방지) */
+const activeBackgroundAI = new Set();
+
+function createAiRevision() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+async function updateWorkoutIfCurrent(docRef, revision, fields) {
+  return runTransaction(db, async transaction => {
+    const snapshot = await transaction.get(docRef);
+    if (!snapshot.exists() || snapshot.data().aiRevision !== revision) return false;
+    transaction.update(docRef, fields);
+    return true;
+  });
+}
+
+export default function WorkoutMemoScreen({ onBack, onSave, initialData, uid, profile, onOpenCoachWithMessage, registerBackGuard }) {
+  const draftTargetId = initialData?.docId || 'new';
+  const restoredDraftRef = useRef(loadRecordDraft(uid, 'workout', draftTargetId));
+  const restoredDraft = restoredDraftRef.current;
+  const originalSectionsRef = useRef(JSON.stringify(normalizeWorkoutSections(initialData)));
+  const saveInFlightRef = useRef(false);
+  const pendingCreateRef = useRef(null);
   const [showExitModal, setShowExitModal] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [draftRestored, setDraftRestored] = useState(Boolean(restoredDraft));
 
-  useEffect(() => {
-    if (!originalSectionsRef.current) {
-      originalSectionsRef.current = JSON.stringify(sections);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const handleBackClick = () => {
+  function hasUnsavedChanges() {
     let isDirty = false;
     if (freeMode) {
       const currentHtml = editorRef.current?.innerHTML || '';
@@ -202,22 +245,32 @@ export default function WorkoutMemoScreen({ onBack, onSave, initialData, uid, pr
     } else {
       isDirty = JSON.stringify(sections) !== originalSectionsRef.current;
     }
-    
-    if (isDirty) {
+
+    return isDirty || preWorkoutMeal !== (initialData?.preWorkoutMeal ?? null);
+  }
+
+  function requestNavigation() {
+    if (hasUnsavedChanges()) {
       setShowExitModal(true);
-    } else {
-      onBack();
+      return false;
     }
+    return true;
+  }
+
+  const handleBackClick = () => {
+    if (requestNavigation()) onBack();
   };
 
   /* ── 자유 메모 모드 ── */
   const [freeMode, setFreeMode] = useState(() => {
+    if (typeof restoredDraft?.freeMode === 'boolean') return restoredDraft.freeMode;
     if (!initialData?.freeHtml) return false;
     // AI가 완료되고 sections가 있으면 구조적 모드로 열기
     if (initialData?.aiStatus === 'done' && initialData?.sections?.length > 0) return false;
     return true;
   });
   const editorRef = useRef(null);
+  const [freeHtmlDraft, setFreeHtmlDraft] = useState(restoredDraft?.freeHtml || initialData?.freeHtml || '');
   const [showColorPicker, setShowColorPicker] = useState(null); // null | 'text' | 'highlight'
   const [activeFormats, setActiveFormats] = useState({});
   const [currentTextColor, setCurrentTextColor] = useState('#171719');
@@ -225,7 +278,7 @@ export default function WorkoutMemoScreen({ onBack, onSave, initialData, uid, pr
 
   useEffect(() => {
     if (freeMode && editorRef.current && !editorRef.current.innerHTML) {
-      editorRef.current.innerHTML = initialData?.freeHtml || '';
+      editorRef.current.innerHTML = freeHtmlDraft;
       // 기존 메모 편집 시 auto-focus는 iOS 스크롤 버그를 유발하므로 새 메모만 포커스
       if (!initialData?.freeHtml) {
         editorRef.current.focus();
@@ -270,15 +323,9 @@ export default function WorkoutMemoScreen({ onBack, onSave, initialData, uid, pr
   }
 
   const [sections, setSections] = useState(() => {
-    if (initialData && initialData.sections && initialData.sections.length > 0) {
-      return initialData.sections.map((s, i) => ({
-        id: i + 1,
-        part: s.part || "",
-        items: (s.items || []).map((it, j) => ({ id: j + 1, title: it.title || "", body: it.body || "", supersetGroup: it.supersetGroup ?? null }))
-      }));
-    }
-    return createEmptyWorkoutSections();
+    return restoredDraft?.sections || normalizeWorkoutSections(initialData);
   });
+
   const [aiMenuOpen, setAiMenuOpen] = useState(false);
   const [bsOpen, setBsOpen] = useState(false);
   const [isBsLoading, setIsBsLoading] = useState(false);
@@ -302,7 +349,54 @@ export default function WorkoutMemoScreen({ onBack, onSave, initialData, uid, pr
   const [moreSheetOpen, setMoreSheetOpen] = useState(false);
 
   // 워크아웃 모드 (과부하 / 디로딩)
-  const [workoutMode, setWorkoutMode] = useState('overload');
+  const [workoutMode, setWorkoutMode] = useState(restoredDraft?.workoutMode || 'overload');
+
+  // 운동 전 식사 상태 (선택). null = 기록 안 함
+  const [preWorkoutMeal, setPreWorkoutMeal] = useState(
+    restoredDraft && 'preWorkoutMeal' in restoredDraft ? restoredDraft.preWorkoutMeal : (initialData?.preWorkoutMeal ?? null)
+  );
+
+  useEffect(() => {
+    if (!registerBackGuard) return undefined;
+    registerBackGuard(requestNavigation);
+    return () => registerBackGuard(null);
+  }, [registerBackGuard, sections, freeMode, initialData, preWorkoutMeal]);
+
+  useEffect(() => {
+    if (!uid) return undefined;
+    if (!initialData?.docId && restoredDraft?.pendingDocId && !pendingCreateRef.current) {
+      pendingCreateRef.current = doc(db, 'logs', restoredDraft.pendingDocId);
+    }
+    const hasStructuredContent = sections.some(section => section.part?.trim()
+      || section.items?.some(item => item.title?.trim() || item.body?.trim()));
+    const hasFreeContent = freeHtmlDraft.replace(/<[^>]*>/g, '').trim();
+    if (!hasStructuredContent && !hasFreeContent) return undefined;
+    const timer = setTimeout(() => {
+      const pendingDocId = initialData?.docId
+        ? null
+        : (pendingCreateRef.current || (pendingCreateRef.current = doc(collection(db, 'logs')))).id;
+      saveRecordDraft(uid, 'workout', draftTargetId, {
+        sections,
+        freeMode,
+        freeHtml: freeHtmlDraft,
+        workoutMode,
+        preWorkoutMeal,
+        pendingDocId,
+      });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [uid, draftTargetId, initialData?.docId, sections, freeMode, freeHtmlDraft, workoutMode, preWorkoutMeal, restoredDraft?.pendingDocId]);
+
+  useEffect(() => {
+    if (!draftRestored) return undefined;
+    const timer = setTimeout(() => setDraftRestored(false), 3000);
+    return () => clearTimeout(timer);
+  }, [draftRestored]);
+
+  function discardAndLeave() {
+    clearRecordDraft(uid, 'workout', draftTargetId);
+    onBack();
+  }
 
   // 글 정리 후 종목별 볼륨 증감
   const [exerciseVolumeDeltas, setExerciseVolumeDeltas] = useState({});
@@ -384,34 +478,26 @@ export default function WorkoutMemoScreen({ onBack, onSave, initialData, uid, pr
     return BODYWEIGHT_BASES.has(base);
   }
 
-  function parseMaxWeight(text) {
-    if (!text) return null;
-    const matches = [...text.matchAll(/(\d+(?:\.\d+)?)\s*kg/gi)];
-    if (!matches.length) return null;
-    return Math.max(...matches.map(m => parseFloat(m[1])));
+  async function fetchRecentWorkoutLogs(max = 80) {
+    if (!uid) return [];
+    const q = query(collection(db, "logs"), where("uid", "==", uid), orderBy("timestamp", "desc"), limit(max));
+    const snap = await getDocs(q);
+    return snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(d => d.type === "workout" && !d.deletedAt)
+      .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
   }
 
-  function parseVolumeFromBody(body) {
-    if (!body) return 0;
-    let total = 0;
-    for (const m of body.matchAll(/(\d+(?:\.\d+)?)\s*kg\s*(?:(\d+)\s*회|[x×]\s*(\d+))/g))
-      total += parseFloat(m[1]) * parseInt(m[2] || m[3]);
-    for (const m of body.matchAll(/(\d+(?:\.\d+)?)\s*(?:lbs?|파운드)\s*(?:(\d+)\s*회|[x×]\s*(\d+))/gi))
-      total += parseFloat(m[1]) * 0.453592 * parseInt(m[2] || m[3]);
-    for (const m of body.matchAll(/(\d+(?:\.\d+)?)\s*칸\s*(?:(\d+)\s*회|[x×]\s*(\d+))/g))
-      total += parseFloat(m[1]) * 5 * parseInt(m[2] || m[3]);
-    return total;
+  async function findComparableLastVolume(currentSections, currentTitle, currentDocId) {
+    const sorted = await fetchRecentWorkoutLogs(80);
+    return findComparableLastVolumeFromLogs(sorted, currentSections, currentTitle, currentDocId);
   }
 
   async function fetchPrevWeight(exerciseName) {
     if (!exerciseName?.trim() || !uid) return;
     const normalizedName = normalizeExerciseName(exerciseName);
     const isBW = isBodyweightExercise(exerciseName);
-    const q = query(collection(db, "logs"), where("uid", "==", uid), orderBy("timestamp", "desc"), limit(50));
-    const snap = await getDocs(q);
-    const sorted = snap.docs
-      .map(d => ({ id: d.id, ...d.data() }))
-      .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+    const sorted = await fetchRecentWorkoutLogs(50);
     for (const d of sorted) {
       if (initialData && d.id === initialData.docId) continue;
       for (const sec of (d.sections || [])) {
@@ -424,9 +510,9 @@ export default function WorkoutMemoScreen({ onBack, onSave, initialData, uid, pr
                 return;
               }
             } else {
-              const w = parseMaxWeight(item.body);
-              if (w !== null) {
-                setExerciseStats(prev => ({ ...prev, [exerciseName]: w }));
+              const vol = parseVolumeFromBody(item.body);
+              if (vol > 0) {
+                setExerciseStats(prev => ({ ...prev, [exerciseName]: vol }));
                 return;
               }
             }
@@ -467,6 +553,8 @@ export default function WorkoutMemoScreen({ onBack, onSave, initialData, uid, pr
       const prompt = `다음 사용자의 거친 운동 메모 데이터를 보기 좋게 정리해서 JSON 배열로 반환해줘.
 응답 형식: [{ "part": "운동부위", "items": [{ "title": "운동종목", "body": "• 세트 1: 20kg 15회\\n• 세트 2: 40kg 20회", "note": "느낀점(선택)", "supersetGroup": null }] }]
 중요 규칙:
+0. part는 반드시 다음 카테고리 중 하나여야 한다: ${BODY_PART_OPTIONS}
+0-1. 클라이밍, 러닝/조깅, 사이클, 인터벌, 줄넘기, 로잉머신 등 유산소성 운동은 반드시 '유산소'로 분류할 것.
 1. 각 세트별 기록은 반드시 '• 세트 N: 무게 횟수' 형태로 작성해줘.
 2. 여러 세트인 경우 쉼표(,) 대신 반드시 줄바꿈(\\n)으로 구분해서 작성해줘.
 3. [가장 중요] 세트 번호(N)는 종목이 바뀌더라도 절대 1부터 다시 시작하지 말고, 이전 종목의 마지막 세트 번호에 이어서 전체 누적으로 계속 카운트해줘.
@@ -486,17 +574,9 @@ export default function WorkoutMemoScreen({ onBack, onSave, initialData, uid, pr
 
 사용자 입력:
 ${rawText}`;
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`;
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-      });
-      const json = await res.json();
-      if (json.error) throw new Error(json.error.message);
-      if (!json.candidates || !json.candidates[0]) throw new Error("AI 응답 실패");
-      const parts = json.candidates[0].content.parts;
-      const text = (parts.find(p => !p.thought) ?? parts[parts.length - 1]).text;
+      const json = await generateContent({ contents: [{ parts: [{ text: prompt }] }] });
+      const text = extractText(json);
+      if (!text) throw new Error("AI 응답 실패");
       const cleanText = text.replace(/```json/gi, '').replace(/```/g, '').trim();
       const parsed = JSON.parse(cleanText);
       const mappedSections = parsed.map(s => ({
@@ -515,10 +595,7 @@ ${rawText}`;
       // 종목별 볼륨 증감 계산
       if (uid) {
         try {
-          const q = query(collection(db, "logs"), where("uid", "==", uid), where("type", "==", "workout"), orderBy("timestamp", "desc"), limit(50));
-          const snap = await getDocs(q);
-          const sorted = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-            .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+          const sorted = await fetchRecentWorkoutLogs(80);
           const deltas = {};
           const repDeltas = {};
           for (const sec of parsed) {
@@ -602,7 +679,7 @@ ${rawText}`;
         }));
       const totalItems = cardSections.reduce((sum, section) => sum + section.totalItems, 0);
       memoCard = {
-        title: '쇠질 메모',
+        title: '운동 메모',
         subtitle: `${cardSections.length || 1}개 부위 · ${totalItems || 0}개 종목`,
         mode: 'workout',
         sections: cardSections.slice(0, 3),
@@ -630,8 +707,12 @@ ${rawText}`;
     }
     const rect = e.currentTarget.getBoundingClientRect();
     const popoverWidth = 279;
-    const left = Math.max(16, Math.min(rect.right - popoverWidth, window.innerWidth - popoverWidth - 16));
-    setSectionPopoverPos({ top: rect.bottom + 8, left });
+    const containerRect = e.currentTarget.closest('.detail-overlay-root')?.getBoundingClientRect();
+    const boundaryLeft = containerRect?.left ?? 0;
+    const boundaryTop = containerRect?.top ?? 0;
+    const boundaryWidth = containerRect?.width ?? window.innerWidth;
+    const left = Math.max(16, Math.min(rect.right - boundaryLeft - popoverWidth, boundaryWidth - popoverWidth - 16));
+    setSectionPopoverPos({ top: rect.bottom - boundaryTop + 8, left });
     setSectionPopover(secId);
     setSectionPopoverSource(source);
     setSectionPopoverItemId(itemId);
@@ -652,17 +733,12 @@ ${rawText}`;
 
     setSectionAiLoading(secId);
     try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`;
-
       if (isItemMode) {
         const exerciseName = sec.items.find(it => it.id === itemId).title.trim();
         let context = '';
         if (uid) {
           try {
-            const q = query(collection(db, "logs"), where("uid", "==", uid), where("type", "==", "workout"), orderBy("timestamp", "desc"), limit(50));
-            const snap = await getDocs(q);
-            const sorted = snap.docs.map(d => ({ ...d.data() }))
-              .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+            const sorted = await fetchRecentWorkoutLogs(80);
             const exerciseRecords = [];
             for (const d of sorted) {
               for (const s of (d.sections || [])) {
@@ -688,9 +764,7 @@ JSON 형식으로만 반환해줘:
 3. 괄호 안에 권장 무게 이유 또는 목표 간략히
 4. JSON만 반환`;
 
-        const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
-        const json = await res.json();
-        if (json.error) throw new Error(json.error.message);
+        const json = await generateContent({ contents: [{ parts: [{ text: prompt }] }] });
         const resParts = json.candidates[0].content.parts;
         const text = (resParts.find(p => !p.thought) ?? resParts[resParts.length - 1]).text;
         const parsed = JSON.parse(text.replace(/```json/gi, '').replace(/```/g, '').trim());
@@ -704,10 +778,7 @@ JSON 형식으로만 반환해줘:
         let context = '';
         if (uid) {
           try {
-            const q = query(collection(db, "logs"), where("uid", "==", uid), where("type", "==", "workout"), orderBy("timestamp", "desc"), limit(50));
-            const snap = await getDocs(q);
-            const sorted = snap.docs.map(d => ({ ...d.data() }))
-              .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+            const sorted = await fetchRecentWorkoutLogs(80);
             const relevant = sorted.filter(d => (d.sections || []).some(s => s.part === sec.part)).slice(0, 2);
             if (relevant.length > 0) {
               context = `\n\n사용자의 최근 ${sec.part} 기록:\n` + relevant.map(d => {
@@ -729,9 +800,7 @@ JSON 형식으로만 반환해줘:
 3. 괄호 안에 권장 무게 이유 또는 목표 간략히
 4. JSON만 반환`;
 
-        const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
-        const json = await res.json();
-        if (json.error) throw new Error(json.error.message);
+        const json = await generateContent({ contents: [{ parts: [{ text: prompt }] }] });
         const resParts = json.candidates[0].content.parts;
         const text = (resParts.find(p => !p.thought) ?? resParts[resParts.length - 1]).text;
         const parsed = JSON.parse(text.replace(/```json/gi, '').replace(/```/g, '').trim());
@@ -757,7 +826,6 @@ JSON 형식으로만 반환해줘:
     setSectionPopover(null);
     if (!uid) return;
     const sec = sections.find(s => s.id === secId);
-    const q = query(collection(db, "logs"), where("uid", "==", uid), where("type", "==", "workout"), orderBy("timestamp", "desc"), limit(50));
 
     if (source === 'item' && itemId) {
       const exerciseName = sec?.items.find(it => it.id === itemId)?.title?.trim();
@@ -765,9 +833,7 @@ JSON 형식으로만 반환해줘:
 
       setRecentSheet({ open: true, secId, itemId, mode: 'item', records: [], currentIdx: 0, loading: true });
       try {
-        const snap = await getDocs(q);
-        const sorted = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-          .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+        const sorted = await fetchRecentWorkoutLogs(80);
         const matching = [];
         for (const d of sorted) {
           if (initialData && d.id === initialData.docId) continue;
@@ -792,9 +858,7 @@ JSON 형식으로만 반환해줘:
     } else {
       setRecentSheet({ open: true, secId, itemId: null, mode: 'section', records: [], currentIdx: 0, loading: true });
       try {
-        const snap = await getDocs(q);
-        const sorted = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-          .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+        const sorted = await fetchRecentWorkoutLogs(80);
         const matching = [];
         for (const d of sorted) {
           if (initialData && d.id === initialData.docId) continue;
@@ -847,8 +911,8 @@ JSON 형식으로만 반환해줘:
     });
   }
 
-  function handleUseRecord(withIncrement) {
-    const rec = recentSheet.records[recentSheet.currentIdx];
+  function handleUseRecord(withIncrement, selectedRecord = null) {
+    const rec = selectedRecord || recentSheet.records[recentSheet.currentIdx];
     if (!rec) return;
     if (recentSheet.mode === 'item' && recentSheet.itemId) {
       const itemBody = rec.section.items[0]?.body || '';
@@ -901,9 +965,44 @@ JSON 형식으로만 반환해줘:
     setSections(prev => [...prev, { id, part: "", items: [{ id: id + 1, title: "", body: "" }] }]);
   }
 
+  async function buildWorkoutFallbackSummary(docId, fallbackSections, fallbackTitle, capturedMode) {
+    const usableSections = (fallbackSections || [])
+      .map(s => ({
+        part: s.part || fallbackTitle || "운동 기록",
+        items: (s.items || [])
+          .filter(it => it.title?.trim() || it.body?.trim())
+          .map(it => ({
+            title: it.title || "운동",
+            body: it.body || "",
+            ...(it.note ? { note: it.note } : {}),
+            ...(it.supersetGroup ? { supersetGroup: it.supersetGroup } : {}),
+          }))
+      }))
+      .filter(s => s.part || s.items.length > 0);
+    const sectionsForSave = usableSections.length > 0
+      ? usableSections
+      : [{ part: fallbackTitle || "운동 기록", items: [] }];
+    const exercisesForSave = sectionsForSave.flatMap(s => s.items.map(it => ({ name: it.title }))).filter(ex => ex.name);
+    const totalVolume = parseVolume(sectionsForSave, profile?.weight);
+    const cardioMinutes = parseCardioMinutes(sectionsForSave);
+    const lastVolume = await findComparableLastVolume(sectionsForSave, fallbackTitle, docId);
+    const overloadMsg = buildWorkoutSummaryMessage(totalVolume, lastVolume, capturedMode, cardioMinutes);
+    return { sectionsForSave, exercisesForSave, totalVolume, cardioMinutes, overloadMsg };
+  }
+
   /* ── 백그라운드 AI 처리 ── */
-  async function runBackgroundAI(docRef, currentSections, title, capturedMode, rawTextOverride) {
-    const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`;
+  async function runBackgroundAI(docRef, currentSections, title, capturedMode, rawTextOverride, revision) {
+    const jobKey = `${docRef.id}:${revision}`;
+    if (activeBackgroundAI.has(jobKey)) return;
+    activeBackgroundAI.add(jobKey);
+    try {
+      await runBackgroundAIInner(docRef, currentSections, title, capturedMode, rawTextOverride, revision);
+    } finally {
+      activeBackgroundAI.delete(jobKey);
+    }
+  }
+
+  async function runBackgroundAIInner(docRef, currentSections, title, capturedMode, rawTextOverride, revision) {
     try {
       // 글 정리
       const rawText = rawTextOverride || currentSections.map(s =>
@@ -912,6 +1011,8 @@ JSON 형식으로만 반환해줘:
       const summarizePrompt = `다음 사용자의 거친 운동 메모 데이터를 보기 좋게 정리해서 JSON 배열로 반환해줘.
 응답 형식: [{ "part": "운동부위", "items": [{ "title": "운동종목", "body": "• 세트 1: 20kg 15회\\n• 세트 2: 40kg 20회", "note": "느낀점(선택)" }] }]
 중요 규칙:
+0. part는 반드시 다음 카테고리 중 하나여야 한다: ${BODY_PART_OPTIONS}
+0-1. 클라이밍, 러닝/조깅, 사이클, 인터벌, 줄넘기, 로잉머신 등 유산소성 운동은 반드시 '유산소'로 분류할 것.
 1. 각 세트별 기록은 반드시 '• 세트 N: 무게 횟수' 형태로 작성해줘.
 2. 여러 세트인 경우 쉼표(,) 대신 반드시 줄바꿈(\\n)으로 구분해서 작성해줘.
 3. [가장 중요] 세트 번호(N)는 종목이 바뀌더라도 절대 1부터 다시 시작하지 말고, 이전 종목의 마지막 세트 번호에 이어서 전체 누적으로 계속 카운트해줘.
@@ -923,12 +1024,17 @@ JSON 형식으로만 반환해줘:
 9. [중요] 풀업/친업/딥스 계열 종목은 반드시 아래 세 가지 중 하나로 명확히 구분해서 title에 표기해줘: 보조 기구(어시스티드 머신)를 사용한 경우 → "어시스티드 풀업"/"어시스티드 친업"/"어시스티드 딥스", 체중에 무게를 추가한 경우 → "가중 풀업"/"가중 친업"/"가중 딥스", 맨몸인 경우 → "풀업"/"친업"/"딥스".
 사용자 입력:\n${rawText}`;
 
-      const sumRes = await fetch(GEMINI_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contents: [{ parts: [{ text: summarizePrompt }] }] })
-      });
-      const sumJson = await sumRes.json();
+      const sumCtrl = new AbortController();
+      const sumTimer = setTimeout(() => sumCtrl.abort(), 45000);
+      let sumJson;
+      try {
+        sumJson = await generateContent({
+          contents: [{ parts: [{ text: summarizePrompt }] }],
+          signal: sumCtrl.signal,
+        });
+      } finally {
+        clearTimeout(sumTimer);
+      }
       if (sumJson.error || !sumJson.candidates?.[0]) throw new Error("글 정리 실패");
 
       const sumParts = sumJson.candidates[0].content.parts;
@@ -944,37 +1050,20 @@ JSON 형식으로만 반환해줘:
       }));
       const structuredExercises = structuredSections.flatMap(s => s.items.map(it => ({ name: it.title }))).filter(ex => ex.name);
       const totalVolume = parseVolume(structuredSections, profile?.weight);
+      const cardioMinutes = parseCardioMinutes(structuredSections);
 
-      // 이전 볼륨 조회
-      let lastVolume = 0;
-      const currentParts = structuredSections.map(s => s.part).filter(Boolean);
-      if (currentParts.length > 0 && uid) {
-        const q = query(collection(db, "logs"), where("uid", "==", uid), orderBy("timestamp", "desc"), limit(50));
-        const snap = await getDocs(q);
-        const sorted = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-          .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
-        for (const d of sorted) {
-          if (d.id === docRef.id) continue;
-          if (d.type !== "workout") continue;
-          if (currentParts.some(p => (d.title || "").includes(p)) && d.totalVolume) {
-            lastVolume = d.totalVolume;
-            break;
-          }
-        }
-      }
+      const lastVolume = await findComparableLastVolume(structuredSections, title, docRef.id);
+      const overloadMsg = buildWorkoutSummaryMessage(totalVolume, lastVolume, capturedMode, cardioMinutes);
 
-      let overloadMsg = "";
-      if (lastVolume > 0) {
-        const diff = totalVolume - lastVolume;
-        const pct = ((diff / lastVolume) * 100).toFixed(1);
-        overloadMsg = capturedMode === 'deload'
-          ? (diff <= 0 ? `오늘 볼륨 ${totalVolume.toLocaleString()}kg, 디로딩 성공! (${Math.abs(pct)}% 감량)` : `오늘 볼륨 ${totalVolume.toLocaleString()}kg, 디로딩 목표 미달 (${pct}% 증가)`)
-          : `오늘 볼륨 ${totalVolume.toLocaleString()}kg, 저번보다 ${Math.abs(pct)}% 과부하 ${diff >= 0 ? "성공" : "실패"}!`;
-      } else {
-        overloadMsg = `오늘 첫 기록 볼륨 ${totalVolume.toLocaleString()}kg 달성!`;
-      }
-
-      await updateDoc(docRef, { sections: structuredSections, exercises: structuredExercises, totalVolume, overloadMsg, aiStatus: 'summarized' });
+      const summaryApplied = await updateWorkoutIfCurrent(docRef, revision, {
+        sections: structuredSections,
+        exercises: structuredExercises,
+        totalVolume,
+        cardioMinutes,
+        overloadMsg,
+        aiStatus: 'summarized',
+      });
+      if (!summaryApplied) return;
 
       // 한줄평
       const commentPrompt = `운동 기록을 분석해서 동기부여가 되는 한줄평을 써줘.
@@ -983,63 +1072,99 @@ JSON 형식으로만 반환해줘:
 1. 반드시 저 문구가 제일 앞에 나오게 해.
 2. 30자 이내로 짧고 강렬하게 한국어로 써.
 3. 순수 텍스트만 반환해.
-정보: 운동부위: ${title}, 총 볼륨: ${totalVolume}kg`;
+정보: 운동부위: ${title}, 총 볼륨: ${totalVolume}kg, 유산소 시간: ${cardioMinutes}분`;
 
-      const commentRes = await fetch(GEMINI_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contents: [{ parts: [{ text: commentPrompt }] }] })
-      });
-      const commentJson = await commentRes.json();
-      if (commentJson.candidates?.[0]) {
-        const cParts = commentJson.candidates[0].content.parts;
-        const aiComment = (cParts.find(p => !p.thought) ?? cParts[cParts.length - 1]).text.trim();
-        await updateDoc(docRef, { aiComment, aiStatus: 'done' });
-      } else {
-        await updateDoc(docRef, { aiStatus: 'done' });
-      }
+      let aiComment = overloadMsg;
+      const commentCtrl = new AbortController();
+      const commentTimer = setTimeout(() => commentCtrl.abort(), 45000);
+      try {
+        const commentJson = await generateContent({
+          contents: [{ parts: [{ text: commentPrompt }] }],
+          signal: commentCtrl.signal,
+        });
+        aiComment = extractText(commentJson).trim() || overloadMsg;
+      } catch {}
+      finally { clearTimeout(commentTimer); }
+      await updateWorkoutIfCurrent(docRef, revision, { aiComment, aiStatus: 'done', aiError: null });
     } catch (err) {
       console.error("백그라운드 AI 처리 실패:", err);
-      try { await updateDoc(docRef, { aiStatus: 'error', aiError: `${err.name}: ${err.message}`.slice(0, 300) }); } catch {}
+      try {
+        const fallback = await buildWorkoutFallbackSummary(docRef.id, currentSections, title, capturedMode);
+        await updateWorkoutIfCurrent(docRef, revision, {
+          sections: fallback.sectionsForSave,
+          exercises: fallback.exercisesForSave,
+          totalVolume: fallback.totalVolume,
+          cardioMinutes: fallback.cardioMinutes,
+          overloadMsg: fallback.overloadMsg,
+          aiComment: fallback.overloadMsg,
+          aiStatus: 'done',
+          aiError: null,
+        });
+      } catch {
+        try { await updateWorkoutIfCurrent(docRef, revision, { aiStatus: 'done', aiError: null }); } catch {}
+      }
     }
   }
 
   /* ── 저장 ── */
   async function handleSave() {
+    if (saveInFlightRef.current) return;
+    saveInFlightRef.current = true;
+    setSaving(true);
+    const aiRevision = createAiRevision();
     try {
       // 자유 메모 모드
       if (freeMode) {
         const html = editorRef.current?.innerHTML || '';
         const plainText = editorRef.current?.innerText || '';
         const title = plainText.split('\n').find(l => l.trim()) || '운동 메모';
+        const freeFallbackSections = [{ part: title.substring(0, 40), items: [{ title: title.substring(0, 40), body: plainText }] }];
+        const cardioMinutes = parseCardioMinutes(freeFallbackSections);
 
         let docRef;
+        const fallbackComment = cardioMinutes > 0
+          ? `오늘 유산소 ${formatCardioDuration(cardioMinutes)} 기록!`
+          : '운동 메모 저장 완료!';
         if (initialData?.docId) {
           docRef = doc(db, 'logs', initialData.docId);
-          await updateDoc(docRef, {
+          await withSaveTimeout(updateDoc(docRef, {
             title: title.substring(0, 40),
             freeHtml: html,
             originalText: plainText,
+            preWorkoutMeal,
+            cardioMinutes,
+            overloadMsg: fallbackComment,
+            aiRevision,
+            aiStartedAt: serverTimestamp(),
             aiStatus: 'processing',
-          });
+            aiError: null,
+          }));
         } else {
-          const res = await addDoc(collection(db, 'logs'), {
+          docRef = pendingCreateRef.current || doc(collection(db, 'logs'));
+          pendingCreateRef.current = docRef;
+          await withSaveTimeout(setDoc(docRef, {
             type: 'workout', uid, timestamp: serverTimestamp(),
             title: title.substring(0, 40),
             freeHtml: html,
             originalText: plainText,
+            preWorkoutMeal,
             mode: 'free',
             exercises: [],
             sections: [],
             totalVolume: 0,
+            cardioMinutes,
+            overloadMsg: fallbackComment,
+            aiRevision,
+            aiStartedAt: serverTimestamp(),
             aiStatus: 'processing',
-          });
-          docRef = res;
+            aiError: null,
+          }));
         }
 
         originalSectionsRef.current = JSON.stringify(sections);
+        clearRecordDraft(uid, 'workout', draftTargetId);
         if (onSave) onSave();
-        runBackgroundAI(docRef, [], title, workoutMode, plainText).catch(() => {});
+        runBackgroundAI(docRef, freeFallbackSections, title, workoutMode, plainText, aiRevision).catch(() => {});
         return;
       }
 
@@ -1051,31 +1176,67 @@ JSON 형식으로만 반환해줘:
         items: s.items.map(it => ({ title: it.title, body: it.body, supersetGroup: it.supersetGroup ?? null }))
       }));
       const roughVolume = parseVolume(sections, profile?.weight);
+      const cardioMinutes = parseCardioMinutes(sectionsData);
+      const fallbackComment = roughVolume > 0
+        ? `오늘 볼륨 ${roughVolume.toLocaleString()}kg 기록 완료!`
+        : cardioMinutes > 0
+          ? `오늘 유산소 ${formatCardioDuration(cardioMinutes)} 기록!`
+        : "운동 기록 저장 완료!";
 
       let docRef;
       if (initialData && initialData.docId) {
         docRef = doc(db, "logs", initialData.docId);
-        await updateDoc(docRef, { title, exercises, originalText, sections: sectionsData, totalVolume: roughVolume, aiStatus: 'processing' });
+        await withSaveTimeout(updateDoc(docRef, {
+          title,
+          exercises,
+          originalText,
+          preWorkoutMeal,
+          sections: sectionsData,
+          totalVolume: roughVolume,
+          cardioMinutes,
+          overloadMsg: fallbackComment,
+          aiRevision,
+          aiStartedAt: serverTimestamp(),
+          aiStatus: 'processing',
+          aiError: null,
+        }));
       } else {
-        const res = await addDoc(collection(db, "logs"), {
+        docRef = pendingCreateRef.current || doc(collection(db, "logs"));
+        pendingCreateRef.current = docRef;
+        await withSaveTimeout(setDoc(docRef, {
           type: "workout", timestamp: serverTimestamp(),
-          uid, title, exercises, originalText, sections: sectionsData, totalVolume: roughVolume, aiStatus: 'processing'
-        });
-        docRef = res;
+          uid,
+          title,
+          exercises,
+          originalText,
+          preWorkoutMeal,
+          sections: sectionsData,
+          totalVolume: roughVolume,
+          cardioMinutes,
+          overloadMsg: fallbackComment,
+          aiRevision,
+          aiStartedAt: serverTimestamp(),
+          aiStatus: 'processing',
+          aiError: null,
+        }));
       }
 
       originalSectionsRef.current = JSON.stringify(sections);
+      clearRecordDraft(uid, 'workout', draftTargetId);
       if (onSave) onSave();
 
       // 백그라운드 AI 처리 (컴포넌트 언마운트 후에도 계속 실행됨)
-      runBackgroundAI(docRef, sections, title, workoutMode).catch(() => {});
+      runBackgroundAI(docRef, sections, title, workoutMode, undefined, aiRevision).catch(() => {});
     } catch (e) {
       alert("저장 중 오류가 발생했습니다: " + e.message);
+    } finally {
+      saveInFlightRef.current = false;
+      setSaving(false);
     }
   }
 
   return (
-    <div className="flex flex-col bg-ui-1 w-full h-full overflow-hidden">
+    <div className="detail-overlay-root flex flex-col bg-ui-1 w-full h-full overflow-hidden">
       <ConfirmModal
         isOpen={showExitModal}
         title="작성 중인 기록이 있습니다"
@@ -1083,7 +1244,7 @@ JSON 형식으로만 반환해줘:
         confirmText="나가기"
         cancelText="계속 작성"
         confirmVariant="danger"
-        onConfirm={onBack}
+        onConfirm={discardAndLeave}
         onCancel={() => setShowExitModal(false)}
       />
       {/* 상단 네비게이션 */}
@@ -1094,7 +1255,7 @@ JSON 형식으로만 반환해줘:
               <IcBack />
             </Pressable>
             <h1 className="font-pretendard text-[20px] font-semibold text-black tracking-[-0.5px] leading-[36px] whitespace-nowrap m-0">
-              쇠질 메모
+              운동 메모
             </h1>
           </div>
           <div className="flex items-center gap-4">
@@ -1109,17 +1270,17 @@ JSON 형식으로만 반환해줘:
       <main className="flex-1 overflow-y-auto">
 
         {/* 툴바 */}
-        <div className="flex h-16 items-center justify-between bg-white px-4 border-b border-ui-2">
+        <div className="flex items-center justify-between bg-white px-6 py-3 border-b border-ui-2">
           <div className="flex items-center gap-4">
             <button
               onClick={() => { setFreeMode(p => !p); setShowColorPicker(null); }}
-              className="w-10 h-10 flex items-center justify-center rounded transition-colors"
+              className="w-6 h-6 flex items-center justify-center rounded transition-colors"
             >
               <IcKeyboard active={freeMode} />
             </button>
             {!freeMode && (
               <div className="relative">
-                <Pressable pressScale={0.92} onClick={() => setAiMenuOpen(!aiMenuOpen)} className="w-10 h-10 flex items-center justify-center">
+                <Pressable pressScale={0.92} onClick={() => setAiMenuOpen(!aiMenuOpen)} className="w-6 h-6 flex items-center justify-center">
                   <IcAI active={aiMenuOpen} />
                 </Pressable>
                 {aiMenuOpen && (
@@ -1157,15 +1318,31 @@ JSON 형식으로만 반환해줘:
             </Pressable>
             <Pressable
               pressScale={0.85}
-              className={`w-10 h-10 flex-none flex items-center justify-center p-0 leading-none ${freeMode || canUndo ? 'text-typo-normal opacity-100' : 'text-[#868E96] opacity-100'}`}
+              className={`w-6 h-6 flex-none flex items-center justify-center p-0 leading-none ${freeMode || canUndo ? 'text-typo-normal opacity-100' : 'text-[#868E96] opacity-100'}`}
               onMouseDown={(e) => { e.preventDefault(); handleUndo(); }}
-            ><IcUndo size={18} /></Pressable>
+            ><IcUndo size={24} /></Pressable>
             <Pressable
               pressScale={0.85}
-              className={`w-10 h-10 flex-none flex items-center justify-center p-0 leading-none ${freeMode || canRedo ? 'text-typo-normal opacity-100' : 'text-[#868E96] opacity-100'}`}
+              className={`w-6 h-6 flex-none flex items-center justify-center p-0 leading-none ${freeMode || canRedo ? 'text-typo-normal opacity-100' : 'text-[#868E96] opacity-100'}`}
               onMouseDown={(e) => { e.preventDefault(); handleRedo(); }}
-            ><IcRedo size={18} /></Pressable>
+            ><IcRedo size={24} /></Pressable>
           </div>
+        </div>
+
+        {/* 운동 전 식사 상태 (선택) */}
+        <div className="flex items-center gap-2 bg-white px-6 py-2.5 border-b border-ui-2 overflow-x-auto scrollbar-hide">
+          <span className="flex-none font-pretendard text-caption-m text-typo-alternative tracking-[-0.3px]">운동 전</span>
+          {PRE_WORKOUT_MEAL_OPTIONS.map(option => (
+            <button
+              key={option.id}
+              type="button"
+              aria-pressed={preWorkoutMeal === option.id}
+              onClick={() => setPreWorkoutMeal(current => current === option.id ? null : option.id)}
+              className={`flex-none h-7 px-3 rounded-full font-pretendard font-semibold text-[11px] tracking-[-0.2px] transition-colors ${preWorkoutMeal === option.id ? 'bg-brand text-white' : 'bg-ui-1 text-typo-secondary'}`}
+            >
+              {option.label}
+            </button>
+          ))}
         </div>
 
         {/* 리치 텍스트 포매팅 툴바 (자유 메모 모드일 때) */}
@@ -1203,7 +1380,7 @@ JSON 형식으로만 반환해줘:
                         key={c}
                         onMouseDown={(e) => { e.preventDefault(); applyTextColor(c); }}
                         className="w-6 h-6 rounded-full border-2 transition-transform hover:scale-110"
-                        style={{ background: c, borderColor: currentTextColor === c ? '#0066ff' : 'transparent' }}
+                        style={{ background: c, borderColor: currentTextColor === c ? '#7E7EFF' : 'transparent' }}
                       />
                     ))}
                   </div>
@@ -1225,7 +1402,7 @@ JSON 형식으로만 반환해줘:
                         key={c}
                         onMouseDown={(e) => { e.preventDefault(); applyHighlight(c); }}
                         className="w-6 h-6 rounded-full border-2 transition-transform hover:scale-110"
-                        style={{ background: c === 'transparent' ? 'white' : c, borderColor: currentHighlight === c ? '#0066ff' : '#dee2e6' }}
+                        style={{ background: c === 'transparent' ? 'white' : c, borderColor: currentHighlight === c ? '#7E7EFF' : '#dee2e6' }}
                       />
                     ))}
                   </div>
@@ -1285,6 +1462,7 @@ JSON 형식으로만 반환해줘:
               ref={editorRef}
               contentEditable
               suppressContentEditableWarning
+              onInput={event => setFreeHtmlDraft(event.currentTarget.innerHTML)}
               onKeyUp={updateActiveFormats}
               onMouseUp={updateActiveFormats}
               onSelect={updateActiveFormats}
@@ -1376,7 +1554,7 @@ JSON 형식으로만 반환해줘:
                       onBodyChange={(val) => updateItem(sec.id, item.id, "body", val)}
                       onBodyBlur={(val) => handleBodyBlur(sec.id, item.id, val)}
                       isAI={item.isAI}
-                      prevMaxWeight={exerciseStats[item.title]}
+                      prevVolume={exerciseStats[item.title]}
                       prevMaxReps={exerciseRepStats[item.title]}
                       onAiClick={(e) => openSectionPopover(sec.id, e, 'item', item.id)}
                       aiActive={sectionPopover === sec.id && sectionPopoverSource === 'item' && sectionPopoverItemId === item.id}
@@ -1394,7 +1572,7 @@ JSON 형식으로만 반환해줘:
                   onBodyChange={(val) => updateItem(sec.id, item.id, "body", val)}
                   onBodyBlur={(val) => handleBodyBlur(sec.id, item.id, val)}
                   isAI={item.isAI}
-                  prevMaxWeight={exerciseStats[item.title]}
+                  prevVolume={exerciseStats[item.title]}
                   prevMaxReps={exerciseRepStats[item.title]}
                   onAiClick={(e) => openSectionPopover(sec.id, e, 'item', item.id)}
                   aiActive={sectionPopover === sec.id && sectionPopoverSource === 'item' && sectionPopoverItemId === item.id}
@@ -1435,14 +1613,17 @@ JSON 형식으로만 반환해줘:
 
       </main>
 
+      <Toast show={draftRestored} message="작성 중이던 운동 기록을 복원했어요" />
+
       {/* 하단 저장 액션바 */}
       <div className="flex-none bg-white border-t border-ui-2 px-5 pt-4 pb-10">
         <Pressable
           pressScale={0.97}
           onClick={handleSave}
-          className="w-full h-[56px] bg-brand rounded-2xl font-pretendard font-bold text-[16px] text-white tracking-[-0.4px]"
+          disabled={saving}
+          className="w-full h-[56px] bg-brand rounded-2xl font-pretendard font-bold text-[16px] text-white tracking-[-0.4px] disabled:opacity-40"
         >
-          저장하기
+          {saving ? '저장 중...' : '저장하기'}
         </Pressable>
       </div>
 
@@ -1655,70 +1836,66 @@ JSON 형식으로만 반환해줘:
                 <span className="text-body-s text-typo-secondary font-pretendard">이 부위의 최근 기록이 없어요</span>
               </div>
             ) : (() => {
-              const rec = recentSheet.records[recentSheet.currentIdx];
+              const visibleRecords = recentSheet.records.slice(recentSheet.currentIdx, recentSheet.currentIdx + 3);
               return (
                 <div
-                  className="w-full rounded-2xl p-4 flex flex-col gap-4 min-h-[320px]"
+                  className="w-full rounded-2xl p-3 flex flex-col gap-3 min-h-[360px]"
                   style={{ background: 'linear-gradient(105.71deg, #EDECFF 1.7%, #E6DBFD 30.89%, #ECEFFB 64.69%, #EFFBED 100%)' }}
                   onTouchStart={(e) => { touchStartX.current = e.touches[0].clientX; }}
                   onTouchEnd={(e) => {
                     const dx = e.changedTouches[0].clientX - touchStartX.current;
                     if (Math.abs(dx) > 50) {
-                      if (dx < 0 && recentSheet.currentIdx < recentSheet.records.length - 1) {
-                        setRecentSheet(prev => ({ ...prev, currentIdx: prev.currentIdx + 1 }));
+                      if (dx < 0 && recentSheet.currentIdx + 3 < recentSheet.records.length) {
+                        setRecentSheet(prev => ({ ...prev, currentIdx: Math.min(prev.currentIdx + 3, Math.max(0, prev.records.length - 3)) }));
                       } else if (dx > 0 && recentSheet.currentIdx > 0) {
-                        setRecentSheet(prev => ({ ...prev, currentIdx: prev.currentIdx - 1 }));
+                        setRecentSheet(prev => ({ ...prev, currentIdx: Math.max(0, prev.currentIdx - 3) }));
                       }
                     }
                   }}
                 >
-                  {/* 카드 헤더 */}
-                  <div className="flex items-center justify-between whitespace-nowrap flex-shrink-0">
-                    <span className="font-pretendard text-[20px] font-semibold text-typo-strong tracking-[-0.5px] leading-9">{rec.section.part}</span>
-                    <span className="font-pretendard text-body-s font-normal text-typo-secondary tracking-[-0.35px] leading-5">{formatRecordDate(rec.date)}</span>
-                  </div>
-
-                  {/* 카드 내용 (스크롤) */}
-                  <div className="flex-1 overflow-y-auto font-pretendard text-body-s font-normal text-typo-normal tracking-[-0.35px] leading-5 whitespace-pre-wrap pr-3 min-h-0">
-                    {(rec.section.items || []).map((it, i) => (
-                      <div key={i} className={i > 0 ? 'mt-4' : ''}>
-                        <p className="font-semibold m-0">{it.title}</p>
-                        {it.body ? <p className="m-0 mt-1">{it.body}</p> : null}
+                  {visibleRecords.map((rec) => (
+                    <div key={rec.docId} className="bg-white/72 rounded-[18px] px-4 py-3 flex flex-col gap-2 shadow-[0_1px_0_rgba(0,0,0,0.04)]">
+                      <div className="flex items-center justify-between gap-3 whitespace-nowrap">
+                        <span className="font-pretendard text-[16px] font-semibold text-typo-strong tracking-[-0.4px] truncate">{rec.section.part}</span>
+                        <span className="font-pretendard text-[12px] font-normal text-typo-secondary tracking-[-0.3px] flex-none">{formatRecordDate(rec.date)}</span>
                       </div>
-                    ))}
-                  </div>
-
-                  {/* 증량 비율 + 액션 버튼 */}
-                  <div className="flex flex-col gap-2 flex-shrink-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[11px] text-typo-secondary font-pretendard flex-none">증량 비율</span>
-                      <div className="flex gap-1.5">
-                        {[2.5, 5, 7.5, 10].map(p => (
-                          <button
-                            key={p}
-                            onClick={() => setIncrementPercent(p)}
-                            className={`px-2 py-0.5 rounded-full text-[11px] font-semibold font-pretendard transition-colors ${incrementPercent === p ? 'bg-brand text-white' : 'bg-white/60 text-typo-secondary'}`}
-                          >
-                            +{p}%
-                          </button>
+                      <div className="font-pretendard text-[13px] font-normal text-typo-normal tracking-[-0.3px] leading-5 whitespace-pre-wrap max-h-[88px] overflow-y-auto pr-1">
+                        {(rec.section.items || []).map((it, i) => (
+                          <div key={i} className={i > 0 ? 'mt-2' : ''}>
+                            <p className="font-semibold m-0">{it.title}</p>
+                            {it.body ? <p className="m-0 mt-0.5">{it.body}</p> : null}
+                          </div>
                         ))}
                       </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex gap-1.5">
+                          {[2.5, 5, 7.5, 10].map(p => (
+                            <button
+                              key={p}
+                              onClick={() => setIncrementPercent(p)}
+                              className={`px-2 py-0.5 rounded-full text-[11px] font-semibold font-pretendard transition-colors ${incrementPercent === p ? 'bg-brand text-white' : 'bg-white text-typo-secondary'}`}
+                            >
+                              +{p}%
+                            </button>
+                          ))}
+                        </div>
+                        <div className="flex items-center gap-1 flex-none">
+                          <button
+                            onClick={() => handleUseRecord(true, rec)}
+                            className="px-2 py-1.5 font-pretendard text-[12px] font-semibold text-brand tracking-[-0.3px] bg-transparent border-none outline-none cursor-pointer"
+                          >
+                            증량
+                          </button>
+                          <button
+                            onClick={() => handleUseRecord(false, rec)}
+                            className="px-2 py-1.5 font-pretendard text-[12px] font-semibold text-typo-normal tracking-[-0.3px] bg-transparent border-none outline-none cursor-pointer"
+                          >
+                            사용
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => handleUseRecord(true)}
-                        className="px-2 py-2 font-pretendard text-body-s font-medium text-brand tracking-[-0.35px] bg-transparent border-none outline-none cursor-pointer"
-                      >
-                        증량하기
-                      </button>
-                      <button
-                        onClick={() => handleUseRecord(false)}
-                        className="px-2 py-2 font-pretendard text-body-s font-medium text-typo-normal tracking-[-0.35px] bg-transparent border-none outline-none cursor-pointer"
-                      >
-                        이대로 하기
-                      </button>
-                    </div>
-                  </div>
+                  ))}
                 </div>
               );
             })()}
@@ -1726,13 +1903,13 @@ JSON 형식으로만 반환해줘:
             {/* 페이지 인디케이터 */}
             {recentSheet.records.length > 0 && (
               <div className="flex items-center gap-2 mt-4">
-                {recentSheet.records.slice(0, 6).map((_, i) => (
+                {Array.from({ length: Math.ceil(recentSheet.records.length / 3) }).map((_, i) => (
                   <button
                     key={i}
-                    onClick={() => setRecentSheet(prev => ({ ...prev, currentIdx: i }))}
+                    onClick={() => setRecentSheet(prev => ({ ...prev, currentIdx: i * 3 }))}
                     className="flex items-center justify-center p-1 bg-transparent border-none cursor-pointer"
                   >
-                    <div className={`w-1.5 h-1.5 rounded-full transition-colors ${i === recentSheet.currentIdx ? 'bg-typo-normal' : 'bg-ui-4'}`} />
+                    <div className={`w-1.5 h-1.5 rounded-full transition-colors ${Math.floor(recentSheet.currentIdx / 3) === i ? 'bg-typo-normal' : 'bg-ui-4'}`} />
                   </button>
                 ))}
               </div>

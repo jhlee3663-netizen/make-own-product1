@@ -1,20 +1,112 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isSignedInOwner(data) {
+      return request.auth != null
+        && data.uid is string
+        && data.uid.size() > 0
+        && data.uid.size() <= 128
+        && request.auth.uid == data.uid;
+    }
+
+    function hasValidRequiredLogFields(data) {
+      return data.keys().hasAll(['uid', 'type', 'timestamp'])
+        && (data.type == 'workout' || data.type == 'diet')
+        && data.timestamp is timestamp;
+    }
+
+    function preservesLegacyRequiredFields(before, after) {
+      return after.keys().hasAll(['uid'])
+        && (!before.keys().hasAny(['type']) || after.keys().hasAny(['type']))
+        && (!before.keys().hasAny(['timestamp']) || after.keys().hasAny(['timestamp']))
+        && (!after.keys().hasAny(['type']) || after.type == 'workout' || after.type == 'diet')
+        && (!after.keys().hasAny(['timestamp']) || after.timestamp is timestamp);
+    }
+
+    /* 운동 전 식사 상태. null은 "선택 안 함"이다. */
+    function isValidPreWorkoutMeal(value) {
+      return value == null || value in ['fasted', 'carb_lt1h', 'carb_1_2h', 'carb_gt2h'];
+    }
+
+    /* 아침 공복 체중만 앱에서 쓸 수 있다. 문서 ID는 날짜로 고정해 하루 한 건을 보장한다. */
+    function isValidMorningWeight(logId, data) {
+      return data.keys().hasOnly(['kind', 'date', 'weightKg', 'updatedAt'])
+        && data.keys().hasAll(['kind', 'date', 'weightKg'])
+        && data.kind == 'morning_weight'
+        && data.date is string
+        && data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && logId == 'mw_' + data.date
+        && data.weightKg is number
+        && data.weightKg >= 20
+        && data.weightKg <= 300
+        && (!data.keys().hasAny(['updatedAt']) || data.updatedAt is timestamp);
+    }
+
+    function hasValidOptionalLogFields(data) {
+      return data.keys().size() <= 40
+        && (!data.keys().hasAny(['kcal']) || (data.kcal is number && data.kcal >= 0 && data.kcal <= 100000))
+        && (!data.keys().hasAny(['totalVolume']) || (data.totalVolume is number && data.totalVolume >= 0 && data.totalVolume <= 100000000))
+        && (!data.keys().hasAny(['title']) || (data.title is string && data.title.size() <= 300))
+        && (!data.keys().hasAny(['originalText']) || (data.originalText is string && data.originalText.size() <= 50000))
+        && (!data.keys().hasAny(['aiComment']) || (data.aiComment is string && data.aiComment.size() <= 2000))
+        && (!data.keys().hasAny(['sections']) || (data.sections is list && data.sections.size() <= 30))
+        && (!data.keys().hasAny(['exercises']) || (data.exercises is list && data.exercises.size() <= 200))
+        && (!data.keys().hasAny(['deletedAt']) || data.deletedAt is timestamp)
+        && (!data.keys().hasAny(['preWorkoutMeal']) || isValidPreWorkoutMeal(data.preWorkoutMeal));
+    }
+
+    function hasValidChangedOptionalLogFields(before, after) {
+      return (after.keys().size() <= 40 || after.keys().size() <= before.keys().size())
+        && (!after.diff(before).affectedKeys().hasAny(['kcal']) || !after.keys().hasAny(['kcal']) || (after.kcal is number && after.kcal >= 0 && after.kcal <= 100000))
+        && (!after.diff(before).affectedKeys().hasAny(['totalVolume']) || !after.keys().hasAny(['totalVolume']) || (after.totalVolume is number && after.totalVolume >= 0 && after.totalVolume <= 100000000))
+        && (!after.diff(before).affectedKeys().hasAny(['title']) || !after.keys().hasAny(['title']) || (after.title is string && after.title.size() <= 300))
+        && (!after.diff(before).affectedKeys().hasAny(['originalText']) || !after.keys().hasAny(['originalText']) || (after.originalText is string && after.originalText.size() <= 50000))
+        && (!after.diff(before).affectedKeys().hasAny(['aiComment']) || !after.keys().hasAny(['aiComment']) || (after.aiComment is string && after.aiComment.size() <= 2000))
+        && (!after.diff(before).affectedKeys().hasAny(['sections']) || !after.keys().hasAny(['sections']) || (after.sections is list && after.sections.size() <= 30))
+        && (!after.diff(before).affectedKeys().hasAny(['exercises']) || !after.keys().hasAny(['exercises']) || (after.exercises is list && after.exercises.size() <= 200))
+        && (!after.diff(before).affectedKeys().hasAny(['deletedAt']) || !after.keys().hasAny(['deletedAt']) || after.deletedAt is timestamp)
+        && (!after.diff(before).affectedKeys().hasAny(['preWorkoutMeal']) || !after.keys().hasAny(['preWorkoutMeal']) || isValidPreWorkoutMeal(after.preWorkoutMeal));
+    }
+
     match /logs/{docId} {
       allow read, delete: if request.auth != null && request.auth.uid == resource.data.uid;
-      allow update: if request.auth != null
-        && request.auth.uid == resource.data.uid
-        && request.resource.data.uid == resource.data.uid;
-      allow create: if request.auth != null
-        && request.auth.uid == request.resource.data.uid
-        && request.resource.data.keys().hasAll(['uid', 'type', 'timestamp']);
+      allow update: if isSignedInOwner(resource.data)
+        && request.resource.data.uid == resource.data.uid
+        && preservesLegacyRequiredFields(resource.data, request.resource.data)
+        && hasValidChangedOptionalLogFields(resource.data, request.resource.data);
+      allow create: if isSignedInOwner(request.resource.data)
+        && hasValidRequiredLogFields(request.resource.data)
+        && hasValidOptionalLogFields(request.resource.data);
     }
     match /users/{uid} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
     }
     match /users/{uid}/coachRooms/{roomId} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+    // 체중·체성분 기록. 인바디(kind: inbody)는 서버 시드 스크립트로만 넣고 앱에서는 읽기만 한다.
+    match /users/{uid}/bodyLogs/{logId} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && isValidMorningWeight(logId, request.resource.data)
+        && (resource == null || resource.data.kind == 'morning_weight');
+      allow delete: if request.auth != null && request.auth.uid == uid
+        && resource.data.kind == 'morning_weight';
+    }
+    // Claude 커넥터(MCP) 토큰과 인가 코드는 서버(Admin SDK)만 다룬다.
+    match /mcpTokens/{tokenId} {
+      allow read, write: if false;
+    }
+    match /mcpAuthCodes/{codeId} {
+      allow read, write: if false;
+    }
+    // AI 사용량 카운터는 서버(Admin SDK)만 갱신한다. 클라이언트가 한도를 조작할 수 없어야 한다.
+    match /aiUsage/{uid} {
+      allow read, write: if false;
+    }
+    // 탈퇴 진행 상태도 서버만 기록한다.
+    match /accountDeletions/{uid} {
+      allow read, write: if false;
     }
   }
 }

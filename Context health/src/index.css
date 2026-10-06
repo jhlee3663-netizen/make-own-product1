@@ -65,6 +65,27 @@ body {
   transition: none;
 }
 
+/* Release persistent compositor layers on desktop after the motion ends. */
+@media (min-width: 640px) {
+  body,
+  button,
+  input,
+  textarea,
+  select,
+  .font-pretendard,
+  svg text {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif !important;
+  }
+
+  .card-enter {
+    animation: none;
+  }
+
+  .tab-panel {
+    will-change: auto;
+  }
+}
+
 /* ── 디테일 화면 (메모 / 식단 상세): 오른쪽에서 슬라이드 ── */
 .detail-overlay {
   position: absolute;
@@ -94,21 +115,21 @@ body {
   animation: slideOutToRight 350ms cubic-bezier(0.4, 0, 1, 1) forwards;
 }
 
-.fab-menu {
+.memo-menu {
   transition: opacity .15s ease-out;
   opacity: 0;
   pointer-events: none;
 }
 
-.fab-menu.open {
+.memo-menu.open {
   opacity: 1;
   pointer-events: auto;
-  animation: fabMenuEnter .2s ease-out;
+  animation: memoMenuEnter .2s ease-out;
 }
 
-@keyframes fabMenuEnter {
-  from { transform: translateY(8px); }
-  to { transform: translateY(0); }
+@keyframes memoMenuEnter {
+  from { transform: translate(-50%, 8px); }
+  to { transform: translate(-50%, 0); }
 }
 
 .bottom-sheet {
@@ -251,9 +272,15 @@ textarea:focus {
   to   { opacity: 1; }
 }
 
-@keyframes loginLogoIn {
-  from { opacity: 0; transform: scale(0.82); }
+@keyframes loginBgBloom {
+  from { opacity: 0; transform: scale(0.35); }
   to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes loginBgDrift {
+  0%   { transform: translateX(0) scale(1); }
+  50%  { transform: translateX(-5%) scale(1.08); }
+  100% { transform: translateX(5%) scale(1.03); }
 }
 
 @keyframes loginTextIn {
@@ -271,15 +298,11 @@ textarea:focus {
   to   { transform: scale(1); opacity: 0; }
 }
 
-@keyframes bubbleFloat {
-  0%   { opacity: 0; transform: translateY(0); }
-  15%  { opacity: 1; }
-  80%  { opacity: 1; }
-  100% { opacity: 0; transform: translateY(-160px); }
-}
-
-@keyframes bubblePop {
-  0%   { transform: scale(1);    opacity: 1; }
-  40%  { transform: scale(1.3);  opacity: 0.7; }
-  100% { transform: scale(0.1);  opacity: 0; }
+/* 로그인 로고 모션: 기록 조각이 떠올랐다가 로고(큰 방울)로 빨려 들어간다 */
+@keyframes chipAbsorb {
+  0%   { opacity: 0; transform: translate(var(--x), var(--y)) scale(0.7); }
+  10%  { opacity: 1; transform: translate(var(--x), var(--y)) scale(1); }
+  62%  { opacity: 1; transform: translate(calc(var(--x) * 0.9), calc(var(--y) * 0.9 - 6px)) scale(1); }
+  92%  { opacity: 0.9; transform: translate(34px, 16px) scale(0.3); }
+  100% { opacity: 0; transform: translate(28px, 12px) scale(0.1); }
 }

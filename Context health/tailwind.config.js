@@ -7,8 +7,8 @@ export default {
   theme: {
     extend: {
       colors: {
-        brand: '#3476EE',
-        'brand-light': 'rgba(52, 118, 238, 0.1)',
+        brand: '#7E7EFF',
+        'brand-light': 'rgba(126, 126, 255, 0.1)',
         cyan: '#008dcf',
         'red-orange': '#c94a00',
         ui: {
@@ -25,6 +25,16 @@ export default {
           secondary: '#646d76',
           alternative: '#868e96',
           inverse: '#ffffff',
+        },
+        // TDS(Toss Design System) 참고 — 의미 색상. 신규/수정 화면에서 상태 표현 시 사용
+        // (Toss mobile md/TOSS_MOBILE.md 기준, brand/ui/typo는 기존 체계 유지)
+        state: {
+          danger: '#F04452',
+          'danger-weak': '#FFEEEE',
+          success: '#03B26C',
+          'success-weak': '#F0FAF6',
+          warning: '#FFC342',
+          'warning-weak': '#FFF9E7',
         }
       },
       boxShadow: {

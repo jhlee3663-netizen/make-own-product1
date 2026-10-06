@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>식단 개수·정확한 무게 입력 UI</title>
+  <style>
+    * { box-sizing: border-box; }
+    :root { --blue:#3476ee; --ink:#171a1d; --text:#495057; --muted:#868e96; --line:#edf0f2; }
+    body { margin:0; min-height:100vh; background:#eef2f6; color:var(--ink); font-family:Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    button { font:inherit; }
+    .board {
+      width:1000px; height:1000px; margin:0 auto; padding:32px 38px; overflow:hidden;
+      background:radial-gradient(circle at 8% 4%,rgba(52,118,238,.09),transparent 27%),linear-gradient(145deg,#fbfcfe,#edf2f7);
+    }
+    h1 { margin:0; font-size:25px; letter-spacing:-.75px; }
+    .subtitle { margin:7px 0 20px; color:#646d76; font-size:14px; letter-spacing:-.3px; }
+    .layout { display:grid; grid-template-columns:438px 1fr; gap:34px; align-items:start; }
+    .section-label { margin:0 0 9px 4px; color:var(--text); font-size:14px; font-weight:750; }
+    .phone { position:relative; width:438px; height:860px; overflow:hidden; border:1px solid #dfe3e8; border-radius:32px; background:#f4f5f7; box-shadow:0 20px 46px rgba(35,49,66,.14); }
+    .status { height:31px; padding:10px 20px 0; display:flex; justify-content:space-between; background:#fff; font-size:11px; font-weight:800; }
+    .nav { height:55px; padding:0 18px; display:grid; grid-template-columns:32px 1fr 32px; align-items:center; background:#fff; border-bottom:1px solid #f1f3f5; }
+    .back { color:var(--text); font-size:27px; line-height:1; }
+    .nav-title { text-align:center; font-size:17px; font-weight:750; letter-spacing:-.45px; }
+    .summary { padding:15px 18px 17px; background:#fff; border-bottom:8px solid #f4f5f7; }
+    .summary-top,.meal-head { display:flex; justify-content:space-between; align-items:center; }
+    .summary-kcal { font-size:23px; font-weight:800; letter-spacing:-.45px; }
+    .date { color:#646d76; font-size:13px; }
+    .goal { margin:5px 0 9px; color:var(--muted); font-size:12px; }
+    .progress { height:6px; overflow:hidden; border-radius:99px; background:#eef1f4; }
+    .progress > div { width:71%; height:100%; border-radius:inherit; background:var(--blue); }
+    .macros { margin-top:12px; display:flex; gap:14px; color:#646d76; font-size:12px; }
+    .macros b { color:var(--text); }
+    .meal { padding:18px; background:#fff; }
+    .meal-title { font-size:20px; font-weight:800; letter-spacing:-.55px; }
+    .meal-kcal { color:var(--blue); font-size:16px; font-weight:800; }
+    .meal-macro { margin:5px 0 10px; color:#9bb9f4; font-size:12px; font-weight:700; }
+    .food-list { border-top:1px solid var(--line); }
+    .food { min-height:100px; padding:14px 0; display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:center; border-bottom:1px solid var(--line); }
+    .food-main { min-width:0; }
+    .food-name { margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); font-size:16px; font-weight:760; letter-spacing:-.4px; }
+    .food-meta { margin:5px 0 0; color:var(--muted); font-size:12px; letter-spacing:-.25px; }
+    .direct {
+      margin:5px 0 0; padding:0; border:0; border-bottom:1px dashed #7ca5f2; background:transparent;
+      color:var(--blue); font-size:12px; font-weight:780; cursor:pointer;
+    }
+    .stepper { display:flex; align-items:center; gap:4px; padding:3px; border-radius:15px; background:#f4f6f8; }
+    .step { width:38px; height:38px; display:grid; place-items:center; border:0; border-radius:12px; background:#fff; color:#646d76; box-shadow:0 1px 3px rgba(22,32,43,.08); font-size:21px; cursor:pointer; }
+    .quantity { min-width:55px; border:0; background:transparent; color:var(--ink); text-align:center; font-size:15px; font-weight:820; cursor:pointer; }
+    .tip { margin-top:14px; padding:11px 12px; border-radius:13px; background:#f8f9fa; color:#646d76; font-size:12px; line-height:1.55; }
+    .add-food { margin-top:14px; width:100%; height:48px; padding:0 14px; display:flex; align-items:center; justify-content:space-between; border:1px solid #dee2e6; border-radius:14px; background:#fff; color:var(--muted); font-size:13px; }
+    .add-food b { color:var(--blue); font-size:22px; }
+    .save-bar { position:absolute; left:0; right:0; bottom:0; padding:14px 18px 24px; background:#fff; border-top:1px solid var(--line); }
+    .save { width:100%; height:53px; border:0; border-radius:15px; background:var(--blue); color:#fff; font-size:16px; font-weight:800; }
+
+    .examples { padding-top:1px; }
+    .example-title { margin:0 0 9px; color:var(--text); font-size:14px; font-weight:750; }
+    .flow-card { padding:18px 20px; border:1px solid #e0e5ea; border-radius:22px; background:rgba(255,255,255,.9); box-shadow:0 12px 28px rgba(44,56,72,.08); }
+    .state-label { margin:0 0 13px; color:var(--blue); font-size:12px; font-weight:820; }
+    .large-food { min-height:101px; padding:0; display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:center; }
+    .large-food .food-name { color:var(--ink); font-size:18px; }
+    .large-food .food-meta,.large-food .direct { font-size:13px; }
+    .large-food .step { width:42px; height:42px; }
+    .large-food .quantity { min-width:61px; font-size:16px; }
+    .arrow { height:50px; display:grid; place-items:center; color:#97a0aa; font-size:23px; }
+    .tap-note { margin-top:-3px; text-align:center; color:#646d76; font-size:12px; font-weight:650; }
+    .exact { border-color:#cfe0ff; background:#f8fbff; }
+    .exact-badge { display:inline-flex; margin-top:6px; padding:4px 7px; border-radius:7px; background:#e9f1ff; color:var(--blue); font-size:11px; font-weight:750; }
+    .input-quantity { width:110px; min-width:110px; height:42px; border:2px solid var(--blue); border-radius:11px; background:#fff; color:var(--ink); text-align:center; font-size:16px; font-weight:820; box-shadow:0 0 0 3px rgba(52,118,238,.1); }
+    .rice-card { margin-top:15px; }
+    .explain { margin-top:15px; padding:15px 17px; border:1px solid #dce7fb; border-radius:18px; background:#f5f8ff; color:#50617c; font-size:13px; line-height:1.55; }
+    .explain strong { color:var(--blue); }
+    .toast { position:absolute; left:50%; bottom:102px; transform:translateX(-50%) translateY(14px); min-width:235px; padding:11px 14px; opacity:0; border-radius:12px; background:rgba(23,26,29,.91); color:#fff; text-align:center; font-size:12px; transition:.2s ease; pointer-events:none; }
+    .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body>
+  <main class="board">
+    <h1>개수와 정확한 무게를 함께 입력하는 방식</h1>
+    <p class="subtitle">평소에는 ＋/－로 빠르게 조절하고, 총량을 누르면 110g·120g처럼 정확하게 입력합니다.</p>
+    <div class="layout">
+      <section>
+        <p class="section-label">식단 화면 기본 상태</p>
+        <div class="phone">
+          <div class="status"><span>9:41</span><span>● ● ▰</span></div>
+          <div class="nav"><span class="back">‹</span><span class="nav-title">식단 기록</span><span></span></div>
+          <div class="summary">
+            <div class="summary-top"><span class="summary-kcal">1,423 kcal</span><span class="date">9월 23일 수요일</span></div>
+            <p class="goal">목표 2,000 kcal · 71%</p>
+            <div class="progress"><div></div></div>
+            <div class="macros"><span>탄수화물 <b>152g</b></span><span>단백질 <b>116g</b></span><span>지방 <b>42g</b></span></div>
+          </div>
+          <div class="meal">
+            <div class="meal-head"><span class="meal-title">점심</span><span class="meal-kcal">630 kcal</span></div>
+            <p class="meal-macro">총 탄 72g · 단 69g · 지 8g</p>
+            <div class="food-list">
+              <div class="food">
+                <div class="food-main">
+                  <p class="food-name">밥</p>
+                  <p class="food-meta">300 kcal · 50g씩 빠른 조절</p>
+                  <button class="direct" data-switch="rice">총량 200g · 직접 입력</button>
+                </div>
+                <div class="stepper"><button class="step">−</button><button class="quantity">200g</button><button class="step">＋</button></div>
+              </div>
+              <div class="food" id="chicken-row">
+                <div class="food-main">
+                  <p class="food-name">닭가슴살</p>
+                  <p class="food-meta">330 kcal · 1개 기준 100g</p>
+                  <button class="direct" id="chicken-direct">총량 300g · 직접 입력</button>
+                </div>
+                <div class="stepper"><button class="step">−</button><button class="quantity" id="chicken-value">3개</button><button class="step">＋</button></div>
+              </div>
+            </div>
+            <div class="tip">💬　단백질은 충분해요. 좋은 지방을 조금 더해도 좋아요.</div>
+            <button class="add-food"><span>음식 추가</span><b>＋</b></button>
+          </div>
+          <div class="save-bar"><button class="save">저장하기</button></div>
+          <div class="toast">정확한 무게 입력으로 전환했어요</div>
+        </div>
+      </section>
+
+      <aside class="examples">
+        <p class="example-title">정확한 양을 입력하는 흐름</p>
+        <div class="flow-card">
+          <p class="state-label">① 평소에는 개수로 빠르게 조절</p>
+          <div class="large-food">
+            <div class="food-main"><p class="food-name">닭가슴살</p><p class="food-meta">330 kcal · 1개 기준 100g</p><button class="direct">총량 300g · 직접 입력</button></div>
+            <div class="stepper"><button class="step">−</button><button class="quantity">3개</button><button class="step">＋</button></div>
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+        <p class="tap-note">‘총량 300g’을 한 번 누르면</p>
+        <div class="arrow">↓</div>
+        <div class="flow-card exact">
+          <p class="state-label">② 숫자만 바로 입력</p>
+          <div class="large-food">
+            <div class="food-main"><p class="food-name">닭가슴살</p><p class="food-meta">121 kcal · 1개 기준 100g</p><span class="exact-badge">정확한 무게 입력 중</span></div>
+            <div class="stepper"><button class="step">−</button><input class="input-quantity" value="110g" aria-label="정확한 무게" /><button class="step">＋</button></div>
+          </div>
+        </div>
+        <div class="flow-card exact rice-card">
+          <p class="state-label">밥도 같은 방식</p>
+          <div class="large-food">
+            <div class="food-main"><p class="food-name">밥</p><p class="food-meta">180 kcal · 정확한 무게</p><span class="exact-badge">10g씩 빠른 조절</span></div>
+            <div class="stepper"><button class="step">−</button><input class="input-quantity" value="120g" aria-label="밥 무게" /><button class="step">＋</button></div>
+          </div>
+        </div>
+        <div class="explain"><strong>입력 원칙:</strong> ＋/－는 빠른 조절, 가운데 값은 정확한 입력입니다. 별도의 ‘개수/그램’ 탭을 먼저 고를 필요가 없습니다.</div>
+      </aside>
+    </div>
+  </main>
+  <script>
+    const direct = document.querySelector('#chicken-direct');
+    const value = document.querySelector('#chicken-value');
+    const toast = document.querySelector('.toast');
+    direct.addEventListener('click', () => {
+      value.textContent = '110g';
+      direct.textContent = '정확한 무게 · 110g';
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 1000);
+    });
+  </script>
+</body>
+</html>

@@ -8,6 +8,8 @@ import {
   orderBy,
   limit,
   onSnapshot,
+  getDocs,
+  startAfter,
   doc,
   updateDoc,
   serverTimestamp,
@@ -19,13 +21,18 @@ import GoalCard from '../dashboard/GoalCard';
 import WeeklyVolumeChart from '../dashboard/WeeklyVolumeChart';
 import DailyNutritionCard from '../dashboard/DailyNutritionCard';
 import WeeklyCalorieChart from '../dashboard/WeeklyCalorieChart';
-import { IcPencil, IcSpark } from '../icons/Icons';
+import MorningWeightRow from '../dashboard/MorningWeightRow';
+import { IcSpark } from '../icons/Icons';
 import TopNav from '../common/TopNav';
 import MainTab from '../common/MainTab';
 import Toast from '../common/Toast';
 import ConfirmModal from '../common/ConfirmModal';
 import Pressable from '../common/Pressable';
 import StatusSheet from '../common/StatusSheet';
+import { formatCardioDuration, getWorkoutPerfGrade } from '../../utils/utils';
+import { BODY_PARTS } from '../../utils/exerciseData';
+import { getUserStorage, setUserStorage } from '../../lib/userStorage';
+import { generateContent, extractText } from '../../lib/aiClient';
 
 const DIET_SECTION_BY_MEAL = {
   '아침': 'breakfast',
@@ -35,6 +42,8 @@ const DIET_SECTION_BY_MEAL = {
   '저녁': 'dinner',
   '야식': 'night_snack',
 };
+
+const BODY_PART_OPTIONS = BODY_PARTS.join(', ');
 
 const DIET_SECTION_LABELS = {
   breakfast: '아침',
@@ -79,7 +88,6 @@ function calcStreak(workoutLogs) {
 
 function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, onCardClick, onDietCardClick, onOpenCoachRoom, onNavChange }) {
   const [mainTab, setMainTab] = useState("workout");
-  const [fabOpen, setFabOpen] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [routineOpen, setRoutineOpen] = useState(false);
   const [pullDistance, setPullDistance] = useState(0);
@@ -135,6 +143,12 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
   }
   const [workoutLogs, setWorkoutLogs] = useState([]);
   const [dietLogs, setDietLogs] = useState([]);
+  const [olderLogs, setOlderLogs] = useState([]);
+  const [olderCursor, setOlderCursor] = useState(null);
+  const [hasOlderLogs, setHasOlderLogs] = useState(false);
+  const [olderLogsLoading, setOlderLogsLoading] = useState(false);
+  const [olderLogsError, setOlderLogsError] = useState('');
+  const paginationStartedRef = useRef(false);
   const [coachingInsight, setCoachingInsight] = useState(null);
   const isGoalSavingRef = useRef(false);
   const [toast, setToast] = useState({ show: false, message: '' });
@@ -149,6 +163,11 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
     if (!user?.uid) return;
     let cancelled = false;
     let unsubRef = null;
+    paginationStartedRef.current = false;
+    setOlderLogs([]);
+    setOlderCursor(null);
+    setHasOlderLogs(false);
+    setOlderLogsError('');
 
     function subscribe() {
       if (cancelled) return;
@@ -169,9 +188,13 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
         });
 
         const active = all.filter(d => !d.deletedAt);
-        const sorted = active.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+        const sorted = active.sort((a, b) => (b.timestamp?.seconds ?? Number.MAX_SAFE_INTEGER) - (a.timestamp?.seconds ?? Number.MAX_SAFE_INTEGER));
         setWorkoutLogs(sorted.filter(d => !d.type || d.type === "workout"));
         setDietLogs(sorted.filter(d => d.type === "diet"));
+        if (!paginationStartedRef.current) {
+          setOlderCursor(snap.docs.at(-1) || null);
+          setHasOlderLogs(snap.size === 200);
+        }
       }, (err) => {
         console.error("Firestore 쿼리 오류:", err);
         if (!cancelled) setTimeout(subscribe, 4000);
@@ -182,44 +205,110 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
     return () => { cancelled = true; unsubRef?.(); if (toastTimerRef.current) clearTimeout(toastTimerRef.current); };
   }, [user?.uid]);
 
+  async function loadOlderLogs() {
+    if (!user?.uid || !olderCursor || olderLogsLoading) return;
+    paginationStartedRef.current = true;
+    setOlderLogsLoading(true);
+    setOlderLogsError('');
+    try {
+      const nextQuery = query(
+        collection(db, 'logs'),
+        where('uid', '==', user.uid),
+        orderBy('timestamp', 'desc'),
+        startAfter(olderCursor),
+        limit(200),
+      );
+      const snap = await getDocs(nextQuery);
+      const nextLogs = snap.docs
+        .map(item => ({ ...item.data(), docId: item.id }))
+        .filter(item => !item.deletedAt);
+      setOlderLogs(current => {
+        const merged = new Map(current.map(item => [item.docId, item]));
+        nextLogs.forEach(item => merged.set(item.docId, item));
+        return [...merged.values()].sort((a, b) => (b.timestamp?.seconds ?? Number.MAX_SAFE_INTEGER) - (a.timestamp?.seconds ?? Number.MAX_SAFE_INTEGER));
+      });
+      setOlderCursor(snap.docs.at(-1) || null);
+      setHasOlderLogs(snap.size === 200);
+    } catch (error) {
+      console.error('이전 기록 조회 실패:', error);
+      setOlderLogsError('이전 기록을 불러오지 못했어요. 다시 시도해주세요.');
+    } finally {
+      setOlderLogsLoading(false);
+    }
+  }
+
+  const mergeVisibleLogs = (firstPage, type) => {
+    const merged = new Map(firstPage.map(item => [item.docId, item]));
+    olderLogs.filter(item => type === 'workout' ? (!item.type || item.type === 'workout') : item.type === 'diet')
+      .forEach(item => merged.set(item.docId, item));
+    return [...merged.values()].sort((a, b) => (b.timestamp?.seconds ?? Number.MAX_SAFE_INTEGER) - (a.timestamp?.seconds ?? Number.MAX_SAFE_INTEGER));
+  };
+  const visibleWorkoutLogs = mergeVisibleLogs(workoutLogs, 'workout');
+  const visibleDietLogs = mergeVisibleLogs(dietLogs, 'diet');
+
   useEffect(() => {
     try {
-      const stored = localStorage.getItem(`coaching_insight_${mainTab}`);
+      const stored = getUserStorage(user?.uid, `coaching_insight_${mainTab}`);
       if (!stored) { setCoachingInsight(null); return; }
       const insight = JSON.parse(stored);
-      const dismissedAt = parseInt(localStorage.getItem(`coaching_insight_dismissed_${mainTab}`) || '0');
+      const dismissedAt = parseInt(getUserStorage(user?.uid, `coaching_insight_dismissed_${mainTab}`) || '0');
       if (insight.timestamp > dismissedAt) setCoachingInsight(insight);
       else setCoachingInsight(null);
     } catch { setCoachingInsight(null); }
-  }, [mainTab]);
+  }, [mainTab, user?.uid]);
 
   function dismissInsight() {
-    localStorage.setItem(`coaching_insight_dismissed_${mainTab}`, String(Date.now()));
+    setUserStorage(user?.uid, `coaching_insight_dismissed_${mainTab}`, String(Date.now()));
     setCoachingInsight(null);
   }
 
-  function handleFabOption(type) {
-    setFabOpen(false);
-    if (type === "workout") onNavigateToMemo();
-    if (type === "diet") onDietCardClick(null); // 새 식단 생성
+  function buildRetrySummaryMessage(totalVolume, cardioMinutes = 0) {
+    if (totalVolume === 0 && cardioMinutes > 0) {
+      return `오늘 유산소 ${formatCardioDuration(cardioMinutes)} 기록!`;
+    }
+    return totalVolume > 0
+      ? `오늘 볼륨 ${totalVolume.toLocaleString()}kg`
+      : '운동 기록 저장 완료!';
   }
 
   async function handleRetryAI(data) {
     if (!data?.docId) return;
     if (retryingRef.current.has(data.docId)) return;
     retryingRef.current.add(data.docId);
+    const existingSections = (data.sections || []).filter(s => (s.items || []).some(it => it.title || it.body));
+    const hasStructuredSections = existingSections.length > 0;
     const rawText = data.originalText ||
       (data.sections || []).flatMap(s => (s.items || []).map(it => it.body)).filter(Boolean).join('\n');
-    if (!rawText) return;
-    const GEMINI_KEY = import.meta.env.VITE_GEMINI_KEY;
-    const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`;
+    if (!rawText && !hasStructuredSections) {
+      retryingRef.current.delete(data.docId);
+      return;
+    }
     const docRef = doc(db, 'logs', data.docId);
-    await updateDoc(docRef, { aiStatus: 'processing', aiError: null });
-    const { parseVolume } = await import('../../utils/utils.js');
+    await updateDoc(docRef, { aiStatus: 'processing', aiStartedAt: serverTimestamp(), aiError: null });
+    const { parseCardioMinutes, parseVolume } = await import('../../utils/utils.js');
     try {
+      if (hasStructuredSections) {
+        const totalVolume = data.totalVolume || parseVolume(existingSections, profile?.weight);
+        const cardioMinutes = data.cardioMinutes || parseCardioMinutes(existingSections);
+        const overloadMsg = buildRetrySummaryMessage(totalVolume, cardioMinutes);
+        const commentPrompt = `운동 기록을 분석해서 동기부여가 되는 한줄평을 써줘.\n필수 포함 문구: "${overloadMsg}"\n규칙:\n1. 반드시 저 문구가 제일 앞에 나오게 해.\n2. 30자 이내로 짧고 강렬하게 한국어로 써.\n3. 순수 텍스트만 반환해.\n정보: 운동부위: ${data.title || ''}, 총 볼륨: ${totalVolume}kg, 유산소 시간: ${cardioMinutes}분`;
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 45000);
+        let aiComment = overloadMsg;
+        try {
+          const commentJson = await generateContent({ contents: [{ parts: [{ text: commentPrompt }] }], signal: ctrl.signal });
+          aiComment = extractText(commentJson).trim() || overloadMsg;
+        } catch {}
+        finally { clearTimeout(timer); }
+        await updateDoc(docRef, { aiComment, overloadMsg, totalVolume, cardioMinutes, aiStatus: 'done', aiError: null });
+        return;
+      }
+
       const prompt = `다음 사용자의 거친 운동 메모 데이터를 보기 좋게 정리해서 JSON 배열로 반환해줘.
 응답 형식: [{ "part": "운동부위", "items": [{ "title": "운동종목", "body": "• 세트 1: 20kg 15회\\n• 세트 2: 40kg 20회", "note": "느낀점(선택)" }] }]
 중요 규칙:
+0. part는 반드시 다음 카테고리 중 하나여야 한다: ${BODY_PART_OPTIONS}
+0-1. 클라이밍, 러닝/조깅, 사이클, 인터벌, 줄넘기, 로잉머신 등 유산소성 운동은 반드시 '유산소'로 분류할 것.
 1. 각 세트별 기록은 반드시 '• 세트 N: 무게 횟수' 형태로 작성해줘.
 2. 여러 세트인 경우 쉼표(,) 대신 반드시 줄바꿈(\\n)으로 구분해서 작성해줘.
 3. [가장 중요] 세트 번호(N)는 종목이 바뀌더라도 절대 1부터 다시 시작하지 말고, 이전 종목의 마지막 세트 번호에 이어서 전체 누적으로 계속 카운트해줘.
@@ -227,14 +316,12 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
 8. JSON 이외의 다른 텍스트(마크다운 등)는 절대 포함하지 마.
 사용자 입력:\n${rawText}`;
       const ctrl1 = new AbortController();
-      const t1 = setTimeout(() => ctrl1.abort(), 15000);
-      let res;
-      try { res = await fetch(GEMINI_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }), signal: ctrl1.signal }); }
+      const t1 = setTimeout(() => ctrl1.abort(), 45000);
+      let json;
+      try { json = await generateContent({ contents: [{ parts: [{ text: prompt }] }], signal: ctrl1.signal }); }
       finally { clearTimeout(t1); }
-      const json = await res.json();
-      if (json.error || !json.candidates?.[0]) throw new Error(json.error?.message || 'AI 응답 없음');
-      const parts = json.candidates[0].content.parts;
-      const text = (parts.find(p => !p.thought) ?? parts[parts.length - 1]).text;
+      const text = extractText(json);
+      if (!text) throw new Error('AI 응답 없음');
       const cleaned = text.replace(/```json/gi, '').replace(/```/g, '').trim();
       const match = cleaned.match(/\[[\s\S]*\]/);
       if (!match) throw new Error('JSON 배열 없음: ' + cleaned.slice(0, 100));
@@ -242,25 +329,33 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
       const sections = parsed.map(s => ({ part: s.part || '운동 부위', items: (s.items || []).map(it => ({ title: it.title, body: it.body, ...(it.note ? { note: it.note } : {}) })) }));
       const exercises = sections.flatMap(s => s.items.map(it => ({ name: it.title }))).filter(ex => ex.name);
       const totalVolume = parseVolume(sections, profile?.weight);
-      const overloadMsg = `오늘 볼륨 ${totalVolume.toLocaleString()}kg`;
-      await updateDoc(docRef, { sections, exercises, totalVolume, aiStatus: 'summarized', aiError: null });
+      const cardioMinutes = parseCardioMinutes(sections);
+      const overloadMsg = buildRetrySummaryMessage(totalVolume, cardioMinutes);
+      await updateDoc(docRef, { sections, exercises, totalVolume, cardioMinutes, overloadMsg, aiStatus: 'summarized', aiError: null });
 
-      const commentPrompt = `운동 기록을 분석해서 동기부여가 되는 한줄평을 써줘.\n필수 포함 문구: "${overloadMsg}"\n규칙:\n1. 반드시 저 문구가 제일 앞에 나오게 해.\n2. 30자 이내로 짧고 강렬하게 한국어로 써.\n3. 순수 텍스트만 반환해.\n정보: 운동부위: ${data.title || ''}, 총 볼륨: ${totalVolume}kg`;
+      const commentPrompt = `운동 기록을 분석해서 동기부여가 되는 한줄평을 써줘.\n필수 포함 문구: "${overloadMsg}"\n규칙:\n1. 반드시 저 문구가 제일 앞에 나오게 해.\n2. 30자 이내로 짧고 강렬하게 한국어로 써.\n3. 순수 텍스트만 반환해.\n정보: 운동부위: ${data.title || ''}, 총 볼륨: ${totalVolume}kg, 유산소 시간: ${cardioMinutes}분`;
       const ctrl2 = new AbortController();
-      const t2 = setTimeout(() => ctrl2.abort(), 15000);
-      let commentRes;
-      try { commentRes = await fetch(GEMINI_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: commentPrompt }] }] }), signal: ctrl2.signal }); }
+      const t2 = setTimeout(() => ctrl2.abort(), 45000);
+      let aiComment = overloadMsg;
+      try {
+        const commentJson = await generateContent({ contents: [{ parts: [{ text: commentPrompt }] }], signal: ctrl2.signal });
+        aiComment = extractText(commentJson).trim() || overloadMsg;
+      } catch {}
       finally { clearTimeout(t2); }
-      const commentJson = await commentRes.json();
-      if (commentJson.candidates?.[0]) {
-        const cParts = commentJson.candidates[0].content.parts;
-        const aiComment = (cParts.find(p => !p.thought) ?? cParts[cParts.length - 1]).text.trim();
-        await updateDoc(docRef, { aiComment, aiStatus: 'done' });
-      } else {
-        await updateDoc(docRef, { aiStatus: 'done' });
-      }
+      await updateDoc(docRef, { aiComment, aiStatus: 'done', aiError: null });
     } catch (err) {
-      await updateDoc(docRef, { aiStatus: 'error', aiError: `${err.name}: ${err.message}`.slice(0, 300) }).catch(() => {});
+      const fallbackSections = hasStructuredSections ? existingSections : (data.sections || []);
+      const totalVolume = data.totalVolume || parseVolume(fallbackSections, profile?.weight);
+      const cardioMinutes = data.cardioMinutes || parseCardioMinutes(fallbackSections);
+      const fallbackComment = buildRetrySummaryMessage(totalVolume, cardioMinutes);
+      await updateDoc(docRef, {
+        aiComment: fallbackComment,
+        overloadMsg: fallbackComment,
+        totalVolume,
+        cardioMinutes,
+        aiStatus: 'done',
+        aiError: null,
+      }).catch(() => {});
     } finally {
       retryingRef.current.delete(data.docId);
     }
@@ -268,7 +363,7 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
 
   function handleDeleteRequest(target) {
     const nextTarget = typeof target === 'string'
-      ? workoutLogs.find(log => log.docId === target) || { docId: target, title: '쇠질 메모' }
+      ? visibleWorkoutLogs.find(log => log.docId === target) || { docId: target, title: '운동 메모' }
       : target;
     if (!nextTarget?.docId) return;
     setDeleteTarget(nextTarget);
@@ -278,14 +373,25 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
     setDeleteTarget(null);
   }
 
+  /* QA-13: 삭제가 실패하면 숨겨둔 카드를 되돌리고 실패를 알린다.
+     성공했을 때만 목록에서 사라진 상태를 유지한다. */
   function handleDeleteConfirm() {
     if (!deleteTarget?.docId) return;
     const docId = deleteTarget.docId;
     setDeleteTarget(null);
     setDeletingId(docId);
     setTimeout(async () => {
-      await updateDoc(doc(db, "logs", docId), { deletedAt: serverTimestamp() });
-      setDeletingId(null);
+      try {
+        await updateDoc(doc(db, "logs", docId), { deletedAt: serverTimestamp() });
+        setOlderLogs(current => current.filter(item => item.docId !== docId));
+      } catch (error) {
+        console.error('기록 삭제 실패:', error);
+        if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+        setToast({ show: true, message: '삭제하지 못했어요. 잠시 후 다시 시도해주세요.' });
+        toastTimerRef.current = setTimeout(() => setToast(t => ({ ...t, show: false })), 3500);
+      } finally {
+        setDeletingId(null);
+      }
     }, 400);
   }
 
@@ -302,6 +408,9 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
     if (!dateChangeTarget?.docId || !dateInput) return;
     const newDate = new Date(`${dateInput}T12:00:00`);
     await updateDoc(doc(db, 'logs', dateChangeTarget.docId), { timestamp: Timestamp.fromDate(newDate) });
+    setOlderLogs(current => current.map(item => item.docId === dateChangeTarget.docId
+      ? { ...item, timestamp: Timestamp.fromDate(newDate) }
+      : item));
     setDateChangeTarget(null);
   }
 
@@ -311,14 +420,16 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
     try {
       const { addDoc, serverTimestamp } = await import('firebase/firestore');
       if (goal.type === 'workout') {
+        const { parseCardioMinutes } = await import('../../utils/utils.js');
         const sectionsData = [{
           id: 1, part: "AI 제안 (코치 추천)",
           items: goal.items.map((it, i) => ({ id: i + 1, title: it.name, body: it.detail }))
         }];
         const exercises = goal.items.map(it => ({ name: it.name, thumbnail: "" }));
+        const cardioMinutes = parseCardioMinutes(sectionsData);
         await addDoc(collection(db, "logs"), {
           type: "workout", uid: user.uid, title: goal.title, exercises,
-          sections: sectionsData, totalVolume: 0, 
+          sections: sectionsData, totalVolume: 0, cardioMinutes,
           timestamp: serverTimestamp(), aiComment: "목표 달성! 대단합니다!"
         });
       } else {
@@ -392,7 +503,7 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
     <div className="flex flex-col h-full overflow-hidden">
       <ConfirmModal
         isOpen={!!deleteTarget}
-        title={deleteTarget?.type === 'diet' ? '식단 기록을 삭제할까요?' : '쇠질 메모를 삭제할까요?'}
+        title={deleteTarget?.type === 'diet' ? '식단 기록을 삭제할까요?' : '운동 메모를 삭제할까요?'}
         subtitle={`${deleteTarget?.type === 'diet' ? '식단' : (deleteTarget?.title || '이')} 기록이 휴지통으로 이동됩니다.\n마이페이지 휴지통에서 30일 내 복원할 수 있습니다.`}
         confirmText="삭제"
         cancelText="취소"
@@ -405,7 +516,7 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
       <header className="z-20 flex-none flex flex-col">
         <TopNav title="내 상태" onTodoClick={() => setRoutineOpen(true)} />
         <MainTab 
-          tabs={[{ id: 'workout', label: '쇠질' }, { id: 'diet', label: '식단' }]} 
+          tabs={[{ id: 'workout', label: '운동' }, { id: 'diet', label: '식단' }]} 
           activeId={mainTab} 
           onChange={setMainTab} 
         />
@@ -422,7 +533,7 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
             top: -570,
             left: '50%',
             marginLeft: -700,
-            background: 'radial-gradient(circle, rgba(52,118,238,0.13) 0%, transparent 70%)',
+            background: 'radial-gradient(circle, rgba(126,126,255,0.13) 0%, transparent 70%)',
             animation: 'pullRefreshRipple 0.85s cubic-bezier(0.2, 0.8, 0.2, 1) forwards',
             zIndex: 10,
           }}
@@ -453,6 +564,8 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
+        <MorningWeightRow uid={user?.uid} todayOnly />
+
       {/* AI 코칭 인사이트 카드 — 해당 탭에서만 노출 */}
         {coachingInsight && coachingInsight.category === mainTab && (
           <div className="mx-4 mt-4 mb-1 bg-white rounded-2xl border border-ui-2 shadow-card overflow-hidden">
@@ -496,10 +609,10 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
         )}
 
         {mainTab === "workout" ? (
-          workoutLogs.length === 0 ? (
+          visibleWorkoutLogs.length === 0 ? (
             <div className="flex flex-col items-center justify-center px-8 pt-16 gap-3">
               <div className="w-16 h-16 rounded-2xl bg-ui-1 flex items-center justify-center text-3xl mb-1">🏋️</div>
-              <p className="font-pretendard font-bold text-[17px] text-typo-strong tracking-[-0.4px]">첫 쇠질을 기록해봐요!</p>
+              <p className="font-pretendard font-bold text-[17px] text-typo-strong tracking-[-0.4px]">첫 운동을 기록해봐요!</p>
               <p className="font-pretendard text-body-s text-typo-alternative text-center tracking-[-0.3px] leading-relaxed">AI가 거친 메모를 깔끔하게 정리해드려요</p>
               <Pressable pressScale={0.97} onClick={onNavigateToMemo} className="mt-2 px-6 py-3 bg-brand text-white rounded-2xl font-pretendard font-bold text-body-s tracking-[-0.35px]">
                 기록 시작하기
@@ -512,19 +625,19 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
                 {streak >= 2 && (
                   <div className="mx-4 mt-4 mb-1 flex items-center gap-2.5 bg-white rounded-[16px] border border-ui-2 px-4 py-3 shadow-[0_0_16px_rgba(3,27,38,0.06)]">
                     <span className="text-xl">🔥</span>
-                    <p className="font-pretendard font-bold text-body-s text-typo-strong tracking-[-0.35px]">{streak}일 연속 쇠질 중!</p>
+                    <p className="font-pretendard font-bold text-body-s text-typo-strong tracking-[-0.35px]">{streak}일 연속 운동 중!</p>
                     <p className="font-pretendard text-caption-m text-typo-alternative tracking-[-0.3px]">Keep going</p>
                   </div>
                 )}
                 <WeeklyVolumeChart workoutLogs={workoutLogs} />
-                {workoutLogs.map((d) => (
-                  <WorkoutCard key={d.docId} data={d} onCardClick={onCardClick} onDelete={handleDeleteRequest} onChangeDate={handleDateChangeRequest} isDeleting={d.docId === deletingId} onRetryAI={handleRetryAI} />
+                {visibleWorkoutLogs.map((d, i) => (
+                  <WorkoutCard key={d.docId} data={d} perfGrade={getWorkoutPerfGrade(d, visibleWorkoutLogs.slice(i + 1))} onCardClick={onCardClick} onDelete={handleDeleteRequest} onChangeDate={handleDateChangeRequest} isDeleting={d.docId === deletingId} onRetryAI={handleRetryAI} />
                 ))}
               </>
             );
           })()
         ) : (
-          dietLogs.length === 0 ? (
+          visibleDietLogs.length === 0 ? (
             <div className="flex flex-col items-center justify-center px-8 pt-16 gap-3">
               <div className="w-16 h-16 rounded-2xl bg-ui-1 flex items-center justify-center text-3xl mb-1">🥗</div>
               <p className="font-pretendard font-bold text-[17px] text-typo-strong tracking-[-0.4px]">오늘 뭐 먹었나요?</p>
@@ -549,7 +662,7 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
               )}
               <DailyNutritionCard dietLogs={dietLogs} profile={profile} />
               <WeeklyCalorieChart dietLogs={dietLogs} profile={profile} />
-              {dietLogs.map((d) => (
+              {visibleDietLogs.map((d) => (
                 <div onClick={() => onDietCardClick(d)} key={d.docId}>
                   <DietCard data={d} isDeleting={d.docId === deletingId} targetKcal={profile?.targetKcal} profile={profile} onDelete={handleDeleteRequest} onChangeDate={handleDateChangeRequest} />
                 </div>
@@ -557,23 +670,22 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
             </>
           )
         )}
+        {(hasOlderLogs || olderLogsError) && (
+          <div className="px-4 pt-3 pb-2 text-center">
+            {olderLogsError && (
+              <p role="alert" className="mb-2 font-pretendard text-caption-m text-[#e03e52]">{olderLogsError}</p>
+            )}
+            <Pressable
+              pressScale={0.97}
+              onClick={loadOlderLogs}
+              disabled={olderLogsLoading}
+              className="w-full h-12 rounded-2xl border border-ui-3 bg-white font-pretendard text-body-s font-semibold text-brand disabled:opacity-50"
+            >
+              {olderLogsLoading ? '불러오는 중…' : '이전 기록 더 보기'}
+            </Pressable>
+          </div>
+        )}
       </main>
-
-      {/* FAB 딤 */}
-      {fabOpen && <div onClick={() => setFabOpen(false)} className="fixed inset-0 bg-black/40 z-[35]" />}
-
-      {/* 쇠질/식단 메뉴 - FAB와 같은 위치에서 대체 */}
-      <div className={`fixed bottom-[84px] right-[10px] z-[40] fab-menu${fabOpen ? " open" : ""} rounded-lg px-2 shadow-[0_0_6px_rgba(0,0,0,0.04)] bg-[linear-gradient(135deg,#228bed_0%,#c509d6_100%)]`}>
-        <button onClick={() => handleFabOption("workout")} className="flex w-full items-center justify-center border-b border-white px-4 py-2 text-white text-body-s font-semibold tracking-[-0.35px] whitespace-nowrap bg-none transition-all duration-100 active:opacity-60">쇠질</button>
-        <button onClick={() => handleFabOption("diet")} className="flex w-full items-center justify-center px-4 py-2 text-white text-body-s font-semibold tracking-[-0.35px] whitespace-nowrap bg-none border-none transition-all duration-100 active:opacity-60">식단</button>
-      </div>
-
-      {/* FAB 버튼 - 메뉴 열리면 숨김 */}
-      {!fabOpen && (
-        <Pressable pressScale={0.90} onClick={() => setFabOpen(true)} className="fixed bottom-[84px] right-[10px] z-[36] w-[48px] h-[48px] bg-brand rounded-full flex items-center justify-center shadow-fab border-none">
-          <IcPencil />
-        </Pressable>
-      )}
 
       {/* 날짜 변경 바텀시트 */}
       {dateChangeSheet && typeof document !== 'undefined'

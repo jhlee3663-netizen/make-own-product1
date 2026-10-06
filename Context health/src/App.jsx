@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './lib/firebase';
 import { setSentryUser } from './lib/sentry';
 import { loadUserData, saveUserData, loadAllCoachRooms, saveCoachRoom, deleteCoachRoom } from './lib/userStore';
+import { clearLegacyPersonalStorage, getUserStorage, getUserStorageKeys, prepareUserStorage, removeUserStorage, setUserStorage } from './lib/userStorage';
 
 import LoginScreen      from './components/screens/LoginScreen';
 import OnboardingScreen from './components/screens/OnboardingScreen';
@@ -12,56 +13,57 @@ import DietDetailScreen  from './components/screens/DietDetailScreen';
 import CoachListScreen  from './components/screens/CoachListScreen';
 import AICoachScreen    from './components/screens/AICoachScreen';
 import MyPageScreen     from './components/screens/MyPageScreen';
+import McpAuthorizeScreen from './components/screens/McpAuthorizeScreen';
 import Toast            from './components/common/Toast';
 import BottomNav        from './components/common/BottomNav';
+import AnalysisScreen   from './components/screens/AnalysisScreen';
 import { refineDynamicCoachRoomMeta, STATIC_COACH_ROOM_IDS } from './utils/coachRooms';
+import { captureMcpAuthorizeRequest } from './lib/mcpConnection';
 
 /* ── 프로필 localStorage 유틸 ── */
-function loadProfile() {
-  try { return JSON.parse(localStorage.getItem('user_profile')) || null; } catch { return null; }
+function loadProfile(uid) {
+  try { return JSON.parse(getUserStorage(uid, 'user_profile')) || null; } catch { return null; }
 }
-function saveProfile(p) { localStorage.setItem('user_profile', JSON.stringify(p)); }
+function saveProfile(uid, profile) { setUserStorage(uid, 'user_profile', JSON.stringify(profile)); }
 
 /* ── 코치 메시지 localStorage 유틸 ── */
-function loadCoachRooms() {
+function loadCoachRooms(uid) {
   try {
     const parse = (key) => {
-      const raw = localStorage.getItem(key);
+      const raw = getUserStorage(uid, key);
       if (!raw) return null;
       return JSON.parse(raw).map(m => ({ ...m, timestamp: m.timestamp ? new Date(m.timestamp) : undefined }));
     };
     const result = {};
     STATIC_COACH_ROOM_IDS.forEach(roomId => { result[roomId] = parse(`coach_msgs_${roomId}`); });
-    for (let i = 0; i < localStorage.length; i += 1) {
-      const key = localStorage.key(i);
-      if (!key?.startsWith('coach_msgs_chat_')) continue;
+    getUserStorageKeys(uid).forEach((key) => {
+      if (!key?.startsWith('coach_msgs_chat_')) return;
       result[key.replace('coach_msgs_', '')] = parse(key);
-    }
+    });
     return result;
   } catch { return {}; }
 }
 
-function loadCoachRoomMeta() {
+function loadCoachRoomMeta(uid) {
   try {
     const result = {};
-    for (let i = 0; i < localStorage.length; i += 1) {
-      const key = localStorage.key(i);
-      if (!key?.startsWith('coach_room_meta_')) continue;
-      const meta = JSON.parse(localStorage.getItem(key));
+    getUserStorageKeys(uid).forEach((key) => {
+      if (!key?.startsWith('coach_room_meta_')) return;
+      const meta = JSON.parse(getUserStorage(uid, key));
       if (meta?.id) result[meta.id] = meta;
-    }
+    });
     return result;
   } catch { return {}; }
 }
 
-function saveCoachRoomMeta(meta) {
+function saveCoachRoomMeta(uid, meta) {
   if (!meta?.id) return;
-  try { localStorage.setItem(`coach_room_meta_${meta.id}`, JSON.stringify(meta)); } catch {}
+  setUserStorage(uid, `coach_room_meta_${meta.id}`, JSON.stringify(meta));
 }
 
 /* ── AI 목표 localStorage 유틸 ── */
-function loadAiGoals() {
-  try { return JSON.parse(localStorage.getItem('ai_goals')) || []; } catch { return []; }
+function loadAiGoals(uid) {
+  try { return JSON.parse(getUserStorage(uid, 'ai_goals')) || []; } catch { return []; }
 }
 
 const APP_HISTORY_KEY = '__contextHealthView';
@@ -77,10 +79,8 @@ function isAppHistoryState(state) {
 
 function App() {
   const [user, setUser]       = useState(undefined); // undefined = 로딩 중
-  const [profile, setProfile] = useState(loadProfile);
-  const [onboardingDone, setOnboardingDone] = useState(() =>
-    !!localStorage.getItem('onboarding_completed') || !!loadProfile()
-  );
+  const [profile, setProfile] = useState(null);
+  const [onboardingDone, setOnboardingDone] = useState(false);
   const [userDataReady, setUserDataReady] = useState(false);
   const [tab, setTab]         = useState('home');
   const [prevTab, setPrevTab] = useState('home');
@@ -88,19 +88,38 @@ function App() {
   const [exitingDetail, setExitingDetail] = useState(false);
 
   const [showToast, setShowToast]       = useState(false);
+  const [toastMessage, setToastMessage] = useState('저장되었습니다');
+  const toastTimerRef = useRef(null);
   const [memoKey, setMemoKey]           = useState(0);
   const [dietKey, setDietKey]           = useState(0);
   const [editingLog, setEditingLog]     = useState(null);
   const [editingDietLog, setEditingDietLog] = useState(null);
-  const [coachRooms, setCoachRooms]     = useState(loadCoachRooms);
-  const [coachRoomMeta, setCoachRoomMeta] = useState(loadCoachRoomMeta);
+  const [coachRooms, setCoachRooms]     = useState(() => loadCoachRooms(null));
+  const [coachRoomMeta, setCoachRoomMeta] = useState({});
+  const [coachRoomLimitReached, setCoachRoomLimitReached] = useState(false);
   const [coachRoom, setCoachRoom]       = useState(null); // null = 목록 | 'workout' | 'diet'
   const [coachPendingMessage, setCoachPendingMessage] = useState(null);
   const [coachOverlay, setCoachOverlay] = useState(null);
-  const [aiGoals, setAiGoals]           = useState(loadAiGoals);
+  const [aiGoals, setAiGoals]           = useState([]);
+  const [mcpAuthorizeRequest, setMcpAuthorizeRequest] = useState(captureMcpAuthorizeRequest);
   const historyIndexRef = useRef(0);
   const latestViewRef = useRef({ tab: 'home', screen: 'home', coachRoom: null, coachOverlay: null });
   const popRestoringRef = useRef(false);
+  const detailBackGuardRef = useRef(null);
+  const registerDetailBackGuard = useCallback((guard) => {
+    detailBackGuardRef.current = guard;
+  }, []);
+
+  function showAppToast(message) {
+    window.clearTimeout(toastTimerRef.current);
+    setToastMessage(message);
+    setShowToast(true);
+    toastTimerRef.current = window.setTimeout(() => setShowToast(false), 4000);
+  }
+
+  function reportSyncFailure() {
+    showAppToast('서버에 저장되지 않았어요. 인터넷 연결 후 다시 시도해주세요.');
+  }
 
   const currentView = () => ({
     tab,
@@ -164,51 +183,127 @@ function App() {
   }
 
   /* ── 인증 ── */
+  const loadedUidRef = useRef(null);
+  loadedUidRef.current = user?.uid || null;
+
   useEffect(() => {
-    const saved = localStorage.getItem('auth_user');
-    if (saved) {
-      try { setUser(JSON.parse(saved)); } catch {}
-    }
-    const unsub = onAuthStateChanged(auth, (fu) => {
-      if (fu) {
-        if (fu.isAnonymous) {
-          const saved = localStorage.getItem('auth_user');
-          if (saved) {
-            try {
-              const storedUser = JSON.parse(saved);
-              if (storedUser.uid && storedUser.uid !== fu.uid) {
-                localStorage.removeItem('user_profile');
-                localStorage.removeItem('ai_goals');
-              }
-              const merged = { ...storedUser, uid: fu.uid };
-              localStorage.setItem('auth_user', JSON.stringify(merged));
-              setUser(merged);
-            } catch {}
-          }
-        } else {
-          try {
-            const prev = JSON.parse(localStorage.getItem('auth_user') || '{}');
-            if (prev.uid && prev.uid !== fu.uid) {
-              localStorage.removeItem('user_profile');
-              localStorage.removeItem('ai_goals');
-            }
-          } catch {}
-          const u = { uid: fu.uid, name: fu.displayName, email: fu.email, photo: fu.photoURL, provider: 'google' };
-          localStorage.setItem('auth_user', JSON.stringify(u));
-          setUser(u);
-        }
-      } else {
+    let active = true;
+    const authTimeout = window.setTimeout(() => {
+      if (!active) return;
+      setUser(current => current === undefined ? null : current);
+      setUserDataReady(true);
+    }, 8000);
+    const unsub = onAuthStateChanged(auth, async (fu) => {
+      if (!fu || fu.uid !== loadedUidRef.current) setUserDataReady(false);
+      if (!fu) {
+        window.clearTimeout(authTimeout);
         localStorage.removeItem('auth_user');
-        setUser(null);
-        setUserDataReady(true);
+        if (active) {
+          setUser(null);
+          setUserDataReady(true);
+        }
+        return;
+      }
+
+      let storedUser = null;
+      try {
+        storedUser = JSON.parse(localStorage.getItem('auth_user') || 'null');
+      } catch {}
+
+      // 기존 Kakao/Naver 익명 세션은 저장 정보를 지우지 않고 로그인 화면으로 보낸다.
+      // 재로그인 시 Google은 계정 연결, Kakao/Naver는 서버 이전으로 기존 데이터를 보존한다.
+      if (fu.isAnonymous) {
+        window.clearTimeout(authTimeout);
+        if (active) {
+          setUser(null);
+          setUserDataReady(true);
+        }
+        return;
+      }
+
+      try {
+        const tokenResult = await fu.getIdTokenResult();
+        if (!active) return;
+        window.clearTimeout(authTimeout);
+        const claimedProvider = tokenResult.claims.socialProvider;
+        const provider = claimedProvider
+          || (fu.providerData.some(item => item.providerId === 'google.com') ? 'google'
+          : fu.providerData.some(item => item.providerId === 'apple.com') ? 'apple'
+          : 'unknown');
+        const sameStoredUser = storedUser?.uid === fu.uid ? storedUser : null;
+
+        prepareUserStorage(fu.uid, storedUser?.uid);
+
+        const nextUser = {
+          uid: fu.uid,
+          name: fu.displayName || sameStoredUser?.name || '사용자',
+          email: fu.email || tokenResult.claims.socialEmail || sameStoredUser?.email || '',
+          photo: fu.photoURL || sameStoredUser?.photo || '',
+          provider,
+        };
+        localStorage.setItem('auth_user', JSON.stringify(nextUser));
+        setUser(nextUser);
+      } catch (error) {
+        window.clearTimeout(authTimeout);
+        console.error('[Auth state]', error);
+        if (active) {
+          localStorage.removeItem('auth_user');
+          setUser(null);
+          setUserDataReady(true);
+        }
       }
     });
-    return () => unsub();
+    return () => {
+      active = false;
+      window.clearTimeout(authTimeout);
+      unsub();
+    };
   }, []);
 
   useEffect(() => {
     if (user !== undefined) setSentryUser(user);
   }, [user]);
+
+  useEffect(() => {
+    /* 다른 탭에서 '다른 계정'으로 바뀐 경우에만 새로고침한다.
+       로그아웃·일시적인 값 변화는 onAuthStateChanged가 처리하므로 여기서 새로고침하지 않는다.
+       (탭끼리 서로 새로고침시키며 로그인 화면으로 튕기던 문제 방지) */
+    let timer;
+    const handleAccountStorageChange = (event) => {
+      if (event.key !== 'auth_user') return;
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        let storedUid = null;
+        try { storedUid = JSON.parse(localStorage.getItem('auth_user') || 'null')?.uid || null; } catch {}
+        const renderedUid = user?.uid || null;
+        if (storedUid && renderedUid && storedUid !== renderedUid) window.location.reload();
+      }, 1500);
+    };
+    window.addEventListener('storage', handleAccountStorageChange);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('storage', handleAccountStorageChange);
+    };
+  }, [user?.uid]);
+
+  useEffect(() => {
+    if (!user?.uid) {
+      setProfile(null);
+      setOnboardingDone(false);
+      setAiGoals([]);
+      setCoachRooms(loadCoachRooms(null));
+      setCoachRoomMeta({});
+      setCoachRoomLimitReached(false);
+      return;
+    }
+    clearLegacyPersonalStorage();
+    const cachedProfile = loadProfile(user.uid);
+    setProfile(cachedProfile);
+    setOnboardingDone(Boolean(getUserStorage(user.uid, 'onboarding_completed') || cachedProfile));
+    setAiGoals(loadAiGoals(user.uid));
+    setCoachRooms(loadCoachRooms(user.uid));
+    setCoachRoomMeta(loadCoachRoomMeta(user.uid));
+  }, [user?.uid]);
 
   useEffect(() => {
     latestViewRef.current = currentView();
@@ -225,9 +320,17 @@ function App() {
     const handlePopState = (event) => {
       if (!isAppHistoryState(event.state)) return;
       popRestoringRef.current = true;
-      historyIndexRef.current = Number(event.state.index || 0);
+      const previousIndex = historyIndexRef.current;
+      const nextIndex = Number(event.state.index || 0);
       const current = latestViewRef.current;
       const isClosingHomeDetail = current?.tab === 'home' && (current?.screen === 'memo' || current?.screen === 'diet-detail') && !current?.coachOverlay;
+      if (isClosingHomeDetail && detailBackGuardRef.current && !detailBackGuardRef.current()) {
+        historyIndexRef.current = previousIndex;
+        window.history.pushState(makeHistoryState(previousIndex, current), '');
+        window.setTimeout(() => { popRestoringRef.current = false; }, 0);
+        return;
+      }
+      historyIndexRef.current = nextIndex;
       const nextView = isClosingHomeDetail
         ? { tab: 'home', screen: 'home', coachRoom: null, coachOverlay: null }
         : event.state.view;
@@ -252,29 +355,31 @@ function App() {
     let cancelled = false;
     async function sync() {
       setUserDataReady(false);
-      const [userData, fsRooms] = await Promise.all([
+      const [userData, coachRoomResult] = await Promise.all([
         loadUserData(user.uid),
         loadAllCoachRooms(user.uid),
       ]);
       if (cancelled) return;
       if (userData?.profile) {
-        saveProfile(userData.profile);
+        saveProfile(user.uid, userData.profile);
         setProfile(userData.profile);
       } else {
-        localStorage.removeItem('user_profile');
+        removeUserStorage(user.uid, 'user_profile');
         setProfile(null);
       }
       if (userData?.onboardingDone || userData?.profile) {
-        localStorage.setItem('onboarding_completed', '1');
+        setUserStorage(user.uid, 'onboarding_completed', '1');
         setOnboardingDone(true);
         if (!userData?.onboardingDone) {
-          saveUserData(user.uid, { onboardingDone: true }).catch(() => {});
+          saveUserData(user.uid, { onboardingDone: true }).catch(reportSyncFailure);
         }
       }
       if (userData?.goals) {
-        localStorage.setItem('ai_goals', JSON.stringify(userData.goals));
+        setUserStorage(user.uid, 'ai_goals', JSON.stringify(userData.goals));
         setAiGoals(userData.goals);
       }
+      const fsRooms = coachRoomResult.rooms;
+      setCoachRoomLimitReached(coachRoomResult.hasMore);
       setCoachRooms(prev => {
         const next = { ...prev };
         const nextMeta = {};
@@ -282,33 +387,49 @@ function App() {
           const data = Array.isArray(value) ? { messages: value, meta: null } : value;
           if (data?.messages) {
             next[roomId] = data.messages;
-            try { localStorage.setItem(`coach_msgs_${roomId}`, JSON.stringify(data.messages)); } catch {}
+            setUserStorage(user.uid, `coach_msgs_${roomId}`, JSON.stringify(data.messages));
           }
           if (data?.meta?.id) {
             nextMeta[roomId] = data.meta;
-            saveCoachRoomMeta(data.meta);
+            saveCoachRoomMeta(user.uid, data.meta);
           }
         }
         if (Object.keys(nextMeta).length) setCoachRoomMeta(prevMeta => ({ ...prevMeta, ...nextMeta }));
         return next;
       });
     }
-    sync().catch(() => {}).finally(() => {
+    sync().catch(reportSyncFailure).finally(() => {
       if (!cancelled) setUserDataReady(true);
     });
     return () => { cancelled = true; };
   }, [user?.uid]);
 
   /* ── 핸들러 ── */
-  function handleLogin(u)    { localStorage.setItem('auth_user', JSON.stringify(u)); setUser(u); }
+  // Firebase가 확인한 인증 상태만 계정 전환의 기준으로 사용한다.
+  // 공급자 콜백에서 auth_user를 먼저 덮어쓰면 레거시 캐시 소유자 판정이 바뀔 수 있다.
+  function handleLogin() {}
   function handleOnboardingComplete(p) {
-    localStorage.setItem('onboarding_completed', '1');
-    saveProfile(p); setProfile(p); setOnboardingDone(true);
-    if (user?.uid) saveUserData(user.uid, { profile: p, onboardingDone: true }).catch(() => {});
+    setUserStorage(user?.uid, 'onboarding_completed', '1');
+    saveProfile(user?.uid, p); setProfile(p); setOnboardingDone(true);
+    if (user?.uid) saveUserData(user.uid, { profile: p, onboardingDone: true }).catch(reportSyncFailure);
   }
-  function handleProfileSave(p) {
-    saveProfile(p); setProfile(p);
-    if (user?.uid) saveUserData(user.uid, { profile: p }).catch(() => {});
+  async function handleProfileSave(p) {
+    saveProfile(user?.uid, p); setProfile(p);
+    if (!user?.uid) return;
+    let timeoutId;
+    try {
+      await Promise.race([
+        saveUserData(user.uid, { profile: p }),
+        new Promise((_, reject) => {
+          timeoutId = window.setTimeout(() => reject(new Error('profile-save-timeout')), 8000);
+        }),
+      ]);
+    } catch (error) {
+      reportSyncFailure();
+      throw error;
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
   }
 
   function handleNavChange(id) {
@@ -332,15 +453,15 @@ function App() {
     if (refinedMeta && refinedMeta !== meta) {
       meta = refinedMeta;
       setCoachRoomMeta(prev => ({ ...prev, [roomId]: refinedMeta }));
-      saveCoachRoomMeta(refinedMeta);
+      saveCoachRoomMeta(user?.uid, refinedMeta);
     }
     setCoachRooms(prev => ({ ...prev, [roomId]: msgs }));
-    try { localStorage.setItem(`coach_msgs_${roomId}`, JSON.stringify(msgs)); } catch {}
-    if (user?.uid) saveCoachRoom(user.uid, roomId, msgs, meta).catch(() => {});
+    setUserStorage(user?.uid, `coach_msgs_${roomId}`, JSON.stringify(msgs));
+    if (user?.uid) saveCoachRoom(user.uid, roomId, msgs, meta).catch(reportSyncFailure);
   }
 
   function handleStartNewCoachRoom(meta, message) {
-    saveCoachRoomMeta(meta);
+    saveCoachRoomMeta(user?.uid, meta);
     setCoachRoomMeta(prev => ({ ...prev, [meta.id]: meta }));
     setCoachPendingMessage(message);
     navigateApp({ tab: 'coach', screen: 'home', coachRoom: meta.id, coachOverlay: null });
@@ -353,22 +474,22 @@ function App() {
       delete next[roomId];
       return next;
     });
-    try { localStorage.removeItem(`coach_msgs_${roomId}`); } catch {}
-    try { localStorage.removeItem(`coach_room_meta_${roomId}`); } catch {}
+    removeUserStorage(user?.uid, `coach_msgs_${roomId}`);
+    removeUserStorage(user?.uid, `coach_room_meta_${roomId}`);
     if (coachRoom === roomId) {
       replaceApp({ tab: 'coach', screen: 'home', coachRoom: null, coachOverlay: null });
     }
     if (coachOverlay?.roomId === roomId) {
       replaceApp({ tab: 'home', screen, coachRoom: null, coachOverlay: null });
     }
-    if (user?.uid) deleteCoachRoom(user.uid, roomId).catch(() => {});
+    if (user?.uid) deleteCoachRoom(user.uid, roomId).catch(reportSyncFailure);
   }
 
   function handleSaveMemo() {
     replaceApp({ tab: 'home', screen: 'home', coachRoom: null, coachOverlay: null });
     setEditingLog(null);
-    setShowToast(true); setMemoKey(k => k + 1);
-    setTimeout(() => setShowToast(false), 3000);
+    setMemoKey(k => k + 1);
+    showAppToast('저장되었습니다');
   }
   function handleCardClick(data) {
     setEditingLog(data);
@@ -377,8 +498,8 @@ function App() {
   function handleSaveDiet() {
     replaceApp({ tab: 'home', screen: 'home', coachRoom: null, coachOverlay: null });
     setEditingDietLog(null);
-    setShowToast(true); setDietKey(k => k + 1);
-    setTimeout(() => setShowToast(false), 3000);
+    setDietKey(k => k + 1);
+    showAppToast('저장되었습니다');
   }
   function handleDietCardClick(data) {
     setEditingDietLog(data);
@@ -387,8 +508,8 @@ function App() {
 
   function addAiGoal(goal) {
     const next = [goal, ...aiGoals];
-    try { localStorage.setItem('ai_goals', JSON.stringify(next)); } catch {}
-    if (user?.uid) saveUserData(user.uid, { goals: next }).catch(() => {});
+    setUserStorage(user?.uid, 'ai_goals', JSON.stringify(next));
+    if (user?.uid) saveUserData(user.uid, { goals: next }).catch(reportSyncFailure);
     setAiGoals(next);
   }
 
@@ -399,8 +520,8 @@ function App() {
 
   function handleRemoveGoal(goalId) {
     const next = aiGoals.filter(g => g.id !== goalId);
-    try { localStorage.setItem('ai_goals', JSON.stringify(next)); } catch {}
-    if (user?.uid) saveUserData(user.uid, { goals: next }).catch(() => {});
+    setUserStorage(user?.uid, 'ai_goals', JSON.stringify(next));
+    if (user?.uid) saveUserData(user.uid, { goals: next }).catch(reportSyncFailure);
     setAiGoals(next);
   }
 
@@ -408,13 +529,13 @@ function App() {
   if (user === undefined || (user && !userDataReady)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white">
-        <div className="w-8 h-8 border-2 border-[#3476EE]/20 border-t-[#3476EE] rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-[#7E7EFF]/20 border-t-[#7E7EFF] rounded-full animate-spin" />
       </div>
     );
   }
 
   /* 탭 순서: 홈(0) | 코치(1) | 마이(2) — 인덱스 기반으로 정확한 방향 결정 */
-  const TAB_ORDER = ['home', 'coach', 'my'];
+  const TAB_ORDER = ['home', 'coach', 'analysis', 'my'];
   function tabStyle(panelId) {
     const pIdx = TAB_ORDER.indexOf(panelId);
     const aIdx = TAB_ORDER.indexOf(tab);
@@ -436,6 +557,11 @@ function App() {
           </div>
         )}
 
+        {/* ── Claude 커넥터 연결 동의 ── */}
+        {user && mcpAuthorizeRequest && (
+          <McpAuthorizeScreen user={user} request={mcpAuthorizeRequest} onClose={() => setMcpAuthorizeRequest(null)} />
+        )}
+
         {/* ── 온보딩 ── */}
         {user && !onboardingDone && (
           <div className="absolute inset-0 z-40">
@@ -447,7 +573,7 @@ function App() {
         {user && onboardingDone && (
           <>
             {/* 홈 탭 */}
-            <div className={tabClass('home')} style={tabStyle('home')}>
+            <div className={tabClass('home')} style={tabStyle('home')} inert={tab !== 'home' ? '' : undefined} aria-hidden={tab !== 'home'}>
               <HomeScreen
                 user={user}
                 profile={profile}
@@ -465,7 +591,7 @@ function App() {
             </div>
 
             {/* AI 코치 탭 */}
-            <div className={tabClass('coach')} style={tabStyle('coach')}>
+            <div className={tabClass('coach')} style={tabStyle('coach')} inert={tab !== 'coach' ? '' : undefined} aria-hidden={tab !== 'coach'}>
               {coachRoom === null ? (
                 <CoachListScreen
                   rooms={coachRooms}
@@ -477,6 +603,7 @@ function App() {
                   onStartNewRoom={handleStartNewCoachRoom}
                   onDeleteRoom={handleCoachRoomDelete}
                   onNavChange={handleNavChange}
+                  historyLimitReached={coachRoomLimitReached}
                 />
               ) : (
                 <AICoachScreen
@@ -496,8 +623,28 @@ function App() {
               )}
             </div>
 
+            {/* 분석 탭 */}
+            <div className={tabClass('analysis')} style={tabStyle('analysis')} inert={tab !== 'analysis' ? '' : undefined} aria-hidden={tab !== 'analysis'}>
+              <AnalysisScreen
+                user={user}
+                profile={profile}
+                active={tab === 'analysis'}
+                onAskCoach={(message) => handleOpenCoachWithMessage('powerbuilding', message)}
+                onRecord={(type) => {
+                  if (type === 'workout') {
+                    setEditingLog(null);
+                    navigateApp({ tab: 'home', screen: 'memo', coachRoom: null, coachOverlay: null });
+                  } else if (type === 'diet') {
+                    handleDietCardClick(null);
+                  } else {
+                    handleNavChange('home');
+                  }
+                }}
+              />
+            </div>
+
             {/* 마이페이지 탭 */}
-            <div className={tabClass('my')} style={tabStyle('my')}>
+            <div className={tabClass('my')} style={tabStyle('my')} inert={tab !== 'my' ? '' : undefined} aria-hidden={tab !== 'my'}>
               <MyPageScreen user={user} profile={profile} onProfileSave={handleProfileSave} onNavChange={handleNavChange} />
             </div>
 
@@ -511,6 +658,7 @@ function App() {
                   initialData={editingLog}
                   uid={user.uid}
                   profile={profile}
+                  registerBackGuard={registerDetailBackGuard}
                   onOpenCoachWithMessage={(roomId, message) => {
                     navigateApp({
                       tab: 'home',
@@ -551,6 +699,7 @@ function App() {
                   initialData={editingDietLog}
                   uid={user.uid}
                   profile={profile}
+                  registerBackGuard={registerDetailBackGuard}
                 />
               </div>
             )}
@@ -565,12 +714,20 @@ function App() {
                     handleNavChange(id);
                   }
                 }}
+                onMemo={(type) => {
+                  if (type === 'workout') {
+                    setEditingLog(null);
+                    navigateApp({ tab: 'home', screen: 'memo', coachRoom: null, coachOverlay: null });
+                  } else {
+                    handleDietCardClick(null);
+                  }
+                }}
               />
             )}
           </>
         )}
 
-        <Toast show={showToast} message="저장되었습니다" />
+        <Toast show={showToast} message={toastMessage} />
       </div>
     </div>
   );

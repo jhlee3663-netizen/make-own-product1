@@ -36,12 +36,12 @@ export default function OnboardingScreen({ user, onComplete }) {
             <div
               key={i}
               className="h-1 flex-1 rounded-full transition-all duration-300"
-              style={{ background: i <= step ? '#3476EE' : '#e9ecef' }}
+              style={{ background: i <= step ? '#7E7EFF' : '#e9ecef' }}
             />
           ))}
         </div>
 
-        <p className="font-pretendard text-[13px] text-[#3476EE] font-semibold tracking-[-0.325px] mb-2">
+        <p className="font-pretendard text-[13px] text-[#7E7EFF] font-semibold tracking-[-0.325px] mb-2">
           {step + 1} / {STEPS.length}
         </p>
         <h2 className="font-pretendard font-bold text-[26px] tracking-[-0.65px] text-[#171a1d] leading-[1.3]">
@@ -69,19 +69,19 @@ export default function OnboardingScreen({ user, onComplete }) {
                 onClick={() => setForm((f) => ({ ...f, goal: g }))}
                 className="flex items-center justify-between px-5 py-4 rounded-[16px] text-left"
                 style={form.goal === g
-                  ? { background: '#eef4ff', border: '2px solid rgba(52, 118, 238, 0.3)' }
+                  ? { background: '#eef4ff', border: '2px solid rgba(126, 126, 255, 0.3)' }
                   : { background: '#f8f9fa', border: '2px solid transparent' }
                 }
               >
                 <span
                   className="font-pretendard font-semibold text-[16px] tracking-[-0.4px]"
-                  style={{ color: form.goal === g ? '#3476EE' : '#171a1d' }}
+                  style={{ color: form.goal === g ? '#7E7EFF' : '#171a1d' }}
                 >
                   {g}
                 </span>
                 {form.goal === g && (
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                    <circle cx="12" cy="12" r="10" fill="#3476EE"/>
+                    <circle cx="12" cy="12" r="10" fill="#7E7EFF"/>
                     <path d="M8 12l3 3 5-5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 )}
@@ -104,7 +104,7 @@ export default function OnboardingScreen({ user, onComplete }) {
                     onClick={() => setForm((f) => ({ ...f, gender: id }))}
                     className="flex-1 py-3 rounded-[12px] font-pretendard font-semibold text-[15px] tracking-[-0.375px]"
                     style={form.gender === id
-                      ? { background: '#3476EE', color: '#fff' }
+                      ? { background: '#7E7EFF', color: '#fff' }
                       : { background: '#f1f3f5', color: '#495057' }
                     }
                   >
@@ -153,7 +153,7 @@ export default function OnboardingScreen({ user, onComplete }) {
                 onClick={() => setForm((f) => ({ ...f, activityLevel: id }))}
                 className="flex items-center gap-4 px-5 py-4 rounded-[16px] text-left"
                 style={form.activityLevel === id
-                  ? { background: '#eef4ff', border: '2px solid rgba(52, 118, 238, 0.3)' }
+                  ? { background: '#eef4ff', border: '2px solid rgba(126, 126, 255, 0.3)' }
                   : { background: '#f8f9fa', border: '2px solid transparent' }
                 }
               >
@@ -161,7 +161,7 @@ export default function OnboardingScreen({ user, onComplete }) {
                 <div className="flex-1">
                   <p
                     className="font-pretendard font-semibold text-[15px] tracking-[-0.375px]"
-                    style={{ color: form.activityLevel === id ? '#3476EE' : '#171a1d' }}
+                    style={{ color: form.activityLevel === id ? '#7E7EFF' : '#171a1d' }}
                   >
                     {label}
                   </p>
@@ -169,7 +169,7 @@ export default function OnboardingScreen({ user, onComplete }) {
                 </div>
                 {form.activityLevel === id && (
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                    <circle cx="12" cy="12" r="10" fill="#3476EE"/>
+                    <circle cx="12" cy="12" r="10" fill="#7E7EFF"/>
                     <path d="M8 12l3 3 5-5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 )}
@@ -187,7 +187,7 @@ export default function OnboardingScreen({ user, onComplete }) {
           pressScale={0.97}
           onClick={next}
           disabled={!canNext}
-          className="w-full h-[56px] bg-[#3476EE] rounded-[16px] font-pretendard font-bold text-[16px] text-white tracking-[-0.4px] disabled:opacity-40"
+          className="w-full h-[56px] bg-[#7E7EFF] rounded-[16px] font-pretendard font-bold text-[16px] text-white tracking-[-0.4px] disabled:opacity-40"
         >
           {step === STEPS.length - 1 ? '시작하기 🚀' : '다음'}
         </Pressable>

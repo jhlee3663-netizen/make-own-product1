@@ -3,17 +3,39 @@ import DonutChart from './DonutChart';
 import { QuoteIcon } from '../icons/Icons';
 import { getDietSummaryComment } from '../../utils/dietFeedback';
 import Pressable from '../common/Pressable';
+import Toast from '../common/Toast';
+import { shareText, buildDietShareText } from '../../utils/share';
 
 function getChip(kcal, goal) {
-  if (!goal) return { label: '성공 🔥', color: '#3476EE', bg: 'rgba(0,84,209,0.1)' };
+  if (!goal) return { label: '성공 🔥', color: '#7E7EFF', bg: 'rgba(0,84,209,0.1)' };
   const ratio = kcal / goal;
   if (ratio > 1.1) return { label: '과식했어요 😅', color: '#e05a2b', bg: 'rgba(255,80,80,0.1)' };
   if (ratio < 1.0) return { label: '더 먹어요 🍚', color: '#008dcf', bg: 'rgba(0,152,178,0.1)' };
-  return { label: '성공 🔥', color: '#3476EE', bg: 'rgba(0,84,209,0.1)' };
+  return { label: '성공 🔥', color: '#7E7EFF', bg: 'rgba(0,84,209,0.1)' };
 }
+
+const enteredCards = new Set();
 
 export default function DietCard({ data, isDeleting, targetKcal, profile, onDelete, onChangeDate }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [toast, setToast] = useState({ show: false, message: '' });
+  const [entering, setEntering] = useState(() => {
+    const key = data.docId || data.id;
+    if (!key || enteredCards.has(key)) return false;
+    enteredCards.add(key);
+    return true;
+  });
+
+  async function handleShare() {
+    const result = await shareText('오늘의 식단', buildDietShareText(data));
+    if (result === 'copied') {
+      setToast({ show: true, message: '클립보드에 복사했어요' });
+      setTimeout(() => setToast(t => ({ ...t, show: false })), 2500);
+    } else if (result === 'failed') {
+      setToast({ show: true, message: '공유에 실패했어요' });
+      setTimeout(() => setToast(t => ({ ...t, show: false })), 2500);
+    }
+  }
   const dt = data.timestamp ? new Date(data.timestamp.seconds * 1000) : null;
   const ds = dt ? `${String(dt.getFullYear()).slice(2)}. ${dt.getMonth() + 1}. ${dt.getDate()}` : (data.date || "");
   const gid = "qG_" + (data.docId || Math.random().toString(36).substr(2, 9));
@@ -22,8 +44,8 @@ export default function DietCard({ data, isDeleting, targetKcal, profile, onDele
   const summaryComment = getDietSummaryComment(data, profile, effectiveGoal);
 
   return (
-    <div className={`px-4 py-2 transition-all duration-300 ${isDeleting ? 'card-exit-wrapper' : 'card-enter'}`}>
-      <Pressable as="div" pressScale={0.985} className="bg-white rounded-[16px] overflow-hidden shadow-[0_0_25px_rgba(3,27,38,0.08)] cursor-pointer border border-transparent hover:border-ui-3">
+    <div onAnimationEnd={() => setEntering(false)} className={`px-4 py-2 ${isDeleting ? 'card-exit-wrapper' : entering ? 'card-enter' : ''}`}>
+      <div className="bg-white rounded-[16px] overflow-hidden shadow-[0_0_25px_rgba(3,27,38,0.08)] cursor-pointer border border-transparent transition-transform duration-150 active:scale-[0.985] [@media(hover:hover)]:hover:border-ui-3">
         <div className="p-4 flex flex-col gap-4">
           <div className="flex flex-col gap-2 pb-4 border-b border-[#f1f3f5]">
             <div className="flex items-center justify-between">
@@ -46,6 +68,12 @@ export default function DietCard({ data, isDeleting, targetKcal, profile, onDele
                   <>
                     <div onClick={(e) => { e.stopPropagation(); setMenuOpen(false); }} className="fixed inset-0 z-[98]" />
                     <div className="absolute top-8 right-0 bg-white rounded-[12px] shadow-lg py-1 z-[99] min-w-[120px]" onClick={e => e.stopPropagation()}>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleShare(); setMenuOpen(false); }}
+                        className="flex w-full px-4 py-[10px] text-body-s text-[#171a1d] font-medium bg-none border-none text-left active:opacity-60 active:bg-ui-1 border-b border-ui-2"
+                      >
+                        🔗 공유하기
+                      </button>
                       <button
                         onClick={(e) => { e.stopPropagation(); if (onChangeDate) onChangeDate(data); setMenuOpen(false); }}
                         className="flex w-full px-4 py-[10px] text-body-s text-[#171a1d] font-medium bg-none border-none text-left active:opacity-60 active:bg-ui-1 border-b border-ui-2"
@@ -98,7 +126,8 @@ export default function DietCard({ data, isDeleting, targetKcal, profile, onDele
             </div>
           </div>
         )}
-      </Pressable>
+      </div>
+      <Toast show={toast.show} message={toast.message} />
     </div>
   );
 }

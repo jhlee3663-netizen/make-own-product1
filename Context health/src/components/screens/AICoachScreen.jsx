@@ -3,10 +3,10 @@ import { db } from '../../lib/firebase';
 import { collection, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
 import { PDF_CONTEXT } from '../../lib/pdfContext';
 import Pressable from '../common/Pressable';
+import { setUserStorage } from '../../lib/userStorage';
+import { generateContent, extractText, AiRequestError } from '../../lib/aiClient';
 
-const GEMINI_KEY = import.meta.env.VITE_GEMINI_KEY;
-
-/* 각 방이 어느 탭(쇠질/식단)에 속하는지 매핑 */
+/* 각 방이 어느 탭(운동/식단)에 속하는지 매핑 */
 export const ROOM_CATEGORY = {
   powerbuilding: 'workout',
   dumbbell: 'workout',
@@ -99,6 +99,8 @@ async function fetchRecentLogs(uid) {
   const snap = await getDocs(q);
   const all = snap.docs
     .map(d => d.data())
+    /* QA-15: 휴지통으로 보낸 기록은 코칭 context에서 제외한다. 홈 화면과 같은 기준. */
+    .filter(d => !d.deletedAt)
     .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
   return {
     workouts: all.filter(d => !d.type || d.type === 'workout').slice(0, 10),
@@ -106,26 +108,12 @@ async function fetchRecentLogs(uid) {
   };
 }
 
-function redactInternalSourceNames(text) {
-  return String(text || '')
-    .replace(/<\s*파워빌딩\s*(?:v|vr)?\s*4\s*\+\s*덤벨\s*도감\s*>/gi, '<내부 운동 가이드>')
-    .replace(/파워빌딩\s*(?:v|vr)?\s*4/gi, '스트렝스·근비대 가이드')
-    .replace(/파워빌딩\s*버전\s*4/gi, '스트렝스·근비대 가이드')
-    .replace(/파워빌딩버전\s*4/gi, '스트렝스·근비대 가이드')
-    .replace(/파워빌딩/g, '스트렝스·근비대')
-    .replace(/버전\s*4/gi, '최신 가이드')
-    .replace(/v\s*4/gi, '최신 가이드')
-    .replace(/vr\s*4/gi, '최신 가이드');
-}
-
 function buildSystemPrompt(profile, workouts, diets, roomType) {
   const p = profile || {};
   const cfg = ROOM_CONFIG[roomType] || ROOM_CONFIG.powerbuilding;
-  const knowledgeContext = redactInternalSourceNames(PDF_CONTEXT);
+  const knowledgeContext = PDF_CONTEXT;
   return `당신은 ${cfg.systemRole}입니다.
 친근하고 담백한 말투로 답변하세요. 한국어로만 답하세요.
-내부 자료명, 파일명, PDF명, 버전명, 지식 베이스 이름은 사용자에게 절대 언급하지 마세요.
-내부 자료를 참고하더라도 "자료에 따르면", "PDF 기준", "지식 베이스 기반" 같은 출처 표현을 쓰지 말고 코치의 조언처럼 자연스럽게 답하세요.
 
 [사용자 프로필]
 - 이름: ${p.name || '사용자'}
@@ -181,7 +169,7 @@ ${cfg.systemFocus} 답변하세요.
 }
 
 function sanitizeAiText(text) {
-  return redactInternalSourceNames(text).replace(/\*/g, '').trim();
+  return String(text || '').replace(/\*/g, '').trim();
 }
 
 function sanitizeSuggestion(suggestion) {
@@ -203,7 +191,26 @@ function sanitizeSuggestion(suggestion) {
   };
 }
 
-async function callGemini(messages, profile, workouts, diets, roomType) {
+/* QA-10: 실패 원인을 네트워크 오류로 뭉뚱그리지 않는다. */
+function aiErrorMessage(error) {
+  if (error?.name === 'AbortError') return 'AI 응답이 너무 오래 걸려 중단했어요. 다시 시도해 주세요.';
+  if (!(error instanceof AiRequestError)) return '네트워크 오류가 발생했어요. 다시 시도해 주세요.';
+  if (error.kind === 'rate-limited') {
+    const minutes = Math.ceil((error.retryAfterSeconds || 0) / 60);
+    return minutes > 0
+      ? `AI 사용량 한도에 도달했어요. 약 ${minutes}분 뒤에 다시 시도해 주세요.`
+      : 'AI 사용량 한도에 도달했어요. 잠시 후 다시 시도해 주세요.';
+  }
+  if (error.kind === 'unauthenticated') return '로그인이 만료됐어요. 다시 로그인한 뒤 시도해 주세요.';
+  if (error.kind === 'too-large') return '대화가 너무 길어졌어요. 새 대화방에서 다시 시도해 주세요.';
+  if (error.kind === 'timeout') return 'AI 응답이 지연되고 있어요. 잠시 후 다시 시도해 주세요.';
+  if (error.kind === 'upstream') return 'AI 서버에 일시적인 문제가 있어요. 잠시 후 다시 시도해 주세요.';
+  return '네트워크 오류가 발생했어요. 다시 시도해 주세요.';
+}
+
+const COACH_TIMEOUT_MS = 45000;
+
+async function callGemini(messages, profile, workouts, diets, roomType, externalSignal) {
   const systemPrompt = buildSystemPrompt(profile, workouts, diets, roomType);
   const firstUserIdx = messages.findIndex(m => m.role === 'user');
   const conversationMessages = firstUserIdx >= 0 ? messages.slice(firstUserIdx) : [];
@@ -216,20 +223,26 @@ async function callGemini(messages, profile, workouts, diets, roomType) {
     })),
   };
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    }
-  );
-  const data = await res.json();
-  if (data.error) throw new Error(data.error.message);
-  const parts = data.candidates?.[0]?.content?.parts;
-  if (!parts) return { text: '죄송해요, 잠시 후 다시 시도해 주세요.', suggestion: null };
-  let rawText = (parts.find(p => !p.thought) ?? parts[parts.length - 1]).text;
-  
+  /* QA-14: 응답이 오지 않아도 정해진 시간 안에 풀린다. 화면을 떠나면 외부 신호로 취소된다. */
+  const controller = new AbortController();
+  const onExternalAbort = () => controller.abort();
+  externalSignal?.addEventListener('abort', onExternalAbort);
+  const timer = setTimeout(() => controller.abort(), COACH_TIMEOUT_MS);
+  let data;
+  try {
+    data = await generateContent({
+      model: 'gemini-3.6-flash',
+      contents: body.contents,
+      systemInstruction: body.systemInstruction,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+    externalSignal?.removeEventListener('abort', onExternalAbort);
+  }
+  let rawText = extractText(data);
+  if (!rawText) return { text: '죄송해요, 잠시 후 다시 시도해 주세요.', suggestion: null };
+
   let suggestion = null;
   const jsonMatch = rawText.match(/```json\n([\s\S]*?)\n```/);
   if (jsonMatch) {
@@ -453,6 +466,10 @@ export default function AICoachScreen({ user, profile, roomType = 'powerbuilding
   );
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  /* QA-14: 화면을 떠나면 진행 중인 코치 요청을 취소한다. */
+  const screenAbortRef = useRef(null);
+  if (!screenAbortRef.current) screenAbortRef.current = new AbortController();
+  useEffect(() => () => screenAbortRef.current?.abort(), []);
   const [context, setContext] = useState({ workouts: [], diets: [] });
   const scrollRef = useRef(null);
   const bottomRef = useRef(null);
@@ -519,13 +536,14 @@ export default function AICoachScreen({ user, profile, roomType = 'powerbuilding
         { ...profile, name },
         context.workouts,
         context.diets,
-        roomType
+        roomType,
+        screenAbortRef.current?.signal,
       );
       updateMessages([...newMessages, { role: 'model', text: reply.text, suggestion: reply.suggestion, timestamp: new Date() }]);
       const category = ROOM_CATEGORY[roomType] || 'workout';
-      localStorage.setItem(`coaching_insight_${category}`, JSON.stringify({ text: reply.text, timestamp: Date.now(), roomType, category }));
-    } catch {
-      updateMessages([...newMessages, { role: 'model', text: '네트워크 오류가 발생했어요. 다시 시도해 주세요.', timestamp: new Date() }]);
+      setUserStorage(user?.uid, `coaching_insight_${category}`, JSON.stringify({ text: reply.text, timestamp: Date.now(), roomType, category }));
+    } catch (error) {
+      updateMessages([...newMessages, { role: 'model', text: aiErrorMessage(error), timestamp: new Date() }]);
     } finally {
       setLoading(false);
     }

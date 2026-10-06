@@ -6,9 +6,23 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "test:nutrition": "node scripts/test-nutrition-modifiers.mjs",
+    "test:diet-portions": "node scripts/test-diet-portions.mjs",
+    "test:manual-macros": "node scripts/test-manual-macro-entry.mjs",
+    "test:food-memo-split": "node scripts/test-food-memo-split.mjs",
+    "test:user-storage": "node scripts/test-user-storage.mjs",
+    "test:record-drafts": "node scripts/test-record-drafts.mjs",
     "preview": "vite preview",
     "predeploy": "npm run build",
-    "deploy": "npx firebase-tools deploy --only hosting"
+    "deploy": "npx firebase-tools deploy --only hosting",
+    "test:ai-proxy": "node scripts/test-ai-proxy.mjs",
+    "test:delete-account": "node scripts/test-delete-account.mjs",
+    "test:pagination": "node scripts/test-pagination.mjs",
+    "test:firestore-rules": "node scripts/test-firestore-rules.mjs",
+    "test:volume": "node scripts/test-volume.mjs",
+    "test:nutrition-guard": "node scripts/test-nutrition-guard.mjs",
+    "test:mcp-parse": "node scripts/test-mcp-parse.mjs",
+    "test:mcp-server": "node scripts/test-mcp-server.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.4",

@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>식단 인라인 수량 조절 UI 시안</title>
+  <style>
+    * { box-sizing: border-box; }
+    :root {
+      --blue: #3476ee;
+      --ink: #171a1d;
+      --text: #495057;
+      --muted: #868e96;
+      --line: #edf0f2;
+      --soft: #f5f7fa;
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #eef2f6;
+      color: var(--ink);
+      font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    button { font: inherit; }
+    .board {
+      width: 1000px;
+      height: 1000px;
+      margin: 0 auto;
+      padding: 32px 38px;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 10% 5%, rgba(52,118,238,.08), transparent 26%),
+        linear-gradient(145deg, #fbfcfe 0%, #edf2f7 100%);
+    }
+    h1 { margin: 0; font-size: 25px; letter-spacing: -.75px; }
+    .subtitle { margin: 7px 0 21px; color: #646d76; font-size: 14px; letter-spacing: -.3px; }
+    .workspace { display: grid; grid-template-columns: 438px 1fr; gap: 34px; align-items: start; }
+    .label { margin: 0 0 9px 4px; color: var(--text); font-size: 14px; font-weight: 750; }
+    .phone {
+      position: relative;
+      width: 438px;
+      height: 860px;
+      overflow: hidden;
+      background: #f4f5f7;
+      border: 1px solid #dfe3e8;
+      border-radius: 32px;
+      box-shadow: 0 20px 46px rgba(35, 49, 66, .14);
+    }
+    .status {
+      height: 31px;
+      padding: 10px 20px 0;
+      display: flex;
+      justify-content: space-between;
+      background: #fff;
+      font-size: 11px;
+      font-weight: 800;
+    }
+    .nav {
+      height: 55px;
+      padding: 0 18px;
+      display: grid;
+      grid-template-columns: 32px 1fr 32px;
+      align-items: center;
+      background: #fff;
+      border-bottom: 1px solid #f1f3f5;
+    }
+    .back { color: var(--text); font-size: 27px; line-height: 1; }
+    .nav-title { text-align: center; font-size: 17px; font-weight: 750; letter-spacing: -.45px; }
+    .summary {
+      padding: 15px 18px 17px;
+      background: #fff;
+      border-bottom: 8px solid #f4f5f7;
+    }
+    .summary-top, .meal-head, .food-top { display: flex; justify-content: space-between; align-items: center; }
+    .summary-kcal { font-size: 23px; font-weight: 800; letter-spacing: -.45px; }
+    .date { color: #646d76; font-size: 13px; }
+    .goal { margin: 5px 0 9px; color: var(--muted); font-size: 12px; }
+    .progress { height: 6px; overflow: hidden; border-radius: 99px; background: #eef1f4; }
+    .progress-fill { width: 71%; height: 100%; border-radius: inherit; background: var(--blue); }
+    .macros { margin-top: 12px; display: flex; gap: 14px; color: #646d76; font-size: 12px; }
+    .macros b { color: var(--text); }
+    .meal { padding: 18px; background: #fff; }
+    .meal-title { font-size: 20px; font-weight: 800; letter-spacing: -.55px; }
+    .meal-kcal { color: var(--blue); font-size: 16px; font-weight: 800; }
+    .meal-macro { margin: 5px 0 10px; color: #9bb9f4; font-size: 12px; font-weight: 700; }
+    .food-list { border-top: 1px solid var(--line); }
+    .food {
+      min-height: 92px;
+      padding: 14px 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      border-bottom: 1px solid var(--line);
+    }
+    .food-main { min-width: 0; }
+    .food-name { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-size: 16px; font-weight: 750; letter-spacing: -.4px; }
+    .food-meta { margin: 5px 0 0; color: var(--muted); font-size: 12px; letter-spacing: -.25px; }
+    .food-total { margin: 5px 0 0; color: var(--blue); font-size: 12px; font-weight: 750; }
+    .stepper {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px;
+      border-radius: 15px;
+      background: #f4f6f8;
+    }
+    .step {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      border: 0;
+      border-radius: 12px;
+      background: #fff;
+      color: #646d76;
+      box-shadow: 0 1px 3px rgba(22, 32, 43, .08);
+      font-size: 21px;
+      cursor: pointer;
+    }
+    .step:active { transform: scale(.94); }
+    .quantity {
+      min-width: 55px;
+      border: 0;
+      background: transparent;
+      color: var(--ink);
+      text-align: center;
+      font-size: 15px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .tip {
+      margin-top: 14px;
+      padding: 11px 12px;
+      border-radius: 13px;
+      background: #f8f9fa;
+      color: #646d76;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+    .add-food {
+      margin-top: 14px;
+      width: 100%;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 14px;
+      border: 1px solid #dee2e6;
+      border-radius: 14px;
+      background: #fff;
+      color: #868e96;
+      font-size: 13px;
+    }
+    .add-plus { color: var(--blue); font-size: 22px; }
+    .save-bar { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 18px 24px; background: #fff; border-top: 1px solid var(--line); }
+    .save { width: 100%; height: 53px; border: 0; border-radius: 15px; background: var(--blue); color: #fff; font-size: 16px; font-weight: 800; }
+
+    .details { padding-top: 1px; }
+    .detail-title { margin: 0 0 9px; color: var(--text); font-size: 14px; font-weight: 750; }
+    .demo-card {
+      margin-bottom: 16px;
+      padding: 20px;
+      border: 1px solid #e0e5ea;
+      border-radius: 22px;
+      background: rgba(255,255,255,.88);
+      box-shadow: 0 12px 28px rgba(44, 56, 72, .08);
+    }
+    .demo-kicker { margin: 0 0 13px; color: var(--blue); font-size: 12px; font-weight: 800; }
+    .demo-card .food { min-height: 99px; padding: 0; border: 0; }
+    .demo-card .food-name { color: var(--ink); font-size: 18px; }
+    .demo-card .food-meta, .demo-card .food-total { font-size: 13px; }
+    .demo-card .step { width: 42px; height: 42px; }
+    .demo-card .quantity { min-width: 59px; font-size: 16px; }
+    .behavior {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 11px;
+    }
+    .behavior li {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      color: #646d76;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .dot { flex: none; width: 21px; height: 21px; display: grid; place-items: center; border-radius: 50%; background: #eaf1ff; color: var(--blue); font-size: 11px; font-weight: 900; }
+    .notice {
+      padding: 16px 18px;
+      border: 1px solid #dce7fb;
+      border-radius: 18px;
+      background: #f5f8ff;
+      color: #50617c;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    .notice strong { color: var(--blue); }
+    .toast {
+      position: absolute;
+      left: 50%;
+      bottom: 102px;
+      transform: translateX(-50%) translateY(16px);
+      min-width: 236px;
+      padding: 11px 15px;
+      opacity: 0;
+      border-radius: 12px;
+      background: rgba(23,26,29,.9);
+      color: #fff;
+      text-align: center;
+      font-size: 12px;
+      transition: .22s ease;
+      pointer-events: none;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body>
+  <main class="board">
+    <h1>식단 수량 바로 조절 UI</h1>
+    <p class="subtitle">같은 음식은 한 줄로 합치고, 목록에서 바로 수량과 총량을 조절하는 시안입니다.</p>
+    <div class="workspace">
+      <section>
+        <p class="label">실제 화면 적용 모습</p>
+        <div class="phone">
+          <div class="status"><span>9:41</span><span>● ● ▰</span></div>
+          <div class="nav"><span class="back">‹</span><span class="nav-title">식단 기록</span><span></span></div>
+          <div class="summary">
+            <div class="summary-top"><span class="summary-kcal">1,423 kcal</span><span class="date">9월 22일 화요일</span></div>
+            <p class="goal">목표 2,000 kcal · 71%</p>
+            <div class="progress"><div class="progress-fill"></div></div>
+            <div class="macros"><span>탄수화물 <b>152g</b></span><span>단백질 <b>116g</b></span><span>지방 <b>42g</b></span></div>
+          </div>
+          <div class="meal">
+            <div class="meal-head"><span class="meal-title">점심</span><span class="meal-kcal" id="meal-kcal">630 kcal</span></div>
+            <p class="meal-macro" id="meal-macro">총 탄 72g · 단 69g · 지 8g</p>
+            <div class="food-list">
+              <div class="food" data-name="밥" data-unit="g" data-step="50" data-value="200" data-kcal-step="75">
+                <div class="food-main">
+                  <p class="food-name">밥</p>
+                  <p class="food-meta"><span class="food-kcal">300 kcal</span> · 50g씩 조절</p>
+                  <p class="food-total">총 <span class="food-total-value">200g</span></p>
+                </div>
+                <div class="stepper"><button class="step minus">−</button><button class="quantity">200g</button><button class="step plus">＋</button></div>
+              </div>
+              <div class="food" data-name="닭가슴살" data-unit="개" data-step="1" data-value="3" data-kcal-step="110">
+                <div class="food-main">
+                  <p class="food-name">닭가슴살</p>
+                  <p class="food-meta"><span class="food-kcal">330 kcal</span> · 1개 100g</p>
+                  <p class="food-total">총 <span class="food-total-value">300g</span></p>
+                </div>
+                <div class="stepper"><button class="step minus">−</button><button class="quantity">3개</button><button class="step plus">＋</button></div>
+              </div>
+            </div>
+            <div class="tip">💬　단백질은 충분해요. 좋은 지방을 조금 더해도 좋아요.</div>
+            <button class="add-food"><span>음식 추가</span><span class="add-plus">＋</span></button>
+          </div>
+          <div class="save-bar"><button class="save">저장하기</button></div>
+          <div class="toast">수량과 영양정보를 업데이트했어요</div>
+        </div>
+      </section>
+
+      <aside class="details">
+        <p class="detail-title">수량 조절 컴포넌트 확대</p>
+        <div class="demo-card">
+          <p class="demo-kicker">개수로 먹는 음식</p>
+          <div class="food">
+            <div class="food-main">
+              <p class="food-name">닭가슴살</p>
+              <p class="food-meta">330 kcal · 1개 100g</p>
+              <p class="food-total">총 300g</p>
+            </div>
+            <div class="stepper"><button class="step">−</button><button class="quantity">3개</button><button class="step">＋</button></div>
+          </div>
+        </div>
+        <div class="demo-card">
+          <p class="demo-kicker">그램으로 먹는 음식</p>
+          <div class="food">
+            <div class="food-main">
+              <p class="food-name">밥</p>
+              <p class="food-meta">300 kcal · 50g씩 조절</p>
+              <p class="food-total">총 200g</p>
+            </div>
+            <div class="stepper"><button class="step">−</button><button class="quantity">200g</button><button class="step">＋</button></div>
+          </div>
+        </div>
+        <div class="demo-card">
+          <p class="demo-kicker">동작 방식</p>
+          <ul class="behavior">
+            <li><span class="dot">＋</span><span>같은 음식을 다시 추가하면 새 줄 대신 기존 수량이 증가합니다.</span></li>
+            <li><span class="dot">1</span><span>가운데 수량을 누르면 숫자를 직접 입력할 수 있습니다.</span></li>
+            <li><span class="dot">−</span><span>0까지 줄이면 해당 음식을 삭제할 수 있습니다.</span></li>
+          </ul>
+        </div>
+        <div class="notice"><strong>핵심:</strong> 연필 아이콘과 별도 수량 탭을 거치지 않고, 한 화면에서 결과를 확인하며 바로 조절합니다.</div>
+      </aside>
+    </div>
+  </main>
+  <script>
+    const toast = document.querySelector('.toast');
+    let toastTimer;
+    function showToast() {
+      toast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('show'), 900);
+    }
+    document.querySelectorAll('.phone .food').forEach(row => {
+      const unit = row.dataset.unit;
+      const step = Number(row.dataset.step);
+      const kcalStep = Number(row.dataset.kcalStep);
+      const quantity = row.querySelector('.quantity');
+      const total = row.querySelector('.food-total-value');
+      const kcal = row.querySelector('.food-kcal');
+      const update = delta => {
+        let value = Math.max(step, Number(row.dataset.value) + delta * step);
+        row.dataset.value = value;
+        quantity.textContent = `${value}${unit}`;
+        if (unit === '개') total.textContent = `${value * 100}g`;
+        else total.textContent = `${value}g`;
+        const multiplier = unit === '개' ? value : value / step;
+        kcal.textContent = `${Math.round(multiplier * kcalStep)} kcal`;
+        showToast();
+      };
+      row.querySelector('.minus').addEventListener('click', () => update(-1));
+      row.querySelector('.plus').addEventListener('click', () => update(1));
+    });
+  </script>
+</body>
+</html>

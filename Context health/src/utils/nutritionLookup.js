@@ -1,5 +1,6 @@
-const GEMINI_MODEL = 'gemini-2.5-flash';
+const GEMINI_MODEL = 'gemini-3.6-flash';
 const MFDS_ENDPOINT = 'https://apis.data.go.kr/1471000/FoodNtrCpntDbInfo02/getFoodNtrCpntDbInq02';
+const MFDS_AUTO_LOOKUP_ENABLED = false;
 
 function toNumber(value) {
   if (value === null || value === undefined) return 0;
@@ -9,6 +10,103 @@ function toNumber(value) {
 
 function compact(value) {
   return String(value || '').replace(/\s+/g, '').toLowerCase();
+}
+
+const INTAKE_MODIFIER_RULES = [
+  {
+    type: 'broth_none',
+    pattern: /(국물|육수)\s*(?:은|를|을)?\s*(?:(?:거의\s*)?안\s*먹(?:음|었(?:음)?|는다)?|먹지\s*않|제외|남김|빼)/,
+    label: '국물 제외',
+    factors: { kcal: 0.68, carb: 0.90, protein: 0.88, fat: 0.40 },
+  },
+  {
+    type: 'broth_less',
+    pattern: /(국물|육수)\s*(?:은|를|을)?\s*(?:매우|아주|좀)?\s*(?:적게|조금|소량|반만|절반)/,
+    label: '국물 약 25% 섭취',
+    factors: { kcal: 0.74, carb: 0.94, protein: 0.93, fat: 0.55 },
+  },
+  {
+    type: 'sauce_none',
+    pattern: /(소스|드레싱|양념)\s*(?:은|를|을)?\s*(?:(?:거의\s*)?안\s*먹(?:음|었(?:음)?|는다)?|먹지\s*않|찍지\s*않|제외|빼|없이)/,
+    label: '소스 제외',
+    factors: { kcal: 0.82, carb: 0.90, protein: 0.98, fat: 0.55 },
+  },
+  {
+    type: 'sauce_less',
+    pattern: /(소스|드레싱|양념)\s*(?:은|를|을)?\s*(?:적게|조금|소량|반만|절반)/,
+    label: '소스 약 50% 섭취',
+    factors: { kcal: 0.90, carb: 0.95, protein: 1, fat: 0.75 },
+  },
+  {
+    type: 'skin_removed',
+    pattern: /(껍질|닭껍질)\s*(?:은|을|를)?\s*(?:제거|빼(?:고)?|벗기(?:고)?|안\s*먹(?:음|었(?:음)?|는다)?|먹지\s*않)/,
+    label: '껍질 제거',
+    factors: { kcal: 0.85, carb: 1, protein: 0.98, fat: 0.40 },
+  },
+  {
+    type: 'visible_fat_removed',
+    pattern: /(비계|기름|지방)\s*(?:은|을|를)?\s*(?:제거|떼(?:고)?|빼(?:고)?|안\s*먹(?:음|었(?:음)?|는다)?|먹지\s*않)/,
+    label: '보이는 지방 제거',
+    factors: { kcal: 0.82, carb: 1, protein: 0.97, fat: 0.45 },
+  },
+  {
+    type: 'breading_removed',
+    pattern: /(튀김옷|껍데기)\s*(?:은|을|를)?\s*(?:제거|벗기(?:고)?|빼(?:고)?|안\s*먹(?:음|었(?:음)?|는다)?|먹지\s*않)/,
+    label: '튀김옷 제거',
+    factors: { kcal: 0.72, carb: 0.65, protein: 0.90, fat: 0.45 },
+  },
+  {
+    type: 'staple_half',
+    pattern: /(밥|면|국수|파스타)\s*(?:은|을|를)?\s*(?:반만|절반|반\s*정도)/,
+    label: '밥·면 약 50% 섭취',
+    factors: { kcal: 0.65, carb: 0.52, protein: 0.80, fat: 0.90 },
+  },
+];
+
+function cleanFoodText(value) {
+  return String(value || '')
+    .replace(/\s+/g, ' ')
+    .replace(/(?:^|\s)(?:먹음|섭취|먹었음|먹었다)(?=\s|$)/g, ' ')
+    .replace(/(?:^|\s)(?:하고|해서|후)(?=\s|$)/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function parseIntakeDescription(text) {
+  let baseText = String(text || '').replace(/\s+/g, ' ').trim();
+  const modifiers = [];
+
+  INTAKE_MODIFIER_RULES.forEach(rule => {
+    if (!rule.pattern.test(baseText)) return;
+    modifiers.push({ type: rule.type, label: rule.label, factors: rule.factors });
+    baseText = baseText.replace(rule.pattern, ' ');
+  });
+
+  return { baseText: cleanFoodText(baseText), modifiers };
+}
+
+export function applyIntakeModifiers(item, modifiers = []) {
+  if (!modifiers.length) return item;
+
+  const adjusted = modifiers.reduce((current, modifier) => ({
+    ...current,
+    kcal: Number(current.kcal || 0) * Number(modifier.factors?.kcal ?? 1),
+    carb: Number(current.carb || 0) * Number(modifier.factors?.carb ?? 1),
+    protein: Number(current.protein || 0) * Number(modifier.factors?.protein ?? 1),
+    fat: Number(current.fat || 0) * Number(modifier.factors?.fat ?? 1),
+  }), item);
+  const labels = modifiers.map(modifier => modifier.label).filter(Boolean);
+
+  return {
+    ...adjusted,
+    kcal: Math.max(0, Math.round(adjusted.kcal)),
+    carb: Math.max(0, Math.round(adjusted.carb)),
+    protein: Math.max(0, Math.round(adjusted.protein)),
+    fat: Math.max(0, Math.round(adjusted.fat)),
+    intakeModifiers: modifiers.map(({ type, label }) => ({ type, label })),
+    adjustmentNote: labels.join(' · '),
+    matchedName: [item.matchedName, ...labels].filter(Boolean).join(' · '),
+  };
 }
 
 export function normalizeFoodKey(value) {
@@ -160,7 +258,7 @@ function reconcileNutrition(item) {
 
   const gap = Math.abs(kcal - macroKcal);
   const gapRatio = gap / Math.max(kcal, macroKcal);
-  if (gap < 35 || gapRatio < 0.08) return { ...item, kcal };
+  if (gap < 120 || gapRatio < 0.18) return { ...item, kcal };
 
   return {
     ...item,
@@ -188,6 +286,25 @@ function makeStandardFood({ name, rawName, serving, kcal, carb, protein, fat, ma
 function getStandardFood(query, amountText = query) {
   const normalized = compact(query);
   const fullText = `${query} ${amountText || ''}`;
+
+  if (/짬뽕|jjamppong/.test(normalized)) {
+    const portion = /반|0\.5|1\/2/.test(fullText) ? 0.5 : 1;
+    const isSeafood = /해물|오징어|홍합|새우/.test(fullText);
+    const base = isSeafood
+      ? { kcal: 780, carb: 115, protein: 30, fat: 22 }
+      : { kcal: 760, carb: 112, protein: 25, fat: 23 };
+    return makeStandardFood({
+      name: `${isSeafood ? '해물 ' : ''}짬뽕 ${portion === 0.5 ? '0.5' : '1'}인분`,
+      rawName: isSeafood ? '해물 짬뽕' : '짬뽕',
+      serving: `${portion}인분`,
+      kcal: Math.round(base.kcal * portion),
+      carb: Math.round(base.carb * portion),
+      protein: Math.round(base.protein * portion),
+      fat: Math.round(base.fat * portion),
+      matchedName: `${isSeafood ? '해물 ' : ''}짬뽕 1인분 평균 기준`,
+      score: 225,
+    });
+  }
 
   if (/초밥|스시|sushi/.test(normalized)) {
     const pieces = extractCountAmount(fullText, /모듬|세트|1\s*인분|일인분|한\s*접시/.test(fullText) ? 10 : 1);
@@ -293,56 +410,86 @@ function extractJson(raw, fallbackPattern) {
 const geminiCache = new Map();
 
 async function callGeminiJson(prompt, pattern) {
-  const key = import.meta.env.VITE_GEMINI_KEY;
-  if (!key) throw new Error('Gemini 키 없음');
-
   if (geminiCache.has(prompt)) return geminiCache.get(prompt);
+
+  /* aiClient는 Firebase SDK에 의존하므로 Node 단위 테스트에서 모듈 로드가 깨지지 않도록 지연 로드한다. */
+  const { generateContent, extractText } = await import('../lib/aiClient.js');
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 25000);
-  let res;
+  let json;
   try {
-    res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { thinkingConfig: { thinkingBudget: 0 } },
-        }),
-        signal: controller.signal,
-      }
-    );
+    json = await generateContent({
+      model: GEMINI_MODEL,
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0,
+        thinkingConfig: { thinkingLevel: 'minimal' },
+      },
+      signal: controller.signal,
+    });
   } finally {
     clearTimeout(timer);
   }
-  const json = await res.json();
-  const cp = json.candidates?.[0]?.content?.parts;
-  if (!cp) throw new Error('AI 응답 없음');
-  const raw = (cp.find(p => !p.thought) ?? cp[cp.length - 1]).text;
+  const raw = extractText(json);
+  if (!raw) throw new Error('AI 응답 없음');
   const result = extractJson(raw, pattern);
   geminiCache.set(prompt, result);
   return result;
 }
 
+const FOOD_ITEM_SEPARATOR = /\s*(?:,|，|;|；|\+|·|ㆍ|\r?\n+)\s*|\s+(?:그리고|및)\s+/u;
+
+export function splitFoodMemoLocally(text) {
+  return String(text || '')
+    .split(FOOD_ITEM_SEPARATOR)
+    .map(part => parseIntakeDescription(part))
+    .reduce((items, parsed) => {
+      if (!parsed.baseText) {
+        if (parsed.modifiers.length && items.length) {
+          items[items.length - 1].modifiers.push(...parsed.modifiers);
+        }
+        return items;
+      }
+      items.push({
+        name: parsed.baseText,
+        amount: '',
+        query: parsed.baseText,
+        modifiers: [...parsed.modifiers],
+      });
+      return items;
+    }, []);
+}
+
 export async function parseFoodMemo(text) {
+  const parsedInput = parseIntakeDescription(text);
+  const localItems = splitFoodMemoLocally(text);
   const prompt = `다음 식단 메모를 음식 항목 단위로만 분리해 순수 JSON 배열만 반환해라.
 영양성분은 추정하지 마라. 음식명과 수량만 정리해라.
 브랜드명이나 제품명이 명확한 가공식품은 query에 제품명을 줄이지 말고 최대한 그대로 보존해라.
-형식: [{"name":"음식명","amount":"수량 또는 1인분","query":"검색용 핵심 음식명"}]
+음식명에 이미 수량이 들어 있으면 amount에 같은 수량을 중복해서 넣지 마라.
+형식: [{"name":"음식명","amount":"수량 또는 빈 문자열","query":"검색용 핵심 음식명"}]
 예: "뼈찜 1인분, 공기밥 반공기" -> [{"name":"뼈찜","amount":"1인분","query":"뼈찜"},{"name":"공기밥","amount":"반공기","query":"밥"}]
 예: "투데이넛 너트한줌 프리미엄" -> [{"name":"투데이넛 너트한줌 프리미엄","amount":"1개","query":"투데이넛 너트한줌 프리미엄"}]
-메모: "${text}"`;
+메모: "${parsedInput.baseText}"`;
   try {
     const items = await callGeminiJson(prompt, /\[[\s\S]*\]/);
-    return items.map(item => ({
+    const normalizedItems = items.map(item => ({
       name: String(item.name || item.query || text).trim(),
-      amount: String(item.amount || '1인분').trim(),
+      amount: String(item.amount || '').trim(),
       query: String(item.query || item.name || text).trim(),
+      modifiers: parsedInput.modifiers,
     })).filter(item => item.name);
+    return localItems.length > 1 && normalizedItems.length < localItems.length
+      ? localItems
+      : normalizedItems;
   } catch {
-    return [{ name: text, amount: '1인분', query: text }];
+    return localItems.length ? localItems : [{
+        name: parsedInput.baseText || text,
+        amount: '',
+        query: parsedInput.baseText || text,
+        modifiers: parsedInput.modifiers,
+      }];
   }
 }
 
@@ -395,50 +542,57 @@ function getMfdsRows(json) {
 }
 
 export async function searchMfdsFoods(query) {
+  if (!MFDS_AUTO_LOOKUP_ENABLED) return [];
+
   const key = import.meta.env.VITE_MFDS_SERVICE_KEY;
   if (!key || !query?.trim()) return [];
-  const standardFood = getStandardFood(query);
-  if (standardFood) return [standardFood];
+  const parsedInput = parseIntakeDescription(query);
+  const searchText = parsedInput.baseText;
+  const standardFood = getStandardFood(searchText);
+  if (standardFood) return [applyIntakeModifiers(standardFood, parsedInput.modifiers)];
 
   const url = new URL(MFDS_ENDPOINT);
   url.searchParams.set('serviceKey', key);
   url.searchParams.set('type', 'json');
   url.searchParams.set('pageNo', '1');
   url.searchParams.set('numOfRows', '10');
-  url.searchParams.set('FOOD_NM_KR', query.trim());
+  url.searchParams.set('FOOD_NM_KR', searchText);
 
   const res = await fetch(url);
   if (!res.ok) throw new Error(`식약처 DB 응답 오류(${res.status})`);
   const json = await res.json();
   return getMfdsRows(json)
-    .map(row => normalizeMfdsRow(row, query))
+    .map(row => normalizeMfdsRow(row, searchText))
     .filter(item => item.name && (item.kcal || item.carb || item.protein || item.fat))
-    .map(item => ({ ...item, score: scoreMfdsRow(item, query) }))
-    .filter(item => isAmountCompatibleWithMfds(item, query))
-    .map(item => adjustNutritionForAmount(item, query))
+    .map(item => ({ ...item, score: scoreMfdsRow(item, searchText) }))
+    .filter(item => isAmountCompatibleWithMfds(item, searchText))
+    .map(item => adjustNutritionForAmount(item, searchText))
+    .map(item => applyIntakeModifiers(item, parsedInput.modifiers))
     .sort((a, b) => b.score - a.score);
 }
 
 export async function estimateFoodNutrition(text) {
-  const standardFood = getStandardFood(text);
-  if (standardFood) return standardFood;
+  const parsedInput = parseIntakeDescription(text);
+  const standardFood = getStandardFood(parsedInput.baseText);
+  if (standardFood) return applyIntakeModifiers(standardFood, parsedInput.modifiers);
 
-  const prompt = `음식 "${text}"의 섭취량 기준 영양성분을 추정해 순수 JSON 객체만 반환해라.
+  const prompt = `음식 "${parsedInput.baseText}"의 섭취량 기준 기본 영양성분을 추정해 순수 JSON 객체만 반환해라.
 반드시 음식명에 적힌 g, ml, 공기, 인분 등 수량을 반영해라.
-한국에서 통용되는 일반 영양성분 기준을 우선하고, 확실하지 않으면 낮게 잡지 말고 보수적으로 잡아라.
+국물, 소스, 껍질, 비계 등을 모두 일반적으로 섭취한 기본 상태로 계산해라.
+한국에서 통용되는 일반적인 1회 섭취 기준의 중앙값을 사용해라.
 밥/쌀밥은 100g당 약 166kcal, 탄수화물 37g, 단백질 3g, 지방 0g 기준으로 수량에 맞춰 계산해라.
-외식/배달/양념 음식은 칼로리와 지방을 낮게 잡지 말고 평균보다 약간 보수적으로 잡아라.
 형식: {"name":"음식명(수량포함)","kcal":숫자,"carb":숫자,"protein":숫자,"fat":숫자}
 모든 수치는 정수. 설명 없이 JSON만.`;
   const item = await callGeminiJson(prompt, /\{[\s\S]*\}/);
-  return reconcileNutrition({
-    name: String(item.name || text),
+  const estimated = reconcileNutrition({
+    name: String(item.name || parsedInput.baseText),
     kcal: toNumber(item.kcal),
     carb: toNumber(item.carb || item.carbohydrate),
     protein: toNumber(item.protein),
     fat: toNumber(item.fat),
     source: 'ai',
   });
+  return applyIntakeModifiers(estimated, parsedInput.modifiers);
 }
 
 export async function estimateMealNutrition(text, customFoods = []) {
@@ -448,19 +602,25 @@ export async function estimateMealNutrition(text, customFoods = []) {
 }
 
 export async function resolveFoodNutrition(food, customFoods = []) {
-  const foodText = `${food.name}${food.amount ? ` ${food.amount}` : ''}`.trim();
+  const parsedInput = parseIntakeDescription(`${food.name}${food.amount ? ` ${food.amount}` : ''}`);
+  const modifiers = [...(food.modifiers || []), ...parsedInput.modifiers]
+    .filter((modifier, index, all) => all.findIndex(item => item.type === modifier.type) === index);
+  const foodText = parsedInput.baseText;
   const customFood = findCustomFood(customFoods, foodText) || findCustomFood(customFoods, food.query || food.name);
   if (customFood) {
-    return {
+    return applyIntakeModifiers({
       ...customFood,
       name: customFood.name || foodText,
       source: 'custom',
       matchedName: '내가 수정한 기준',
-    };
+    }, modifiers);
   }
 
-  const standardFood = getStandardFood(`${food.name} ${food.amount || ''}`, food.amount);
-  if (standardFood) return standardFood;
+  const standardFood = getStandardFood(foodText, food.amount);
+  if (standardFood) {
+    const userFoodName = cleanFoodText(`${food.name}${food.amount ? ` ${food.amount}` : ''}`);
+    return applyIntakeModifiers({ ...standardFood, name: userFoodName }, modifiers);
+  }
 
   try {
     const mfdsItems = await searchMfdsFoods(foodText);
@@ -472,15 +632,17 @@ export async function resolveFoodNutrition(food, customFoods = []) {
     const isConfident = best && best.score >= 60 && (!second || best.score - second.score >= 15 || best.score >= 90);
     if (isConfident && isAmountCompatibleWithMfds(best, foodText)) {
       const adjusted = adjustNutritionForAmount(best, foodText);
+      const finalItem = applyIntakeModifiers(adjusted, modifiers);
       return {
-        ...adjusted,
-        name: `${food.name}${food.amount ? ` ${food.amount}` : ''}`,
-        matchedName: adjusted.matchedName || best.name,
+        ...finalItem,
+        name: cleanFoodText(`${food.name}${food.amount ? ` ${food.amount}` : ''}`),
+        matchedName: finalItem.matchedName || best.name,
       };
     }
   } catch (e) {
     console.warn('식약처 DB 검색 실패, AI 추정으로 대체:', e.message);
   }
 
-  return estimateFoodNutrition(`${food.name} ${food.amount || ''}`.trim());
+  const estimated = await estimateFoodNutrition(foodText);
+  return applyIntakeModifiers(estimated, modifiers);
 }

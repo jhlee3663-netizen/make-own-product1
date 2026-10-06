@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>운동 칩 디자인 프리뷰</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, 'Pretendard', sans-serif;
+    background: #f8f9fa;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px;
+    gap: 12px;
+    min-height: 100vh;
+  }
+
+  .label {
+    font-size: 12px;
+    color: #adb5bd;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    align-self: flex-start;
+    margin-bottom: -4px;
+  }
+
+  /* 카드 */
+  .card {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 0 25px rgba(3,27,38,0.08);
+    overflow: hidden;
+    width: 100%;
+    max-width: 390px;
+  }
+  .card-body { padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+
+  /* 헤더 */
+  .card-header { display: flex; flex-direction: column; gap: 8px; }
+  .badge {
+    background: rgba(52,118,238,0.1);
+    color: #3476EE;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 4px 8px;
+    border-radius: 8px;
+    width: fit-content;
+  }
+  .card-title-row { display: flex; justify-content: space-between; align-items: center; }
+  .card-title { font-size: 18px; font-weight: 700; color: #171a1d; letter-spacing: -0.45px; }
+  .card-date { font-size: 14px; color: #646d76; }
+
+  /* AI 코멘트 */
+  .card-comment {
+    border-top: 1px solid #f1f3f5;
+    padding: 14px 16px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .comment-text {
+    font-size: 14px;
+    font-weight: 500;
+    background: linear-gradient(90deg, #228bed, #c509d6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -0.35px;
+  }
+
+  /* ── 현재 디자인: 박스 + 이름 ── */
+  .ex-scroll-box {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+  .ex-scroll-box::-webkit-scrollbar { display: none; }
+  .ex-item-box {
+    flex-shrink: 0;
+    width: 80px;
+    border-radius: 16px;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+  .ex-thumb {
+    width: 100%;
+    height: 44px;
+    border-radius: 10px;
+  }
+  .ex-name-box {
+    font-size: 12px;
+    font-weight: 500;
+    text-align: center;
+    width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ── 신규 디자인: 칩 ── */
+  .ex-scroll-chip {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+    flex-wrap: nowrap;
+  }
+  .ex-scroll-chip::-webkit-scrollbar { display: none; }
+  .ex-chip {
+    flex-shrink: 0;
+    padding: 6px 12px;
+    border-radius: 100px;
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    letter-spacing: -0.3px;
+  }
+
+  /* 부위별 색상 */
+  .c-chest   { background: #dbeafe; color: #1d60cc; }
+  .c-back    { background: #dcfce7; color: #166534; }
+  .c-shoulder{ background: #ede9fe; color: #5b21b6; }
+  .c-leg     { background: #ffedd5; color: #c2410c; }
+  .c-arm     { background: #ffe4e6; color: #be123c; }
+  .c-core    { background: #cffafe; color: #0e7490; }
+  .c-default { background: #f1f3f5; color: #495057; }
+
+  .divider {
+    width: 100%;
+    max-width: 390px;
+    text-align: center;
+    font-size: 11px;
+    color: #ced4da;
+    position: relative;
+  }
+  .divider::before, .divider::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    width: 38%;
+    height: 1px;
+    background: #dee2e6;
+  }
+  .divider::before { left: 0; }
+  .divider::after { right: 0; }
+</style>
+</head>
+<body>
+
+<p class="label">현재</p>
+
+<!-- 현재 디자인 -->
+<div class="card">
+  <div class="card-body">
+    <div class="card-header">
+      <div class="badge">성공 🔥</div>
+      <div class="card-title-row">
+        <span class="card-title">가슴, 등</span>
+        <span class="card-date">26. 5. 27</span>
+      </div>
+    </div>
+    <div class="ex-scroll-box">
+      <div class="ex-item-box" style="background:#dbeafe">
+        <div class="ex-thumb" style="background:linear-gradient(135deg,#dbeafe,#bfdbfe)"></div>
+        <span class="ex-name-box" style="color:#1d60cc">어시스티드 풀업</span>
+      </div>
+      <div class="ex-item-box" style="background:#dbeafe">
+        <div class="ex-thumb" style="background:linear-gradient(135deg,#dbeafe,#bfdbfe)"></div>
+        <span class="ex-name-box" style="color:#1d60cc">디클라인 벤치</span>
+      </div>
+      <div class="ex-item-box" style="background:#dbeafe">
+        <div class="ex-thumb" style="background:linear-gradient(135deg,#dbeafe,#bfdbfe)"></div>
+        <span class="ex-name-box" style="color:#1d60cc">펙덱 플라이</span>
+      </div>
+      <div class="ex-item-box" style="background:#dcfce7">
+        <div class="ex-thumb" style="background:linear-gradient(135deg,#dcfce7,#bbf7d0)"></div>
+        <span class="ex-name-box" style="color:#166534">티바 로우</span>
+      </div>
+    </div>
+  </div>
+  <div class="card-comment">
+    <span style="font-size:18px">❝</span>
+    <span class="comment-text">오늘 볼륨 9,060kg, 저번보다 70.9% 과부하 성공!</span>
+  </div>
+</div>
+
+<div class="divider">새 디자인</div>
+
+<!-- 신규: 칩 디자인 옵션 A — 작고 둥근 pill -->
+<p class="label">안 A — 작은 pill</p>
+<div class="card">
+  <div class="card-body">
+    <div class="card-header">
+      <div class="badge">성공 🔥</div>
+      <div class="card-title-row">
+        <span class="card-title">가슴, 등</span>
+        <span class="card-date">26. 5. 27</span>
+      </div>
+    </div>
+    <div class="ex-scroll-chip">
+      <span class="ex-chip c-chest">어시스티드 풀업</span>
+      <span class="ex-chip c-chest">디클라인 벤치프레스</span>
+      <span class="ex-chip c-chest">펙덱 플라이</span>
+      <span class="ex-chip c-back">티바 로우</span>
+    </div>
+  </div>
+  <div class="card-comment">
+    <span style="font-size:18px">❝</span>
+    <span class="comment-text">오늘 볼륨 9,060kg, 저번보다 70.9% 과부하 성공!</span>
+  </div>
+</div>
+
+<!-- 신규: 칩 디자인 옵션 B — 두 줄 wrap -->
+<p class="label">안 B — 두 줄 wrap</p>
+<div class="card">
+  <div class="card-body">
+    <div class="card-header">
+      <div class="badge">성공 🔥</div>
+      <div class="card-title-row">
+        <span class="card-title">가슴, 등</span>
+        <span class="card-date">26. 5. 27</span>
+      </div>
+    </div>
+    <div class="ex-scroll-chip" style="flex-wrap:wrap; overflow:visible;">
+      <span class="ex-chip c-chest">어시스티드 풀업</span>
+      <span class="ex-chip c-chest">디클라인 벤치프레스</span>
+      <span class="ex-chip c-chest">펙덱 플라이</span>
+      <span class="ex-chip c-back">티바 로우</span>
+    </div>
+  </div>
+  <div class="card-comment">
+    <span style="font-size:18px">❝</span>
+    <span class="comment-text">오늘 볼륨 9,060kg, 저번보다 70.9% 과부하 성공!</span>
+  </div>
+</div>
+
+<!-- 여러 부위 혼합 예시 -->
+<p class="label">혼합 부위 예시 (안 A 기준)</p>
+<div class="card">
+  <div class="card-body">
+    <div class="card-header">
+      <div class="badge">성공 🔥</div>
+      <div class="card-title-row">
+        <span class="card-title">가슴, 삼두</span>
+        <span class="card-date">26. 5. 20</span>
+      </div>
+    </div>
+    <div class="ex-scroll-chip">
+      <span class="ex-chip c-chest">팔굽혀펴기</span>
+      <span class="ex-chip c-default">고중량 운동</span>
+      <span class="ex-chip c-default">저중량 고반복</span>
+      <span class="ex-chip c-default">드랍 세트</span>
+      <span class="ex-chip c-arm">트라이셉 익스텐션</span>
+    </div>
+  </div>
+  <div class="card-comment">
+    <span style="font-size:18px">❝</span>
+    <span class="comment-text">오늘 볼륨 5,300kg 압도적 볼륨, 성장뿐!</span>
+  </div>
+</div>
+
+</body>
+</html>

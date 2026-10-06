@@ -71,7 +71,7 @@ function formatDate(ts) {
   return `${d.getMonth() + 1}.${d.getDate()}`;
 }
 
-export default function CoachListScreen({ rooms, roomMeta, onOpenRoom, onStartNewRoom, onDeleteRoom }) {
+export default function CoachListScreen({ rooms, roomMeta, onOpenRoom, onStartNewRoom, onDeleteRoom, historyLimitReached = false }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [inputText, setInputText] = useState('');
   const [roomMenu, setRoomMenu] = useState(null);
@@ -175,7 +175,7 @@ export default function CoachListScreen({ rooms, roomMeta, onOpenRoom, onStartNe
                 <div className="pt-5 flex flex-col gap-2">
                   <button
                     onClick={() => { const id = roomMenu.id; setRoomMenu(null); setSidebarOpen(false); onOpenRoom(id); }}
-                    className="w-full h-12 rounded-[14px] bg-[#3476EE] font-pretendard text-[15px] font-semibold text-white active:opacity-80"
+                    className="w-full h-12 rounded-[14px] bg-[#7E7EFF] font-pretendard text-[15px] font-semibold text-white active:opacity-80"
                   >
                     대화 열기
                   </button>
@@ -212,7 +212,8 @@ export default function CoachListScreen({ rooms, roomMeta, onOpenRoom, onStartNe
                   <p className="font-pretendard text-body-s text-typo-alternative">대화 기록이 없습니다</p>
                 </div>
               ) : (
-                roomsWithHistory.map(r => {
+                <>
+                {roomsWithHistory.map(r => {
                   const msgs = rooms[r.id] || [];
                   const lastMsg = [...msgs].reverse().find(m => m.text);
                   return (
@@ -240,7 +241,13 @@ export default function CoachListScreen({ rooms, roomMeta, onOpenRoom, onStartNe
                       </div>
                     </Pressable>
                   );
-                })
+                })}
+                {historyLimitReached && (
+                  <p role="status" className="px-5 py-4 font-pretendard text-caption-m text-typo-alternative leading-relaxed">
+                    최근 대화 100개를 표시하고 있어요. 더 오래된 대화는 현재 목록에서 열 수 없습니다.
+                  </p>
+                )}
+                </>
               )}
             </div>
           </div>

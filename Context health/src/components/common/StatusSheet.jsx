@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-
-const GEMINI_KEY = import.meta.env.VITE_GEMINI_KEY;
+import { generateContent, extractText } from '../../lib/aiClient';
 
 function getWeekRange(weeksAgo = 0) {
   const now = new Date();
@@ -20,7 +19,6 @@ function inRange(ts, { start, end }) {
 }
 
 async function generateStatusComment({ parts, volumeThis, volumeLast, avgKcal, targetKcal, carbPct, proteinPct, fatPct }) {
-  if (!GEMINI_KEY) return null;
   const volumeText = volumeLast > 0
     ? `볼륨: 이번주 ${volumeThis.toLocaleString()}kg, 저번주 ${volumeLast.toLocaleString()}kg`
     : `볼륨: 이번주 ${volumeThis.toLocaleString()}kg (저번주 기록 없음)`;
@@ -41,16 +39,11 @@ ${volumeText}
 - 반드시 한국어로`;
 
   try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
-      }
-    );
-    const data = await res.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
+    const data = await generateContent({
+      model: 'gemini-3.6-flash',
+      contents: [{ parts: [{ text: prompt }] }],
+    });
+    return extractText(data).trim() || null;
   } catch {
     return null;
   }

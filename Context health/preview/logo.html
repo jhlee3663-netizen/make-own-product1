@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="UTF-8" /><title>로고 미리보기</title></head>
+<body style="margin:0;background:#fff"><div id="root"></div>
+<script type="module">
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import '../src/index.css';
+import LogoMotion from '../src/components/common/LogoMotion';
+const h = React.createElement;
+createRoot(document.getElementById('root')).render(
+  h('div', { style: { display: 'flex', gap: 40, alignItems: 'center', padding: 60 } },
+    h(LogoMotion, {}),
+    h('img', { src: '/logo.png', width: 80 }),
+    h('img', { src: '/favicon.png', width: 96 }),
+    h('img', { src: '/pwa-512x512.png', width: 160, style: { borderRadius: 36 } }),
+    h('img', { src: '/pwa-maskable-512x512.png', width: 160, style: { borderRadius: 80 } })));
+</script></body></html>

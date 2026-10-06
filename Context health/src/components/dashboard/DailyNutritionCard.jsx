@@ -48,7 +48,7 @@ export default function DailyNutritionCard({ dietLogs, profile }) {
         </p>
         <div className="flex gap-3">
           {[
-            { label: '탄', value: totals.carb, color: '#3476EE' },
+            { label: '탄', value: totals.carb, color: '#7E7EFF' },
             { label: '단', value: totals.protein, color: '#1a9e5c' },
             { label: '지', value: totals.fat, color: '#f08c00' },
           ].map(({ label, value, color }) => (

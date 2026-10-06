@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import Pressable from './Pressable';
+import { getUserStorage, setUserStorage } from '../../lib/userStorage';
 
 const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
 const DEFAULT_ROUTINE = {
@@ -41,9 +42,9 @@ function ChevronRight() {
   );
 }
 
-export default function RoutineSheet({ onClose, workoutLogs, dietLogs, onNavigateToMemo, onNavigateToDiet }) {
+export default function RoutineSheet({ uid, onClose, workoutLogs, dietLogs, onNavigateToMemo, onNavigateToDiet }) {
   const [routine, setRoutine] = useState(() => {
-    try { return { ...DEFAULT_ROUTINE, ...JSON.parse(localStorage.getItem('weekly_routine') || '{}') }; }
+    try { return { ...DEFAULT_ROUTINE, ...JSON.parse(getUserStorage(uid, 'weekly_routine') || '{}') }; }
     catch { return DEFAULT_ROUTINE; }
   });
   const [editingDay, setEditingDay] = useState(null);
@@ -65,7 +66,7 @@ export default function RoutineSheet({ onClose, workoutLogs, dietLogs, onNavigat
   function saveRoutine(day, value) {
     const next = { ...routine, [day]: value };
     setRoutine(next);
-    localStorage.setItem('weekly_routine', JSON.stringify(next));
+    setUserStorage(uid, 'weekly_routine', JSON.stringify(next));
     setEditingDay(null);
   }
 
@@ -140,7 +141,7 @@ export default function RoutineSheet({ onClose, workoutLogs, dietLogs, onNavigat
                   <div
                     key={key}
                     className={`flex items-center gap-3 px-4 py-3 rounded-2xl ${isCurrentDay ? 'ring-1 ring-brand/30' : ''}`}
-                    style={{ background: isCurrentDay ? 'rgba(52,118,238,0.06)' : 'rgba(0,0,0,0.03)' }}
+                    style={{ background: isCurrentDay ? 'rgba(126,126,255,0.06)' : 'rgba(0,0,0,0.03)' }}
                   >
                     <span className={`w-5 text-center font-pretendard text-[13px] font-bold tracking-[-0.3px] flex-none ${isCurrentDay ? 'text-brand' : 'text-typo-alternative'}`}>
                       {day}

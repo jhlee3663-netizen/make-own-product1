@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>영양정보 직접 입력 UI 시안</title>
+  <style>
+    * { box-sizing: border-box; }
+    :root { --blue:#3476ee; --ink:#171a1d; --text:#495057; --muted:#868e96; --line:#edf0f2; --soft:#f6f8fa; }
+    body { margin:0; min-height:100vh; background:#eef2f6; color:var(--ink); font-family:Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    button,input,textarea { font:inherit; }
+    .board {
+      width:1000px; height:1000px; margin:0 auto; padding:30px 38px 38px; overflow:hidden;
+      background:radial-gradient(circle at 8% 4%,rgba(52,118,238,.09),transparent 26%),linear-gradient(145deg,#fbfcfe,#edf2f7);
+    }
+    h1 { margin:0; font-size:25px; letter-spacing:-.75px; }
+    .subtitle { margin:7px 0 20px; color:#646d76; font-size:14px; letter-spacing:-.3px; }
+    .comparison { display:flex; gap:28px; align-items:flex-start; }
+    .case { width:434px; }
+    .case-label { margin:0 0 9px 4px; color:var(--text); font-size:14px; font-weight:760; }
+    .case-label span { color:var(--muted); font-weight:550; }
+    .phone { position:relative; width:434px; height:860px; overflow:hidden; border:1px solid #dfe3e8; border-radius:31px; background:#f4f5f7; box-shadow:0 19px 44px rgba(35,49,66,.14); }
+    .status { height:31px; padding:10px 20px 0; display:flex; justify-content:space-between; background:#fff; font-size:11px; font-weight:800; }
+    .nav { height:55px; padding:0 18px; display:grid; grid-template-columns:32px 1fr 32px; align-items:center; background:#fff; border-bottom:1px solid #f1f3f5; }
+    .back { color:var(--text); font-size:27px; line-height:1; }
+    .nav-title { text-align:center; font-size:17px; font-weight:760; letter-spacing:-.45px; }
+    .summary { padding:14px 18px 15px; background:#fff; border-bottom:8px solid #f4f5f7; }
+    .summary-top,.meal-head,.food-row,.manual-row { display:flex; justify-content:space-between; align-items:center; }
+    .summary-kcal { font-size:22px; font-weight:820; letter-spacing:-.45px; }
+    .date { color:#646d76; font-size:13px; }
+    .goal { margin:5px 0 9px; color:var(--muted); font-size:12px; }
+    .progress { height:6px; overflow:hidden; border-radius:99px; background:#eef1f4; }
+    .progress div { width:72%; height:100%; background:var(--blue); }
+    .macros { margin-top:11px; display:flex; gap:14px; color:#646d76; font-size:12px; }
+    .macros b { color:var(--text); }
+    .meal { padding:17px 18px 16px; background:#fff; }
+    .meal-title { font-size:20px; font-weight:820; letter-spacing:-.55px; }
+    .meal-kcal { color:var(--blue); font-size:16px; font-weight:820; }
+    .meal-macro { margin:5px 0 10px; color:#9bb9f4; font-size:12px; font-weight:700; }
+    .food-list { border-top:1px solid var(--line); }
+    .food-row { min-height:69px; gap:10px; border-bottom:1px solid var(--line); }
+    .food-copy { min-width:0; flex:1; }
+    .food-name { margin:0; color:var(--text); font-size:14px; font-weight:760; }
+    .food-meta { margin:5px 0 0; color:var(--muted); font-size:11px; }
+    .stepper { display:flex; align-items:center; gap:4px; padding:3px; border-radius:14px; background:#f4f6f8; }
+    .step { width:34px; height:34px; border:0; border-radius:10px; background:#fff; color:#646d76; box-shadow:0 1px 3px rgba(22,32,43,.08); font-size:19px; }
+    .qty { min-width:46px; text-align:center; font-size:13px; font-weight:800; }
+    .manual-row { min-height:82px; gap:10px; border-bottom:1px solid var(--line); }
+    .badge { display:inline-flex; margin-right:6px; padding:3px 6px; border-radius:6px; background:#eaf1ff; color:var(--blue); font-size:10px; font-weight:800; vertical-align:1px; }
+    .manual-kcal { color:#646d76; font-size:14px; font-weight:800; white-space:nowrap; }
+    .edit { color:#adb5bd; font-size:14px; margin-left:7px; }
+    .tip { margin-top:13px; padding:10px 12px; border-radius:12px; background:#f8f9fa; color:#646d76; font-size:11px; line-height:1.5; }
+    .search { margin-top:13px; height:48px; padding:0 13px; display:flex; align-items:center; justify-content:space-between; border:1px solid #dee2e6; border-radius:14px; background:#fff; color:#adb5bd; font-size:12px; }
+    .quick { margin-top:9px; display:flex; gap:7px; overflow:hidden; }
+    .direct-pill { flex:none; padding:7px 10px; border:1px solid #b9cef7; border-radius:18px; background:#f5f8ff; color:var(--blue); font-size:11px; font-weight:750; }
+    .chip { flex:none; padding:7px 10px; border-radius:18px; background:#f1f3f5; color:#495057; font-size:11px; }
+    .save-bar { position:absolute; left:0; right:0; bottom:0; padding:14px 18px 24px; background:#fff; border-top:1px solid var(--line); }
+    .save { width:100%; height:52px; border:0; border-radius:15px; background:var(--blue); color:#fff; font-size:16px; font-weight:820; }
+
+    .dim { position:absolute; inset:0; z-index:5; background:rgba(17,24,39,.42); }
+    .sheet { position:absolute; z-index:6; left:0; right:0; bottom:0; padding:10px 18px 25px; border-radius:24px 24px 0 0; background:#fff; box-shadow:0 -12px 34px rgba(17,24,39,.16); }
+    .handle { width:42px; height:4px; margin:0 auto 17px; border-radius:10px; background:#dee2e6; }
+    .sheet-head { display:flex; align-items:flex-start; justify-content:space-between; }
+    .sheet-title { margin:0; font-size:20px; letter-spacing:-.55px; }
+    .sheet-desc { margin:5px 0 0; color:var(--muted); font-size:12px; }
+    .close { border:0; background:transparent; padding:0; color:#adb5bd; font-size:24px; }
+    .field { margin-top:16px; }
+    .label { display:block; margin-bottom:6px; color:#646d76; font-size:12px; font-weight:700; }
+    .text-input { width:100%; height:43px; padding:0 12px; border:1px solid #dee2e6; border-radius:11px; outline:none; color:var(--ink); font-size:13px; }
+    .paste-box { position:relative; }
+    .paste { width:100%; height:62px; resize:none; padding:11px 72px 9px 12px; border:1px solid #cfdcf4; border-radius:12px; outline:none; background:#f8faff; color:#495057; font-size:12px; line-height:1.45; }
+    .parse { position:absolute; right:8px; bottom:9px; height:28px; padding:0 9px; border:0; border-radius:8px; background:#e7efff; color:var(--blue); font-size:11px; font-weight:800; }
+    .grid { margin-top:14px; display:grid; grid-template-columns:1fr 1fr; gap:9px; }
+    .number-card { position:relative; padding:9px 10px 8px; border:1px solid #e1e5ea; border-radius:12px; background:#fff; }
+    .number-label { display:block; color:var(--muted); font-size:10px; font-weight:700; }
+    .number { width:100%; margin-top:3px; padding:0 24px 0 0; border:0; outline:none; color:var(--ink); font-size:18px; font-weight:820; }
+    .unit { position:absolute; right:10px; bottom:10px; color:#adb5bd; font-size:11px; }
+    .calc { margin-top:12px; padding:10px 11px; display:flex; justify-content:space-between; border-radius:10px; background:#f5f8ff; color:#64748b; font-size:11px; }
+    .calc b { color:var(--blue); }
+    .add { margin-top:13px; width:100%; height:50px; border:0; border-radius:14px; background:var(--blue); color:#fff; font-size:15px; font-weight:820; }
+  </style>
+</head>
+<body>
+  <main class="board">
+    <h1>영양정보 직접 입력 UI 시안</h1>
+    <p class="subtitle">뷔페·회식처럼 음식을 나누기 어려울 때, 탄단지와 칼로리를 통합 항목 하나로 기록합니다.</p>
+    <div class="comparison">
+      <section class="case">
+        <p class="case-label">식단 화면 <span>— 진입 버튼과 저장 결과</span></p>
+        <div class="phone">
+          <div class="status"><span>9:41</span><span>● ● ▰</span></div>
+          <div class="nav"><span class="back">‹</span><span class="nav-title">식단 기록</span><span>⋮</span></div>
+          <div class="summary">
+            <div class="summary-top"><span class="summary-kcal">1,443 kcal</span><span class="date">9월 28일 월요일</span></div>
+            <p class="goal">목표 2,000 kcal · 72%</p>
+            <div class="progress"><div></div></div>
+            <div class="macros"><span>탄수화물 <b>161g</b></span><span>단백질 <b>101g</b></span><span>지방 <b>48g</b></span></div>
+          </div>
+          <div class="meal">
+            <div class="meal-head"><span class="meal-title">저녁</span><span class="meal-kcal">1,200 kcal</span></div>
+            <p class="meal-macro">총 탄 130g · 단 70g · 지 45g</p>
+            <div class="food-list">
+              <div class="manual-row">
+                <div class="food-copy">
+                  <p class="food-name"><span class="badge">직접 입력</span>뷔페 저녁</p>
+                  <p class="food-meta">탄 130g · 단 70g · 지 45g</p>
+                </div>
+                <div><span class="manual-kcal">1,200 kcal</span><span class="edit">✎</span></div>
+              </div>
+              <div class="food-row">
+                <div class="food-copy"><p class="food-name">프로틴</p><p class="food-meta">103 kcal · 1회 기준</p></div>
+                <div class="stepper"><button class="step">−</button><span class="qty">1회</span><button class="step">＋</button></div>
+              </div>
+            </div>
+            <div class="tip">💬　오늘 저녁은 열량이 높은 편이에요. 다음 끼니는 조금 가볍게 맞춰요.</div>
+            <div class="search"><span>저녁에 먹은 식단을 적어주세요</span><span>⌕　✦</span></div>
+            <div class="quick"><button class="direct-pill">＋ 영양정보 직접 입력</button><span class="chip">+ 닭가슴살</span><span class="chip">+ 밥</span></div>
+          </div>
+          <div class="save-bar"><button class="save">저장하기</button></div>
+        </div>
+      </section>
+
+      <section class="case">
+        <p class="case-label">입력 화면 <span>— 한 번 붙여넣고 확인</span></p>
+        <div class="phone">
+          <div class="status"><span>9:41</span><span>● ● ▰</span></div>
+          <div class="nav"><span class="back">‹</span><span class="nav-title">식단 기록</span><span>⋮</span></div>
+          <div class="summary">
+            <div class="summary-top"><span class="summary-kcal">243 kcal</span><span class="date">9월 28일 월요일</span></div>
+            <p class="goal">목표 2,000 kcal · 12%</p><div class="progress"><div style="width:12%"></div></div>
+          </div>
+          <div class="meal"><div class="meal-head"><span class="meal-title">저녁</span><span class="meal-kcal">0 kcal</span></div><p class="meal-macro">아직 기록한 음식이 없어요</p></div>
+          <div class="dim"></div>
+          <div class="sheet">
+            <div class="handle"></div>
+            <div class="sheet-head">
+              <div><h2 class="sheet-title">영양정보 직접 입력</h2><p class="sheet-desc">음식을 나누기 어려운 식사를 한 번에 기록하세요</p></div>
+              <button class="close">×</button>
+            </div>
+            <div class="field">
+              <label class="label">기록 이름 <span style="color:#adb5bd;font-weight:500">· 선택</span></label>
+              <input class="text-input" value="뷔페 저녁" />
+            </div>
+            <div class="field">
+              <label class="label">AI 결과 한 번에 붙여넣기</label>
+              <div class="paste-box">
+                <textarea class="paste">약 1200kcal, 탄수화물 130g, 단백질 70g, 지방 45g</textarea>
+                <button class="parse">자동 입력</button>
+              </div>
+            </div>
+            <div class="grid">
+              <div class="number-card"><span class="number-label">칼로리</span><input class="number" value="1,200" /><span class="unit">kcal</span></div>
+              <div class="number-card"><span class="number-label">탄수화물</span><input class="number" value="130" /><span class="unit">g</span></div>
+              <div class="number-card"><span class="number-label">단백질</span><input class="number" value="70" /><span class="unit">g</span></div>
+              <div class="number-card"><span class="number-label">지방</span><input class="number" value="45" /><span class="unit">g</span></div>
+            </div>
+            <div class="calc"><span>탄단지 기준 계산 열량</span><b>약 1,205 kcal</b></div>
+            <button class="add">저녁에 추가</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

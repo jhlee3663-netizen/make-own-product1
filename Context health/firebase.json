@@ -1,7 +1,36 @@
 {
+  "functions": {
+    "source": "functions",
+    "ignore": [
+      "node_modules",
+      ".git",
+      "firebase-debug.log",
+      "firebase-debug.*.log",
+      "*.local",
+      "scripts"
+    ]
+  },
   "firestore": {
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
+  },
+  "emulators": {
+    "auth": {
+      "host": "127.0.0.1",
+      "port": 9099
+    },
+    "firestore": {
+      "host": "127.0.0.1",
+      "port": 8080
+    },
+    "ui": {
+      "enabled": false
+    },
+    "singleProjectMode": true,
+    "functions": {
+      "host": "127.0.0.1",
+      "port": 5001
+    }
   },
   "hosting": {
     "public": "dist",
@@ -11,6 +40,15 @@
       "**/node_modules/**"
     ],
     "headers": [
+      {
+        "source": "/",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      },
       {
         "source": "/index.html",
         "headers": [
@@ -49,6 +87,69 @@
       }
     ],
     "rewrites": [
+      {
+        "source": "/api/ai-generate",
+        "function": {
+          "functionId": "aiGenerate",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/api/social-auth",
+        "function": {
+          "functionId": "socialAuth",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/api/delete-account",
+        "function": {
+          "functionId": "deleteAccount",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/mcp",
+        "function": {
+          "functionId": "mcp",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/api/mcp-oauth/**",
+        "function": {
+          "functionId": "mcp",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/.well-known/oauth-protected-resource",
+        "function": {
+          "functionId": "mcp",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/.well-known/oauth-protected-resource/**",
+        "function": {
+          "functionId": "mcp",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/.well-known/oauth-authorization-server",
+        "function": {
+          "functionId": "mcp",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/.well-known/oauth-authorization-server/**",
+        "function": {
+          "functionId": "mcp",
+          "region": "us-central1"
+        }
+      },
       {
         "source": "**",
         "destination": "/index.html"

@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { auth, db } from '../../lib/firebase';
 import { signOut } from 'firebase/auth';
-import { clearIndexedDbPersistence, terminate, collection, query, where, orderBy, limit, getDocs, updateDoc, doc, deleteField } from 'firebase/firestore';
+import { clearIndexedDbPersistence, terminate, collection, query, where, orderBy, getDocs, updateDoc, doc, deleteField, Timestamp } from 'firebase/firestore';
+import { clearLegacyPersonalStorage, clearUserStorage } from '../../lib/userStorage';
 import Pressable from '../common/Pressable';
+import ConfirmModal from '../common/ConfirmModal';
+import WeightHistorySection from '../dashboard/WeightHistorySection';
+import { disconnectMcp, getMcpStatus } from '../../lib/mcpConnection';
 
 const GOALS = ['체중 감량', '근육 증량', '체형 유지', '건강 증진'];
 const ACTIVITY_LEVELS = [
@@ -49,7 +53,7 @@ function daysLeft(deletedAt) {
   return Math.max(0, 30 - Math.floor((Date.now() - ms) / 86400000));
 }
 
-const TERMS_CONTENT = `제1조 (목적)
+export const TERMS_CONTENT = `제1조 (목적)
 본 약관은 Context Health(이하 "서비스")를 이용함에 있어 이용자의 권리, 의무 및 책임 사항을 규정함을 목적으로 합니다.
 
 제2조 (서비스 이용)
@@ -71,7 +75,7 @@ const TERMS_CONTENT = `제1조 (목적)
 부칙
 본 약관은 2025년 1월 1일부터 적용됩니다.`;
 
-const PRIVACY_CONTENT = `Context Health(이하 "서비스")는 이용자의 개인정보 보호를 중요하게 생각하며, 「개인정보 보호법」을 준수합니다.
+export const PRIVACY_CONTENT = `Context Health(이하 "서비스")는 이용자의 개인정보 보호를 중요하게 생각하며, 「개인정보 보호법」을 준수합니다.
 
 1. 수집하는 개인정보 항목
 - 계정 정보: 이름, 이메일 주소
@@ -96,7 +100,7 @@ const PRIVACY_CONTENT = `Context Health(이하 "서비스")는 이용자의 개�
 담당: Context Health 운영팀
 연락처: jhlee3663@gmail.com`;
 
-function LegalModal({ title, content, onClose }) {
+export function LegalModal({ title, content, onClose }) {
   return (
     <div className="absolute inset-0 z-[100] flex flex-col bg-white">
       <div className="flex items-center gap-3 px-5 pt-12 pb-4 border-b border-ui-2 flex-none">
@@ -131,25 +135,53 @@ export default function MyPageScreen({ user, profile, onProfileSave, onNavChange
   const [trashedLogs, setTrashedLogs] = useState([]);
   const [trashLoading, setTrashLoading] = useState(false);
   const [restoringId, setRestoringId] = useState(null);
+  const [deleteOpen, setDeleteOpen]   = useState(false);
+  const [deleting, setDeleting]       = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileSaveError, setProfileSaveError] = useState('');
 
   useEffect(() => {
     if (!trashOpen || !user?.uid) return;
     setTrashLoading(true);
-    const q = query(collection(db, 'logs'), where('uid', '==', user.uid), orderBy('timestamp', 'desc'), limit(200));
+    const cutoff = Date.now() - 30 * 86400000;
+    const q = query(
+      collection(db, 'logs'),
+      where('uid', '==', user.uid),
+      where('deletedAt', '>=', Timestamp.fromMillis(cutoff)),
+      orderBy('deletedAt', 'desc'),
+    );
     getDocs(q).then(snap => {
-      const now = Date.now();
-      const cutoff = now - 30 * 86400000;
       const items = snap.docs
         .map(d => ({ ...d.data(), docId: d.id }))
-        .filter(d => d.deletedAt)
-        .filter(d => {
-          const ms = d.deletedAt.seconds ? d.deletedAt.seconds * 1000 : 0;
-          return ms > cutoff;
-        })
-        .sort((a, b) => (b.deletedAt?.seconds || 0) - (a.deletedAt?.seconds || 0));
+        .filter(d => d.deletedAt);
       setTrashedLogs(items);
     }).finally(() => setTrashLoading(false));
   }, [trashOpen, user?.uid]);
+
+  /* Claude 커넥터 연결 상태. 연결된 적이 없으면 항목 자체를 숨긴다. */
+  const [mcpConnected, setMcpConnected] = useState(false);
+  const [mcpDisconnecting, setMcpDisconnecting] = useState(false);
+  useEffect(() => {
+    if (!user?.uid) return undefined;
+    let cancelled = false;
+    getMcpStatus()
+      .then(({ connected }) => { if (!cancelled) setMcpConnected(Boolean(connected)); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [user?.uid]);
+
+  async function handleMcpDisconnect() {
+    if (mcpDisconnecting) return;
+    setMcpDisconnecting(true);
+    try {
+      await disconnectMcp();
+      setMcpConnected(false);
+    } catch {
+      alert('연결을 해제하지 못했어요. 잠시 후 다시 시도해주세요.');
+    } finally {
+      setMcpDisconnecting(false);
+    }
+  }
 
   async function handleRestore(docId) {
     setRestoringId(docId);
@@ -161,30 +193,66 @@ export default function MyPageScreen({ user, profile, onProfileSave, onNavChange
     }
   }
 
-  function handleSave() {
-    onProfileSave(form);
-    setEditing(false);
+  async function handleSave() {
+    if (profileSaving) return;
+    setProfileSaving(true);
+    setProfileSaveError('');
+    try {
+      await onProfileSave(form);
+      setEditing(false);
+    } catch {
+      setProfileSaveError('서버에 저장되지 않았어요. 연결을 확인하고 다시 시도해주세요.');
+    } finally {
+      setProfileSaving(false);
+    }
   }
 
   async function handleLogout() {
+    try { await signOut(auth); } catch {}
     localStorage.removeItem('auth_user');
-    localStorage.removeItem('user_profile');
-    localStorage.removeItem('onboarding_completed');
-    localStorage.removeItem('ai_goals');
-    const keysToRemove = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (k?.startsWith('coach_msgs_') || k?.startsWith('coach_room_meta_')) keysToRemove.push(k);
-    }
-    keysToRemove.forEach(k => localStorage.removeItem(k));
-    if (user?.provider === 'google') {
-      try { await signOut(auth); } catch {}
-      try {
-        await terminate(db);
-        await clearIndexedDbPersistence(db);
-      } catch {}
-    }
+    clearUserStorage(user?.uid);
+    clearLegacyPersonalStorage();
+    try {
+      await terminate(db);
+      await clearIndexedDbPersistence(db);
+    } catch {}
     window.location.reload();
+  }
+
+  /* QA-08: 실패 원인(재로그인 필요 / 부분 삭제 / 일반 오류)을 구분해서 알린다. */
+  async function handleDeleteAccount() {
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      const token = await auth.currentUser.getIdToken(true);
+      const res = await fetch('/api/delete-account', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const payload = await res.json().catch(() => null);
+
+      if (res.ok) {
+        await handleLogout();
+        return;
+      }
+
+      setDeleting(false);
+      setDeleteOpen(false);
+      if (res.status === 401 && payload?.error === 'requires-recent-login') {
+        alert('보안을 위해 최근 로그인 기록이 필요합니다. 로그아웃 후 다시 로그인한 뒤 탈퇴를 진행해주세요.');
+        return;
+      }
+      if (payload?.partial) {
+        const d = payload.deleted || {};
+        alert(`일부 데이터만 삭제된 상태에서 중단됐습니다 (기록 ${d.logs || 0}건, 코치방 ${d.coachRooms || 0}개 삭제됨).\n계정은 아직 남아 있습니다. 다시 탈퇴를 눌러 남은 데이터까지 마저 삭제해주세요.`);
+        return;
+      }
+      alert('탈퇴 처리 중 오류가 발생했습니다. 데이터는 삭제되지 않았습니다. 다시 시도해주세요.');
+    } catch {
+      setDeleting(false);
+      setDeleteOpen(false);
+      alert('탈퇴 요청을 보내지 못했습니다. 네트워크 상태를 확인한 뒤 다시 시도해주세요.');
+    }
   }
 
   const fp = { editing, form, setForm };
@@ -193,6 +261,16 @@ export default function MyPageScreen({ user, profile, onProfileSave, onNavChange
     <div className="flex flex-col h-full bg-ui-1 relative">
       {activeModal === 'terms' && <LegalModal title="이용약관" content={TERMS_CONTENT} onClose={() => setActiveModal(null)} />}
       {activeModal === 'privacy' && <LegalModal title="개인정보처리방침" content={PRIVACY_CONTENT} onClose={() => setActiveModal(null)} />}
+      <ConfirmModal
+        isOpen={deleteOpen}
+        title="회원 탈퇴"
+        subtitle={"탈퇴 시 모든 기록과 계정 정보가 영구적으로 삭제되며 복구할 수 없습니다.\n정말 탈퇴하시겠습니까?"}
+        confirmText={deleting ? '처리 중...' : '탈퇴'}
+        cancelText="취소"
+        confirmVariant="danger"
+        onConfirm={handleDeleteAccount}
+        onCancel={() => setDeleteOpen(false)}
+      />
       {/* 헤더 프로필 카드 */}
       <div className="bg-white px-5 pt-14 pb-6">
         <div className="flex items-center gap-4">
@@ -208,7 +286,7 @@ export default function MyPageScreen({ user, profile, onProfileSave, onNavChange
           </div>
           <Pressable
             pressScale={0.93}
-            onClick={() => setEditing(!editing)}
+            onClick={() => { setEditing(!editing); setProfileSaveError(''); }}
             className={`px-3.5 py-1.5 rounded-full font-pretendard font-semibold text-caption-l tracking-[-0.325px] ${
               editing ? 'bg-brand text-white' : 'bg-ui-2 text-typo-normal'
             }`}
@@ -307,7 +385,7 @@ export default function MyPageScreen({ user, profile, onProfileSave, onNavChange
                     </div>
                     {form.activityLevel === id && (
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                        <path d="M20 6L9 17L4 12" stroke="#3476EE" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        <path d="M20 6L9 17L4 12" stroke="#7E7EFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                       </svg>
                     )}
                   </Pressable>
@@ -320,12 +398,18 @@ export default function MyPageScreen({ user, profile, onProfileSave, onNavChange
         {/* 저장 버튼 */}
         {editing && (
           <div className="px-5 mt-3">
+            {profileSaveError && (
+              <p className="mb-2 text-center font-pretendard text-caption-l text-[#e03e52]">
+                {profileSaveError}
+              </p>
+            )}
             <Pressable
               pressScale={0.97}
               onClick={handleSave}
-              className="w-full h-[52px] bg-brand rounded-2xl font-pretendard font-bold text-body-s text-white tracking-[-0.375px]"
+              disabled={profileSaving}
+              className="w-full h-[52px] bg-brand rounded-2xl font-pretendard font-bold text-body-s text-white tracking-[-0.375px] disabled:opacity-40"
             >
-              저장하기
+              {profileSaving ? '저장 중...' : '저장하기'}
             </Pressable>
           </div>
         )}
@@ -348,13 +432,31 @@ export default function MyPageScreen({ user, profile, onProfileSave, onNavChange
               </svg>
             </button>
           ))}
+          {mcpConnected && (
+            <button
+              onClick={handleMcpDisconnect}
+              disabled={mcpDisconnecting}
+              className="flex items-center justify-between w-full py-3.5 border-b border-ui-2 disabled:opacity-40"
+            >
+              <span className="font-pretendard font-medium text-body-s text-typo-normal tracking-[-0.35px]">Claude 연결됨 (기록 조회)</span>
+              <span className="font-pretendard font-semibold text-caption-l text-[#e03e52] tracking-[-0.3px]">{mcpDisconnecting ? '해제 중...' : '연결 해제'}</span>
+            </button>
+          )}
           <button
             onClick={handleLogout}
-            className="flex items-center justify-between w-full py-4"
+            className="flex items-center justify-between w-full py-4 border-b border-ui-2"
           >
             <span className="font-pretendard font-semibold text-body-s text-[#e03e52] tracking-[-0.35px]">로그아웃</span>
           </button>
+          <button
+            onClick={() => setDeleteOpen(true)}
+            className="flex items-center justify-between w-full py-4"
+          >
+            <span className="font-pretendard font-medium text-body-s text-typo-alternative tracking-[-0.35px]">회원 탈퇴</span>
+          </button>
         </div>
+
+        <WeightHistorySection uid={user?.uid} />
 
         {/* 휴지통 섹션 */}
         <div className="bg-white mt-3 px-5 mb-3">

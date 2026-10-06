@@ -2,14 +2,8 @@ import React, { useMemo, useRef, useState } from 'react';
 import { IcSpark } from '../icons/Icons';
 import { AutoTextarea } from './AutoTextarea';
 import { filterExercises } from '../../utils/exerciseData';
+import { parseVolumeFromBody } from '../../utils/utils';
 import Pressable from './Pressable';
-
-function parseMaxWeightFromText(text) {
-  if (!text) return null;
-  const matches = [...text.matchAll(/(\d+(?:\.\d+)?)\s*kg/gi)];
-  if (!matches.length) return null;
-  return Math.max(...matches.map(m => parseFloat(m[1])));
-}
 
 function parseTotalRepsFromText(text) {
   if (!text) return null;
@@ -74,15 +68,16 @@ function buildBodySegments(body) {
   return segments;
 }
 
-const WorkoutTaskItem = ({ title, body, onTitleChange, onBodyChange, onBodyBlur, isAI = false, prevMaxWeight, prevMaxReps, onAiClick, aiActive = false, isConverting, suppressSupersetBadge = false }) => {
-  const currentMax = useMemo(() => parseMaxWeightFromText(body), [body]);
-  const delta = prevMaxWeight != null && currentMax != null ? currentMax - prevMaxWeight : null;
+const WorkoutTaskItem = ({ title, body, onTitleChange, onBodyChange, onBodyBlur, isAI = false, prevVolume, prevMaxReps, onAiClick, aiActive = false, isConverting, suppressSupersetBadge = false }) => {
+  const currentVolume = useMemo(() => parseVolumeFromBody(body), [body]);
+  const delta = prevVolume != null && currentVolume > 0 ? Math.round(currentVolume - prevVolume) : null;
   const currentReps = useMemo(() => parseTotalRepsFromText(body), [body]);
   const repsDelta = prevMaxReps != null && currentReps != null ? currentReps - prevMaxReps : null;
   const [suggestions, setSuggestions] = useState([]);
   const [editingBody, setEditingBody] = useState(false);
   const [editingTitle, setEditingTitle] = useState(!title);
   const [activeTooltip, setActiveTooltip] = useState(null);
+  const blurTimer = useRef(null);
   const titleInputRef = useRef(null);
 
   const hasGroups = useMemo(() =>
@@ -247,10 +242,18 @@ const WorkoutTaskItem = ({ title, body, onTitleChange, onBodyChange, onBodyBlur,
           <AutoTextarea
             value={body}
             onChange={(e) => onBodyChange(e.target.value)}
-            onBlur={() => { setEditingBody(false); onBodyBlur?.(body); }}
-            onFocus={() => setEditingBody(true)}
+            onBlur={() => {
+              blurTimer.current = setTimeout(() => {
+                setEditingBody(false);
+                onBodyBlur?.(body);
+              }, 150);
+            }}
+            onFocus={() => {
+              clearTimeout(blurTimer.current);
+              setEditingBody(true);
+            }}
             placeholder="운동의 무게와 세트수 등 편하게 적어주세요"
-            className={`font-pretendard text-body-s font-medium tracking-[-0.35px] leading-5 bg-transparent border-none outline-none w-full p-0 placeholder:text-ui-4/70 ${isAI ? 'text-[#0066ff]' : 'text-typo-secondary'}`}
+            className={`font-pretendard text-body-s font-medium tracking-[-0.35px] leading-5 bg-transparent border-none outline-none w-full p-0 placeholder:text-ui-4/70 ${isAI ? 'text-[#7E7EFF]' : 'text-typo-secondary'}`}
           />
         ) : (
           <div className="flex flex-col gap-1 cursor-text" onClick={() => setEditingBody(true)}>

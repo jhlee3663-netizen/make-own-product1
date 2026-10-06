@@ -20,7 +20,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <button
               type="button"
               onClick={() => window.location.reload()}
-              className="h-11 w-full rounded-xl bg-[#3476EE] font-pretendard text-[14px] font-semibold text-white"
+              className="h-11 w-full rounded-xl bg-[#7E7EFF] font-pretendard text-[14px] font-semibold text-white"
             >
               새로고침
             </button>

@@ -1,15 +1,12 @@
 import React from 'react';
+import { getCurrentWeekDays } from '../../utils/utils';
 
-const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
+const DAY_LABELS = ['월', '화', '수', '목', '금', '토', '일'];
 
 export default function WeeklyCalorieChart({ dietLogs, profile }) {
   const targetKcal = Number(profile?.targetKcal || 0);
   const today = new Date();
-  const days = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(today);
-    d.setDate(today.getDate() - (6 - i));
-    return d;
-  });
+  const days = getCurrentWeekDays();
 
   const calories = days.map(day => {
     const ds = day.toDateString();
@@ -53,7 +50,7 @@ export default function WeeklyCalorieChart({ dietLogs, profile }) {
                 />
               </div>
               <p className={`font-pretendard text-[10px] leading-none ${isToday ? 'text-[#1a9e5c] font-bold' : 'text-typo-alternative'}`}>
-                {DAY_LABELS[day.getDay()]}
+                {DAY_LABELS[i]}
               </p>
             </div>
           );
