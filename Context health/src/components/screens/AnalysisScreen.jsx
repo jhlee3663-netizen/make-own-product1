@@ -39,7 +39,7 @@ function buildReportPrompt({ profile, trend, maintenance, strength, week }) {
 ${JSON.stringify(stats)}
 
 아래 JSON 객체 하나만 반환한다. 각 값은 한국어 해요체 한 문장, 60자 이내, 구체적인 숫자를 하나 이상 포함한다.
-{"headline":"이번 주를 한마디로 요약 (30자 이내)","good":"이번 주에 잘한 점","improve":"바꾸면 좋을 점","suggestion":"다음 주에 실천할 구체적인 행동 하나"}`;
+{"headline":"이번 주를 한마디로 요약. 쉼표 하나로 나뉜 짧은 두 구절, 전체 30자 이내 (예: 스쿼트는 신기록, 벤치프레스는 4주째 제자리예요.)","good":"이번 주에 잘한 점","improve":"바꾸면 좋을 점","suggestion":"다음 주에 실천할 구체적인 행동 하나"}`;
 }
 
 async function generateReport(input) {
