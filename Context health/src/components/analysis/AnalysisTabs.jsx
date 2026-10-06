@@ -708,6 +708,8 @@ function WeeklyBars({ weekly, metric }) {
 function ExerciseRow({ exercise, last }) {
   const { name, e1rm, top, delta, stalledWeeks, series } = exercise;
   const stalled = stalledWeeks > 0;
+  // 정체했거나 기록이 떨어진 종목은 붉은 선, 오른 종목만 보라 선
+  const declining = stalled || delta <= -0.5;
   return (
     <li className={`flex items-center gap-3 py-3 ${last ? '' : 'border-b border-[#f1f3f5]'}`}>
       <div className="min-w-0 flex-1">
@@ -716,7 +718,7 @@ function ExerciseRow({ exercise, last }) {
       </div>
       <div className="flex items-center gap-1 flex-none">
         {series.length > 1
-          ? <FadeLine d={flowPath(sparkPoints(series, 52, 22, 4), 6)} width={52} height={22} color={stalled ? STALL : POINT} />
+          ? <FadeLine d={flowPath(sparkPoints(series, 52, 22, 4), 6)} width={52} height={22} color={declining ? STALL : POINT} />
           : <span className="w-[52px]" />}
         <div className="w-20 flex flex-col items-end gap-0.5">
           <span className={`font-pretendard font-bold text-[14px] leading-5 text-[#171a1d] ${TRACKING}`}>{kg(e1rm)}</span>
