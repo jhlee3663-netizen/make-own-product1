@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { QuoteIcon } from '../icons/Icons';
 import Pressable from '../common/Pressable';
+import PressCard from '../common/PressCard';
 import Toast from '../common/Toast';
 import { formatCardioDuration } from '../../utils/utils';
 import { shareText, buildWorkoutShareText } from '../../utils/share';
@@ -66,9 +67,9 @@ const WorkoutCard = ({ data, perfGrade = 'success', onCardClick, onDelete, onCha
 
   return (
     <div onAnimationEnd={() => setEntering(false)} className={`px-4 py-2 ${isDeleting ? 'card-exit-wrapper' : entering ? 'card-enter' : ''}`}>
-      <div
+      <PressCard
         onClick={() => onCardClick(data)}
-        className="bg-white rounded-[16px] shadow-[0_0_25px_rgba(3,27,38,0.08)] cursor-pointer border border-transparent overflow-hidden transition-transform duration-150 active:scale-[0.985] [@media(hover:hover)]:hover:border-ui-3"
+        className="bg-white shadow-[0_0_25px_rgba(3,27,38,0.08)] cursor-pointer"
       >
         <div className="p-4 flex flex-col gap-4">
 
@@ -189,7 +190,7 @@ const WorkoutCard = ({ data, perfGrade = 'success', onCardClick, onDelete, onCha
             </div>
           </div>
         ) : null}
-      </div>
+      </PressCard>
       <Toast show={toast.show} message={toast.message} />
     </div>
   );
