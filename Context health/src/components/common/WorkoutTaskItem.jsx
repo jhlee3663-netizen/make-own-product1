@@ -24,7 +24,7 @@ function clamp(value, min, max) {
 }
 
 const BODY_SET_TYPES = [
-  { pattern: /\(드랍(?:\s*세트?)?\)|드랍\s*세트/i, label: '드랍', color: '#d47800', bg: 'rgba(212,120,0,0.09)' },
+  { pattern: /\(\s*드랍(?:\s*세트?)?\s*\)|드랍(?:\s*세트)?/i, label: '드랍', color: '#d47800', bg: 'rgba(212,120,0,0.09)' },
   { pattern: /\(슈퍼(?:\s*세트?)?\)|슈퍼\s*세트/i, label: '슈퍼세트', color: '#008dcf', bg: 'rgba(0,141,207,0.1)' },
   { pattern: /\(컴파운드(?:\s*세트?)?\)|컴파운드\s*세트/i, label: '컴파운드', color: '#1565c0', bg: 'rgba(21,101,192,0.08)' },
   { pattern: /\(강제\s*반복\)|강제\s*반복/i, label: '강제반복', color: '#c62828', bg: 'rgba(198,40,40,0.08)' },
@@ -78,6 +78,7 @@ const WorkoutTaskItem = ({ title, body, onTitleChange, onBodyChange, onBodyBlur,
   const [editingTitle, setEditingTitle] = useState(!title);
   const [activeTooltip, setActiveTooltip] = useState(null);
   const blurTimer = useRef(null);
+  const focusOnEdit = useRef(false); // 보기 화면을 눌러 편집으로 들어온 경우에만 자동으로 키보드를 띄운다
   const titleInputRef = useRef(null);
 
   const hasGroups = useMemo(() =>
@@ -241,9 +242,11 @@ const WorkoutTaskItem = ({ title, body, onTitleChange, onBodyChange, onBodyBlur,
         {editingBody || !hasGroups ? (
           <AutoTextarea
             value={body}
+            autoFocus={focusOnEdit.current}
             onChange={(e) => onBodyChange(e.target.value)}
             onBlur={() => {
               blurTimer.current = setTimeout(() => {
+                focusOnEdit.current = false;
                 setEditingBody(false);
                 onBodyBlur?.(body);
               }, 150);
@@ -256,7 +259,7 @@ const WorkoutTaskItem = ({ title, body, onTitleChange, onBodyChange, onBodyBlur,
             className={`font-pretendard text-body-s font-medium tracking-[-0.35px] leading-5 bg-transparent border-none outline-none w-full p-0 placeholder:text-ui-4/70 ${isAI ? 'text-[#7171FF]' : 'text-typo-secondary'}`}
           />
         ) : (
-          <div className="flex flex-col gap-1 cursor-text" onClick={() => setEditingBody(true)}>
+          <div className="flex flex-col gap-1 cursor-text" onClick={() => { focusOnEdit.current = true; setEditingBody(true); }}>
             {segments.map((seg, idx) => {
               if (seg.type === 'note') {
                 return (
@@ -272,7 +275,7 @@ const WorkoutTaskItem = ({ title, body, onTitleChange, onBodyChange, onBodyBlur,
                   : seg.types;
                 const hasBadges = visibleTypes.length > 0 || hasUnitChip;
                 return (
-                  <div key={idx} className={`rounded-[16px] px-2 ${hasBadges ? 'pt-4 pb-3' : 'py-3'} my-1 flex flex-col gap-4`} style={{ background: seg.types[0]?.bg ?? 'rgba(212,120,0,0.09)' }}>
+                  <div key={idx} className={`set-card-pop rounded-[16px] px-2 ${hasBadges ? 'pt-4 pb-3' : 'py-3'} my-1 flex flex-col gap-4`} style={{ background: seg.types[0]?.bg ?? 'rgba(212,120,0,0.09)' }}>
                     {seg.lines.map((line, li) => (
                       <div key={li} className="text-[14px] font-medium font-pretendard text-[#646d76] leading-[22px] tracking-[-0.35px]">{line}</div>
                     ))}

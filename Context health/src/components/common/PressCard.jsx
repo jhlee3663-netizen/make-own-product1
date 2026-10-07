@@ -5,6 +5,8 @@ import React, { useEffect, useRef } from 'react';
    누르는 순간 진한 색이 가운데에서 바깥으로 퍼진다. 처음 70%까지는 눈에 안 보일 만큼 빠르게,
    나머지 가장자리까지는 눈에 보이는 속도로 채워진다. 카드는 0.98배로 줄어든 채 누르는 동안 유지되고,
    손을 떼면 색이 빠지면서 원래 크기로 돌아온다.
+   한번 시작된 색은 아무리 짧게 눌러도 가장자리까지 다 찬 뒤에 빠진다 (중간에 멈추면 산만해 보인다).
+   터치로 스크롤할 때는 손이 닿기만 해서는 반응하지 않는다.
    카드 안쪽 영역에 불투명한 배경을 두면 퍼지는 색을 가리므로 두지 않는다. */
 
 export const PRESS = {
@@ -15,13 +17,16 @@ export const PRESS = {
   fastCover: 0.7,   // 순식간에 채워지는 범위 (카드 폭 대비)
   fastMs: 35,       // 그 범위까지 걸리는 시간
   fillMs: 200,      // 나머지 가장자리까지 채워지는 시간
-  pressMs: 110,     // 줄어드는 시간
+  pressMs: 90,      // 줄어드는 시간
   backMs: 300,      // 손을 뗐을 때 원래 크기로 돌아오는 시간
   releaseMs: 240,   // 손을 뗐을 때 색이 빠지는 시간
   cancelMs: 100,    // 스크롤로 판단됐을 때 색이 빠지는 시간
   longPressMs: 1000, // 이만큼 누르고 있으면 onLongPress 실행 (더보기 메뉴 등)
-  minHoldMs: 120,   // 톡 눌렀을 때도 효과가 보이는 최소 시간
-  moveCancelPx: 8,
+  touchDelayMs: 40,  // 터치는 이만큼 기다렸다가 반응한다. 그 전에 손이 움직이면 스크롤로 보고 아무 효과도 내지 않는다
+  tapRate: 1.6,      // 톡 누르고 뗐을 때 남은 색을 이 배속으로 끝까지 채운 뒤에 뺀다
+  cancelRate: 3,     // 누른 뒤 스크롤로 바뀌었을 때의 배속
+  settleMs: 40,      // 색이 다 찬 뒤 빠지기 전까지 잠깐 머무는 시간
+  moveCancelPx: 6,
 };
 
 // 색 띠: 가운데 80%는 꽉 찬 색, 양 끝 10%씩만 옅어진다. 띠의 끝이 곧 색이 번져 나가는 경계가 된다.
@@ -37,13 +42,14 @@ export default function PressCard({ children, className = '', radius = 16, inset
   const edge = typeof inset === 'number' ? { top: inset, right: inset, bottom: inset, left: inset } : inset;
   const rootRef = useRef(null);
   const overlayRef = useRef(null);
-  const state = useRef({ releaseTimer: null, longTimer: null, startX: 0, startY: 0, down: false, activeAt: 0, longFired: false });
+  const state = useRef({ releaseTimer: null, longTimer: null, pendingTimer: null, pending: false, fill: null, startX: 0, startY: 0, down: false, activeAt: 0, longFired: false });
   const longPressRef = useRef(onLongPress);
   longPressRef.current = onLongPress;
 
   useEffect(() => () => {
     clearTimeout(state.current.longTimer);
     clearTimeout(state.current.releaseTimer);
+    clearTimeout(state.current.pendingTimer);
   }, []);
 
   function activate() {
@@ -54,7 +60,7 @@ export default function PressCard({ children, className = '', radius = 16, inset
     if (overlay?.animate) {
       overlay.getAnimations().forEach(animation => animation.cancel());
       const total = PRESS.fastMs + PRESS.fillMs;
-      overlay.animate(
+      s.fill = overlay.animate(
         [
           { transform: 'scaleX(0)', opacity: 1, easing: 'linear' },
           { transform: `scaleX(${PRESS.fastCover})`, opacity: 1, offset: PRESS.fastMs / total, easing: 'cubic-bezier(0.3, 0.4, 0.4, 1)' },
@@ -94,9 +100,14 @@ export default function PressCard({ children, className = '', radius = 16, inset
     clearTimeout(s.longTimer);
     if (!s.activeAt) return;
     clearTimeout(s.releaseTimer);
-    if (cancelled) { fadeOut(PRESS.cancelMs); return; }
-    const wait = Math.max(0, PRESS.minHoldMs - (performance.now() - s.activeAt));
-    s.releaseTimer = setTimeout(() => fadeOut(PRESS.releaseMs), wait);
+    // 색이 아직 퍼지는 중이면 속도를 올려 가장자리까지 채운 다음에 뺀다
+    let wait = 0;
+    if (s.fill && s.fill.playState === 'running') {
+      const rate = cancelled ? PRESS.cancelRate : PRESS.tapRate;
+      s.fill.playbackRate = rate;
+      wait = Math.max(0, PRESS.fastMs + PRESS.fillMs - Number(s.fill.currentTime || 0)) / rate;
+    }
+    s.releaseTimer = setTimeout(() => fadeOut(cancelled ? PRESS.cancelMs : PRESS.releaseMs), wait + (cancelled ? 0 : PRESS.settleMs));
   }
 
   function handlePointerDown(event) {
@@ -109,7 +120,15 @@ export default function PressCard({ children, className = '', radius = 16, inset
     s.longFired = false;
     s.startX = event.clientX;
     s.startY = event.clientY;
-    activate(); // 손이 닿는 즉시 반응한다. 스크롤이면 handlePointerMove에서 바로 취소한다.
+    clearTimeout(s.pendingTimer);
+    if (event.pointerType === 'touch') {
+      // 스크롤하려고 닿은 손가락일 수 있으니 아주 잠깐 지켜본 뒤 반응한다
+      s.pending = true;
+      s.pendingTimer = setTimeout(() => { s.pending = false; if (s.down) activate(); }, PRESS.touchDelayMs);
+    } else {
+      s.pending = false;
+      activate();
+    }
     clearTimeout(s.longTimer);
     if (longPressRef.current) {
       s.longTimer = setTimeout(() => {
@@ -126,14 +145,26 @@ export default function PressCard({ children, className = '', radius = 16, inset
     if (!s.down) return;
     if (Math.hypot(event.clientX - s.startX, event.clientY - s.startY) > PRESS.moveCancelPx) {
       s.down = false;
+      if (cancelPending()) return; // 아직 반응 전이면 아무 효과 없이 스크롤로 넘긴다
       release(true);
     }
+  }
+
+  function cancelPending() {
+    const s = state.current;
+    if (!s.pending) return false;
+    s.pending = false;
+    clearTimeout(s.pendingTimer);
+    clearTimeout(s.longTimer);
+    return true;
   }
 
   function handlePointerUp() {
     const s = state.current;
     if (!s.down) return;
     s.down = false;
+    // 기다리는 사이에 뗀 짧은 터치: 지금 바로 효과를 시작해 끝까지 보여준다
+    if (s.pending) { s.pending = false; clearTimeout(s.pendingTimer); activate(); }
     release();
   }
 
@@ -150,8 +181,10 @@ export default function PressCard({ children, className = '', radius = 16, inset
 
   function handlePointerCancel() {
     const s = state.current;
-    if (!s.down && !s.activeAt) return;
+    // 손을 뗀 뒤에 따라오는 leave 이벤트로 색이 중간에 끊기지 않게, 누르는 중일 때만 취소한다
+    if (!s.down) return;
     s.down = false;
+    if (cancelPending()) return;
     release(true);
   }
 

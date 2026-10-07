@@ -586,6 +586,11 @@ function App() {
     <div className="min-h-dvh bg-[#f1f3f5] flex justify-center items-start sm:items-center">
       <div className="w-full max-w-[430px] h-dvh bg-white relative overflow-hidden shadow-2xl">
 
+        {/* ── Claude 커넥터 연결 동의 ── */}
+        {user && mcpAuthorizeRequest && (
+          <McpAuthorizeScreen user={user} request={mcpAuthorizeRequest} onClose={() => setMcpAuthorizeRequest(null)} />
+        )}
+
         {/* ── 온보딩 ── */}
         {user && !onboardingDone && (
           <div className="absolute inset-0 z-40">
@@ -599,6 +604,7 @@ function App() {
             {/* 홈 탭 */}
             <div className={tabClass('home')} style={tabStyle('home')} inert={tab !== 'home' ? '' : undefined} aria-hidden={tab !== 'home'}>
               <HomeScreen
+                active={tab === 'home'}
                 user={user}
                 profile={profile}
                 aiGoals={aiGoals}

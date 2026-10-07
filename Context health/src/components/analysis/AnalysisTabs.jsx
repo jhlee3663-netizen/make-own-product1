@@ -1,4 +1,5 @@
-import React, { useId, useState } from 'react';
+import React, { useEffect, useId, useState } from 'react';
+import MainTab from '../common/MainTab';
 import { IcBack, IcMore } from '../icons/Icons';
 import Pressable from '../common/Pressable';
 import PressCard from '../common/PressCard';
@@ -126,7 +127,7 @@ function Badge({ tone = 'grey', children }) {
 function HaloDot({ size = 16, style, className = '' }) {
   const inner = Math.round(size * 0.625);
   return (
-    <span className={`absolute rounded-full pointer-events-none ${className}`} style={{ width: size, height: size, background: 'rgba(119,119,255,0.2)', ...style }}>
+    <span className={`chart-dot absolute rounded-full pointer-events-none ${className}`} style={{ width: size, height: size, background: 'rgba(119,119,255,0.2)', ...style }}>
       <span className="absolute rounded-full" style={{ width: inner, height: inner, left: (size - inner) / 2, top: (size - inner) / 2, background: DOT }} />
     </span>
   );
@@ -237,7 +238,7 @@ function FadeLine({ d, width, height, strokeWidth = 1.8, color = POINT, classNam
           <stop offset="1" stopColor={color} />
         </linearGradient>
       </defs>
-      <path d={d} fill="none" stroke={`url(#${id})`} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+      <path d={d} pathLength="1" className="chart-draw" fill="none" stroke={`url(#${id})`} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -381,7 +382,7 @@ function TileProgress({ ratio }) {
   const fill = Math.max(8, Math.min(120, 120 * ratio));
   return (
     <span className="relative block w-[120px] h-1.5 rounded-[3px] bg-[#f1f3f5]">
-      <span className="absolute left-0 top-0 h-1.5 rounded-[3px]" style={{ width: fill, background: FADE_GRADIENT }} />
+      <span className="chart-grow-x absolute left-0 top-0 h-1.5 rounded-[3px]" style={{ width: fill, background: FADE_GRADIENT }} />
       <HaloDot size={16} style={{ left: fill - 10, top: -5 }} />
     </span>
   );
@@ -392,7 +393,7 @@ function TileBars({ values }) {
   return (
     <span className="flex items-end gap-1 h-[30px]">
       {values.map((v, i) => (
-        <span key={i} className="w-[5px] rounded-[1px]" style={{ height: Math.max(2, (v / max) * 23), background: i === values.length - 1 ? POINT : 'rgba(113,113,255,0.2)' }} />
+        <span key={i} className="chart-bar w-[5px] rounded-[1px]" style={{ '--d': `${150 + i * 40}ms`, height: Math.max(2, (v / max) * 23), background: i === values.length - 1 ? POINT : 'rgba(113,113,255,0.2)' }} />
       ))}
     </span>
   );
@@ -473,7 +474,7 @@ function WeightChart({ series }) {
 
   return (
     <div className="relative w-full touch-pan-y" style={{ aspectRatio: `${W} / ${H}` }} onPointerDown={pick} onPointerMove={e => e.buttons && pick(e)} role="img" aria-label="공복 체중 추이">
-      <svg viewBox={`0 0 ${W} ${H}`} className="absolute inset-0 w-full h-full" style={{ overflow: 'visible' }}>
+      <svg viewBox={`0 0 ${W} ${H}`} className="chart-wipe absolute inset-0 w-full h-full" style={{ overflow: 'visible' }}>
         <defs>
           <linearGradient id="weight-line" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2={W} y2="0">
             <stop offset="0" stopColor={POINT} stopOpacity="0.2" />
@@ -575,7 +576,7 @@ function IntakeChart({ days, from, to, maintenance, weightSeries }) {
 
   return (
     <div className="relative w-full touch-pan-y" style={{ aspectRatio: `${W} / ${H}` }} onPointerDown={pick} onPointerMove={e => e.buttons && pick(e)} role="img" aria-label="하루 섭취 칼로리와 체중">
-      <svg viewBox={`0 0 ${W} ${H}`} className="absolute inset-0 w-full h-full" style={{ overflow: 'visible' }}>
+      <svg viewBox={`0 0 ${W} ${H}`} className="chart-wipe absolute inset-0 w-full h-full" style={{ overflow: 'visible' }}>
         <defs>
           <linearGradient id="intake-fill" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" stopColor={INTAKE} />
@@ -639,7 +640,7 @@ function ProteinRange({ diet }) {
         </div>
         <div className="relative h-[34px]">
           <div className="absolute left-0 right-0 top-1.5 h-2 rounded bg-[#f1f3f5]" />
-          <div className="absolute top-1.5 h-2 rounded" style={{ left: pct(range.min), width: `calc(${pct(range.max)} - ${pct(range.min)})`, background: 'rgba(113,113,255,0.2)' }} />
+          <div className="chart-grow-x absolute top-1.5 h-2 rounded" style={{ left: pct(range.min), width: `calc(${pct(range.max)} - ${pct(range.min)})`, background: 'rgba(113,113,255,0.2)' }} />
           <HaloDot size={16} style={{ left: `calc(${pct(avgProtein)} - 8px)`, top: 2 }} />
           {[range.min, range.max].map(v => (
             <span key={v} className={`absolute top-[18px] -translate-x-1/2 font-pretendard text-[11px] leading-4 text-[#868e96] ${TRACKING}`} style={{ left: pct(v) }}>{v}g</span>
@@ -718,7 +719,7 @@ function WeeklyBars({ weekly, metric }) {
           const on = i === index;
           return (
             <button key={week.label} onClick={() => setSelected(i)} aria-label={`${week.label} 주 ${config.format(week[metric])}`} className="flex-1 flex flex-col items-center justify-end gap-1.5 h-full">
-              <span className="w-full rounded-t-[8px]" style={{ height: week[metric] > 0 ? Math.max(8, (week[metric] / max) * 88) : 2, background: on ? POINT : 'rgba(113,113,255,0.2)' }} />
+              <span className="chart-bar w-full rounded-t-[8px]" style={{ '--d': `${150 + i * 45}ms`, height: week[metric] > 0 ? Math.max(8, (week[metric] / max) * 88) : 2, background: on ? POINT : 'rgba(113,113,255,0.2)' }} />
               <span className={`font-pretendard text-[10px] leading-3 ${on ? 'font-bold' : ''} ${TRACKING}`} style={{ color: on ? POINT : '#868e96' }}>{week.label}</span>
             </button>
           );
@@ -817,7 +818,7 @@ function WorkoutTab({ strength, weekly, week, weeks, setWeeks, onRecord }) {
               <div key={p.part} className="flex items-center gap-3">
                 <span className={`w-11 flex-none truncate font-pretendard text-[13px] leading-5 text-[#646d76] ${TRACKING}`}>{p.part}</span>
                 <div className="flex-1 h-2 rounded bg-[#f1f3f5] overflow-hidden">
-                  <div className="h-full rounded" style={{ width: `${(p.share / topShare) * 94.7}%`, background: FADE_GRADIENT }} />
+                  <div className="chart-grow-x h-full rounded" style={{ width: `${(p.share / topShare) * 94.7}%`, background: FADE_GRADIENT }} />
                 </div>
                 <span className={`w-9 flex-none text-right font-pretendard font-semibold text-[13px] leading-5 text-[#171a1d] ${TRACKING}`}>{Math.round(p.share * 100)}%</span>
               </div>
@@ -904,8 +905,11 @@ function MoreMenu({ view, setView, actions }) {
 }
 
 /* ── 화면 ── */
-export default function AnalysisTabsView({ status = 'ready', model, report, reportStatus, onAskCoach, onRecord, onRetry, onRetryReport, onBack, onRegenerateReport, onEditGoal, initialTab = 'summary' }) {
+export default function AnalysisTabsView({ status = 'ready', model, report, reportStatus, onAskCoach, onRecord, onRetry, onRetryReport, onBack, onRegenerateReport, onEditGoal, active = true, initialTab = 'summary' }) {
   const [tab, setTab] = useState(initialTab);
+  // 분석 탭에 들어올 때마다 카드와 그래프가 처음부터 다시 나타나게 한다
+  const [enter, setEnter] = useState(0);
+  useEffect(() => { if (active) setEnter(count => count + 1); }, [active]);
   const [menu, setMenu] = useState(null); // null | 'menu' | 'guide'
   const [weeks, setWeeks] = useState(8);
   const ready = status === 'ready' && model;
@@ -922,26 +926,18 @@ export default function AnalysisTabsView({ status = 'ready', model, report, repo
             <IcMore />
           </Pressable>
         </div>
-        <div role="tablist" className="flex">
-          {TABS.map(item => {
-            const on = tab === item.id;
-            return (
-              <button
-                key={item.id}
-                role="tab"
-                aria-selected={on}
-                onClick={() => setTab(item.id)}
-                className={`flex-1 py-2 border-b-2 font-pretendard text-[16px] leading-6 ${on ? 'font-bold' : 'font-medium text-[#868e96] border-white'} ${TRACKING}`}
-                style={on ? { color: POINT, borderColor: POINT } : undefined}
-              >
-                {item.label}
-              </button>
-            );
-          })}
-        </div>
+        <MainTab
+          tabs={TABS}
+          activeId={tab}
+          onChange={setTab}
+          labelClass={`font-pretendard text-[16px] leading-6 ${TRACKING}`}
+          activeClass="font-bold text-[#7171FF]"
+          inactiveClass="font-medium text-[#868e96]"
+          barClass="bg-[#7171FF]"
+        />
       </header>
       <main className="flex-1 overflow-y-auto">
-        <div className="flex flex-col gap-3 px-4 pt-4 pb-[120px]">
+        <div key={`${tab}-${enter}`} className="stagger-in flex flex-col gap-3 px-4 pt-4 pb-[120px]">
           {status === 'loading' && (
             <div className="flex justify-center py-20">
               <div className="w-8 h-8 border-2 rounded-full animate-spin" style={{ borderColor: 'rgba(113,113,255,0.2)', borderTopColor: POINT }} />

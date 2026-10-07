@@ -88,8 +88,19 @@ function calcStreak(workoutLogs) {
   return streak;
 }
 
-function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, onCardClick, onDietCardClick, onOpenCoachRoom, onNavChange }) {
+function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, onCardClick, onDietCardClick, onOpenCoachRoom, onNavChange, active = true }) {
   const [mainTab, setMainTab] = useState("workout");
+  // 홈으로 돌아올 때마다 카드가 한 줄씩 다시 쌓여 올라오게 한다 (목록을 새로 그리지 않고 모션만 다시 재생)
+  const listRef = useRef(null);
+  const enteredRef = useRef(false);
+  useEffect(() => {
+    if (!enteredRef.current) { enteredRef.current = true; return; }
+    const el = listRef.current;
+    if (!active || !el) return;
+    el.classList.remove('stagger-in');
+    void el.offsetWidth;
+    el.classList.add('stagger-in');
+  }, [active]);
   const [deletingId, setDeletingId] = useState(null);
   const [routineOpen, setRoutineOpen] = useState(false);
   const [pullDistance, setPullDistance] = useState(0);
@@ -614,6 +625,7 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
           </div>
         )}
 
+        <div ref={listRef} className="stagger-in">
         {mainTab === "workout" ? (
           visibleWorkoutLogs.length === 0 ? (
             <div className="flex flex-col items-center justify-center px-8 pt-16 gap-3">
@@ -674,6 +686,7 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
             </>
           )
         )}
+        </div>
         {(hasOlderLogs || olderLogsError) && (
           <div className="px-4 pt-3 pb-2 text-center">
             {olderLogsError && (

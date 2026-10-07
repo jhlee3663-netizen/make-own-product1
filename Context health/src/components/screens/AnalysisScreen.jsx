@@ -159,6 +159,7 @@ export default function AnalysisScreen({ user, profile, active, onAskCoach, onRe
 
   return (
     <AnalysisTabsView
+      active={active}
       status={status}
       model={result}
       report={report}

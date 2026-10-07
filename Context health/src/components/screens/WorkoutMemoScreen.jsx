@@ -42,7 +42,7 @@ const HIGHLIGHT_COLORS = [
 ];
 
 const SUMMARY_SET_TYPES = [
-  { pattern: /\(드랍(?:\s*세트?)?\)|드랍\s*세트/gi, label: '드랍', color: '#d47800' },
+  { pattern: /\(\s*드랍(?:\s*세트?)?\s*\)|드랍(?:\s*세트)?/gi, label: '드랍', color: '#d47800' },
   { pattern: /\(슈퍼(?:\s*세트?)?\)|슈퍼\s*세트/gi, label: '슈퍼세트', color: '#7b1fa2' },
   { pattern: /\(컴파운드(?:\s*세트?)?\)|컴파운드\s*세트/gi, label: '컴파운드', color: '#1565c0' },
   { pattern: /\(강제\s*반복\)|강제\s*반복/gi, label: '강제반복', color: '#c62828' },

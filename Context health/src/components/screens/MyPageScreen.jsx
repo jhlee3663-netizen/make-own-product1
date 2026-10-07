@@ -163,6 +163,7 @@ export default function MyPageScreen({ user, profile, onProfileSave, onNavChange
   const [mcpDisconnecting, setMcpDisconnecting] = useState(false);
   const [mcpAllowed, setMcpAllowed] = useState(false);       // 이 계정이 Claude 연결을 쓸 수 있는지
   const [mcpGuideOpen, setMcpGuideOpen] = useState(false);
+  const [mcpConfirmOpen, setMcpConfirmOpen] = useState(false);
   useEffect(() => {
     if (!user?.uid) return undefined;
     let cancelled = false;
@@ -178,6 +179,7 @@ export default function MyPageScreen({ user, profile, onProfileSave, onNavChange
 
   async function handleMcpDisconnect() {
     if (mcpDisconnecting) return;
+    setMcpConfirmOpen(false);
     setMcpDisconnecting(true);
     try {
       await disconnectMcp();
@@ -307,6 +309,16 @@ export default function MyPageScreen({ user, profile, onProfileSave, onNavChange
         confirmVariant="danger"
         onConfirm={handleDeleteAccount}
         onCancel={() => setDeleteOpen(false)}
+      />
+      <ConfirmModal
+        isOpen={mcpConfirmOpen}
+        title="Claude 연결 해제"
+        subtitle={"연결을 정말 해제하시겠습니까?\n다시 쓰려면 Claude에서 새로 연결해야 해요."}
+        confirmText="해제"
+        cancelText="취소"
+        confirmVariant="danger"
+        onConfirm={handleMcpDisconnect}
+        onCancel={() => setMcpConfirmOpen(false)}
       />
       {/* 헤더 프로필 카드 */}
       <div className="bg-white px-5 pt-14 pb-6">
@@ -471,7 +483,7 @@ export default function MyPageScreen({ user, profile, onProfileSave, onNavChange
           ))}
           {mcpConnected && (
             <button
-              onClick={handleMcpDisconnect}
+              onClick={() => setMcpConfirmOpen(true)}
               disabled={mcpDisconnecting}
               className="flex items-center justify-between w-full py-3.5 border-b border-ui-2 disabled:opacity-40"
             >
