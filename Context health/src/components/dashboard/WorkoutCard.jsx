@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { QuoteIcon } from '../icons/Icons';
 import Pressable from '../common/Pressable';
 import PressCard from '../common/PressCard';
+import useDismiss from '../../lib/useDismiss';
 import Toast from '../common/Toast';
 import { formatCardioDuration } from '../../utils/utils';
 import { shareText, buildWorkoutShareText } from '../../utils/share';
@@ -11,6 +12,8 @@ const enteredCards = new Set();
 const WorkoutCard = ({ data, perfGrade = 'success', onCardClick, onDelete, onChangeDate, isDeleting, onRetryAI }) => {
   if (!data) return null;
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+  useDismiss(menuOpen, () => setMenuOpen(false), menuRef);
   const [toast, setToast] = useState({ show: false, message: '' });
   const [entering, setEntering] = useState(() => {
     const key = data.docId || data.id;
@@ -84,7 +87,7 @@ const WorkoutCard = ({ data, perfGrade = 'success', onCardClick, onDelete, onCha
                   {perfGrade === 'meh' ? '아쉬워요 💭' : '성공 🔥'}
                 </p>
               </div>
-              <div className="relative">
+              <div className="relative" ref={menuRef}>
                 <Pressable
                   pressScale={0.85}
                   onClick={(e) => {
@@ -101,7 +104,6 @@ const WorkoutCard = ({ data, perfGrade = 'success', onCardClick, onDelete, onCha
                 </Pressable>
                 {menuOpen && (
                   <>
-                    <div onClick={(e) => { e.stopPropagation(); setMenuOpen(false); }} className="fixed inset-0 z-[98]" />
                     <div className="absolute top-8 right-0 bg-white rounded-[12px] shadow-lg py-1 z-[99] min-w-[120px]" onClick={e => e.stopPropagation()}>
                       <button
                         onClick={(e) => {

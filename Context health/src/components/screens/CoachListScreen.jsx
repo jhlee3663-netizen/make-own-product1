@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import Pressable from '../common/Pressable';
+import PressCard from '../common/PressCard';
 import { createDynamicCoachRoomMeta } from '../../utils/coachRooms';
 
 export const COACH_ROOMS = [
@@ -304,12 +305,13 @@ export default function CoachListScreen({ rooms, roomMeta, onOpenRoom, onStartNe
                 const msgs = rooms[r.id] || [];
                 const lastMsg = [...msgs].reverse().find(m => m.text);
                 return (
-                  <Pressable
+                  <PressCard
                     key={r.id}
-                    pressScale={0.98}
+                    radius={20}
                     onClick={() => onOpenRoom(r.id)}
-                    className="w-full bg-[#f8f9fc] rounded-[20px] p-4 flex items-center gap-4 text-left"
+                    className="w-full bg-[#f8f9fc] cursor-pointer"
                   >
+                    <div className="p-3 flex items-center gap-4 text-left">
                     <div className="w-14 h-14 rounded-full flex items-center justify-center text-[28px] shadow-sm flex-shrink-0" style={{ background: r.bg }}>
                       {r.emoji}
                     </div>
@@ -319,7 +321,8 @@ export default function CoachListScreen({ rooms, roomMeta, onOpenRoom, onStartNe
                         {sanitizePreviewText(lastMsg?.text).split('\n')[0].slice(0, 24) || '최근 대화 없음'}...
                       </p>
                     </div>
-                  </Pressable>
+                    </div>
+                  </PressCard>
                 );
               })}
             </div>

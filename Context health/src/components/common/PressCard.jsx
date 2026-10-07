@@ -19,7 +19,7 @@ export const PRESS = {
   backMs: 300,      // 손을 뗐을 때 원래 크기로 돌아오는 시간
   releaseMs: 240,   // 손을 뗐을 때 색이 빠지는 시간
   cancelMs: 100,    // 스크롤로 판단됐을 때 색이 빠지는 시간
-  longPressMs: 1500, // 이만큼 누르고 있으면 onLongPress 실행 (더보기 메뉴 등)
+  longPressMs: 1000, // 이만큼 누르고 있으면 onLongPress 실행 (더보기 메뉴 등)
   minHoldMs: 120,   // 톡 눌렀을 때도 효과가 보이는 최소 시간
   moveCancelPx: 8,
 };
@@ -30,7 +30,11 @@ const SOLID = 0.8;
 const FULL_SCALE = 1 / SOLID + 0.02;
 const BAND = `linear-gradient(90deg, transparent 0%, ${PRESS.color} ${(0.5 - SOLID / 2) * 100}%, ${PRESS.color} ${(0.5 + SOLID / 2) * 100}%, transparent 100%)`;
 
-export default function PressCard({ children, className = '', radius = 16, onClick, onLongPress, ...rest }) {
+/* inset: 카드 가장자리와 눌리는 영역 사이 간격 (숫자 또는 { top, right, bottom, left })
+   innerRadius: 눌리는 영역의 모서리 (숫자 또는 CSS 값)
+   pad: true면 내용도 inset만큼 안으로 넣는다. false면 내용 위치는 그대로 두고 눌리는 영역만 안쪽에 그린다. */
+export default function PressCard({ children, className = '', radius = 16, inset = PRESS.inset, innerRadius = PRESS.innerRadius, pad = true, onClick, onLongPress, ...rest }) {
+  const edge = typeof inset === 'number' ? { top: inset, right: inset, bottom: inset, left: inset } : inset;
   const rootRef = useRef(null);
   const overlayRef = useRef(null);
   const state = useRef({ releaseTimer: null, longTimer: null, startX: 0, startY: 0, down: false, activeAt: 0, longFired: false });
@@ -68,11 +72,11 @@ export default function PressCard({ children, className = '', radius = 16, onCli
     if (!root?.animate) return;
     const from = getComputedStyle(root).transform;
     root.getAnimations().forEach(animation => animation.cancel());
-    const animation = root.animate(
+    root.animate(
       [{ transform: from === 'none' ? 'scale(1)' : from }, { transform: `scale(${target})` }],
-      { duration, easing, fill: 'forwards' },
+      // 원래 크기로 돌아갈 때는 끝난 뒤 움직임 정보를 남기지 않는다 (남으면 카드 안의 fixed 요소가 카드 기준이 된다)
+      { duration, easing, fill: target === 1 ? 'none' : 'forwards' },
     );
-    if (target === 1) animation.onfinish = () => animation.cancel();
   }
 
   function fadeOut(duration) {
@@ -134,7 +138,13 @@ export default function PressCard({ children, className = '', radius = 16, onCli
   }
 
   function handleClick(event) {
-    if (state.current.longFired) { state.current.longFired = false; return; }
+    if (state.current.longFired) { state.current.longFired = false; event.stopPropagation(); return; }
+    onClick?.(event);
+  }
+
+  function handleKeyDown(event) {
+    if (event.target !== rootRef.current || (event.key !== 'Enter' && event.key !== ' ')) return;
+    event.preventDefault();
     onClick?.(event);
   }
 
@@ -148,6 +158,9 @@ export default function PressCard({ children, className = '', radius = 16, onCli
   return (
     <div
       ref={rootRef}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? handleKeyDown : undefined}
       onClick={handleClick}
       onContextMenu={event => event.preventDefault()}
       onPointerDown={handlePointerDown}
@@ -160,10 +173,10 @@ export default function PressCard({ children, className = '', radius = 16, onCli
       style={{ borderRadius: radius, WebkitTapHighlightColor: 'transparent', WebkitTouchCallout: 'none', WebkitUserSelect: 'none' }}
       {...rest}
     >
-      <span aria-hidden="true" className="absolute overflow-hidden pointer-events-none" style={{ inset: PRESS.inset, borderRadius: PRESS.innerRadius }}>
+      <span aria-hidden="true" className="absolute overflow-hidden pointer-events-none" style={{ ...edge, borderRadius: innerRadius }}>
         <span ref={overlayRef} className="absolute inset-0 will-change-transform" style={{ background: BAND, opacity: 0, transform: 'scaleX(0)' }} />
       </span>
-      <div className="relative" style={{ padding: PRESS.inset }}>{children}</div>
+      <div className="relative" style={pad ? { padding: `${edge.top}px ${edge.right}px ${edge.bottom}px ${edge.left}px` } : undefined}>{children}</div>
     </div>
   );
 }

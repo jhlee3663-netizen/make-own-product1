@@ -29,6 +29,7 @@ import MainTab from '../common/MainTab';
 import Toast from '../common/Toast';
 import ConfirmModal from '../common/ConfirmModal';
 import Pressable from '../common/Pressable';
+import PressCard from '../common/PressCard';
 import StatusSheet from '../common/StatusSheet';
 import { formatCardioDuration, getWorkoutPerfGrade } from '../../utils/utils';
 import { BODY_PARTS } from '../../utils/exerciseData';
@@ -587,12 +588,15 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
             <p className="px-4 pb-3 font-pretendard text-body-s text-typo-secondary tracking-[-0.35px] overflow-hidden whitespace-nowrap text-ellipsis">
               {coachingInsight.text}
             </p>
-            <button
+            <PressCard
               onClick={() => { dismissInsight(); onOpenCoachRoom?.(coachingInsight.roomType || 'powerbuilding'); }}
-              className="w-full px-4 py-3 border-t border-ui-2 text-left font-pretendard text-caption-l font-semibold text-brand tracking-[-0.325px] transition-all duration-100 active:opacity-50 active:bg-ui-1"
+              radius={0}
+              innerRadius="8px 8px 12px 12px"
+              pad={false}
+              className="border-t border-ui-2 cursor-pointer"
             >
-              이어서 대화하기 →
-            </button>
+              <span className="block px-4 py-3 font-pretendard text-caption-l font-semibold text-brand tracking-[-0.325px]">이어서 대화하기 →</span>
+            </PressCard>
           </div>
         )}
 
@@ -665,9 +669,7 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
               <DailyNutritionCard dietLogs={dietLogs} profile={profile} />
               <WeeklyCalorieChart dietLogs={dietLogs} profile={profile} />
               {visibleDietLogs.map((d) => (
-                <div onClick={() => onDietCardClick(d)} key={d.docId}>
-                  <DietCard data={d} isDeleting={d.docId === deletingId} targetKcal={profile?.targetKcal} profile={profile} onDelete={handleDeleteRequest} onChangeDate={handleDateChangeRequest} />
-                </div>
+                <DietCard key={d.docId} data={d} onCardClick={onDietCardClick} isDeleting={d.docId === deletingId} targetKcal={profile?.targetKcal} profile={profile} onDelete={handleDeleteRequest} onChangeDate={handleDateChangeRequest} />
               ))}
             </>
           )

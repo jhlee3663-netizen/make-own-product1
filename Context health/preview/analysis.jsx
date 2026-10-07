@@ -94,3 +94,13 @@ if (params.has('menu')) {
 if (params.has('guide')) {
   setTimeout(() => [...document.querySelectorAll('button')].find(b => b.textContent.includes('숫자 계산 기준'))?.click(), 700);
 }
+/* ?press=N : N번째 눌림 영역(0부터)을 누른 상태로 멈춘다 (스크린샷용) */
+if (params.has('press')) {
+  setTimeout(() => {
+    const el = [...document.querySelectorAll('[role=button].select-none')][Number(params.get('press'))];
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'mouse', button: 0, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 }));
+    document.getAnimations().forEach(animation => { animation.pause(); animation.currentTime = 400; });
+  }, 500);
+}

@@ -1,6 +1,7 @@
 import React, { useId, useState } from 'react';
 import { IcBack, IcMore } from '../icons/Icons';
 import Pressable from '../common/Pressable';
+import PressCard from '../common/PressCard';
 
 /* 분석 탭: 요약 | 체중 | 식단 | 운동.
    수치·색·그라데이션은 Figma 시안(📚 스터디 1135:6792 / 6882 / 6982 / 7103 / 7209) 그대로다.
@@ -331,21 +332,26 @@ function AiReport({ status, report, onAskCoach, onRetry }) {
 
       {status === 'ready' && (
         <div className="flex border-t border-[#f1f3f5]">
-          <button onClick={() => setOpen(o => !o)} aria-expanded={open} className={`flex-1 py-3 border-r border-[#f1f3f5] font-pretendard font-semibold text-[13px] leading-5 text-[#646d76] active:bg-[#f8f9fa] ${TRACKING}`}>
-            {open ? '접기' : '자세히 보기'}
-          </button>
-          <button onClick={onAskCoach} className={`flex-1 py-3 font-pretendard font-semibold text-[13px] leading-5 active:bg-[#f8f9fa] ${TRACKING}`}>
-            <span className="bg-clip-text text-transparent" style={{ backgroundImage: AI_GRADIENT }}>코치에게 물어보기</span>
-          </button>
+          <PressCard onClick={() => setOpen(o => !o)} aria-expanded={open} radius={0} innerRadius="8px 8px 8px 20px" pad={false} className="flex-1 border-r border-[#f1f3f5] cursor-pointer">
+            <span className={`block py-3 text-center font-pretendard font-semibold text-[13px] leading-5 text-[#646d76] ${TRACKING}`}>{open ? '접기' : '자세히 보기'}</span>
+          </PressCard>
+          <PressCard onClick={onAskCoach} radius={0} innerRadius="8px 8px 20px 8px" pad={false} className="flex-1 cursor-pointer">
+            <span className={`block py-3 text-center font-pretendard font-semibold text-[13px] leading-5 ${TRACKING}`}>
+              <span className="bg-clip-text text-transparent" style={{ backgroundImage: AI_GRADIENT }}>코치에게 물어보기</span>
+            </span>
+          </PressCard>
         </div>
       )}
     </Card>
   );
 }
 
+const TILE_PRESS_INSET = { top: 12, right: 8, bottom: 8, left: 8 }; // Figma 1158:9834 '기본카드 클릭 시'
+
 function Tile({ label, value, sub, subColor = '#868e96', visual, visualAlign = 'center', onClick }) {
   return (
-    <button onClick={onClick} className={`${CARD} flex flex-col gap-10 text-left px-5 pt-5 pb-4 active:bg-[#f8f9fa]`}>
+    <PressCard onClick={onClick} radius={24} inset={TILE_PRESS_INSET} pad={false} className={`${CARD} cursor-pointer`}>
+      <span className="flex flex-col gap-10 px-5 pt-5 pb-4">
       <span className="flex flex-col gap-1 w-full">
         <span className="flex flex-col">
           <span className={`font-pretendard text-[14px] leading-5 text-[#646d76] ${TRACKING}`}>{label}</span>
@@ -354,7 +360,8 @@ function Tile({ label, value, sub, subColor = '#868e96', visual, visualAlign = '
         <span className={`font-pretendard text-[12px] leading-[18px] ${TRACKING}`} style={{ color: subColor }}>{sub}</span>
       </span>
       <span className={`relative flex w-full h-10 ${visualAlign === 'end' ? 'items-end' : 'items-center'}`}>{visual}</span>
-    </button>
+      </span>
+    </PressCard>
   );
 }
 

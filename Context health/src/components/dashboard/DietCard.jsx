@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import DonutChart from './DonutChart';
 import { QuoteIcon } from '../icons/Icons';
 import { getDietSummaryComment } from '../../utils/dietFeedback';
 import Pressable from '../common/Pressable';
+import PressCard from '../common/PressCard';
+import useDismiss from '../../lib/useDismiss';
 import Toast from '../common/Toast';
 import { shareText, buildDietShareText } from '../../utils/share';
 
@@ -16,8 +18,10 @@ function getChip(kcal, goal) {
 
 const enteredCards = new Set();
 
-export default function DietCard({ data, isDeleting, targetKcal, profile, onDelete, onChangeDate }) {
+export default function DietCard({ data, isDeleting, targetKcal, profile, onDelete, onChangeDate, onCardClick }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+  useDismiss(menuOpen, () => setMenuOpen(false), menuRef);
   const [toast, setToast] = useState({ show: false, message: '' });
   const [entering, setEntering] = useState(() => {
     const key = data.docId || data.id;
@@ -45,14 +49,20 @@ export default function DietCard({ data, isDeleting, targetKcal, profile, onDele
 
   return (
     <div onAnimationEnd={() => setEntering(false)} className={`px-4 py-2 ${isDeleting ? 'card-exit-wrapper' : entering ? 'card-enter' : ''}`}>
-      <div className="bg-white rounded-[16px] overflow-hidden shadow-[0_0_25px_rgba(3,27,38,0.08)] cursor-pointer border border-transparent transition-transform duration-150 active:scale-[0.985] [@media(hover:hover)]:hover:border-ui-3">
-        <div className="p-4 flex flex-col gap-4">
+      <PressCard
+        onClick={() => onCardClick?.(data)}
+        onLongPress={() => setMenuOpen(true)}
+        className="bg-white shadow-[0_0_25px_rgba(3,27,38,0.08)] cursor-pointer"
+      >
+        {/* 눌리는 영역 안쪽 여백 8 + 영역 바깥 4 (운동 카드와 같은 구조) */}
+        <div className="p-2 flex flex-col gap-4">
+        <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-2 pb-4 border-b border-[#f1f3f5]">
             <div className="flex items-center justify-between">
               <div className="inline-flex px-2 py-1 rounded-[8px] w-fit" style={{ background: chip.bg }}>
                 <span className="text-[13px] font-pretendard tracking-[-0.325px] whitespace-nowrap" style={{ color: chip.color }}>{chip.label}</span>
               </div>
-              <div className="relative">
+              <div className="relative" ref={menuRef}>
                 <Pressable
                   pressScale={0.85}
                   onClick={(e) => { e.stopPropagation(); setMenuOpen(o => !o); }}
@@ -66,7 +76,6 @@ export default function DietCard({ data, isDeleting, targetKcal, profile, onDele
                 </Pressable>
                 {menuOpen && (
                   <>
-                    <div onClick={(e) => { e.stopPropagation(); setMenuOpen(false); }} className="fixed inset-0 z-[98]" />
                     <div className="absolute top-8 right-0 bg-white rounded-[12px] shadow-lg py-1 z-[99] min-w-[120px]" onClick={e => e.stopPropagation()}>
                       <button
                         onClick={(e) => { e.stopPropagation(); handleShare(); setMenuOpen(false); }}
@@ -117,7 +126,7 @@ export default function DietCard({ data, isDeleting, targetKcal, profile, onDele
           </div>
         </div>
         {summaryComment && (
-          <div className="border-t border-[#f1f3f5] p-4 flex gap-2 items-start bg-white">
+          <div className="border-t border-[#f1f3f5] p-4 flex gap-2 items-start">
             <QuoteIcon gid={gid} />
             <div className="flex-1 mt-0.5 min-w-0">
               <p className="font-pretendard font-medium text-[14px] text-transparent bg-clip-text bg-gradient-to-r from-[#228bed] to-[#c509d6] tracking-[-0.35px] leading-[20px] m-0 truncate">
@@ -126,7 +135,8 @@ export default function DietCard({ data, isDeleting, targetKcal, profile, onDele
             </div>
           </div>
         )}
-      </div>
+        </div>
+      </PressCard>
       <Toast show={toast.show} message={toast.message} />
     </div>
   );
