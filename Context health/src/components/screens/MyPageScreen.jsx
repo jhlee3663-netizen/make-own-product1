@@ -161,11 +161,17 @@ export default function MyPageScreen({ user, profile, onProfileSave, onNavChange
   /* Claude 커넥터 연결 상태. 연결된 적이 없으면 항목 자체를 숨긴다. */
   const [mcpConnected, setMcpConnected] = useState(false);
   const [mcpDisconnecting, setMcpDisconnecting] = useState(false);
+  const [mcpAllowed, setMcpAllowed] = useState(false);       // 이 계정이 Claude 연결을 쓸 수 있는지
+  const [mcpGuideOpen, setMcpGuideOpen] = useState(false);
   useEffect(() => {
     if (!user?.uid) return undefined;
     let cancelled = false;
     getMcpStatus()
-      .then(({ connected }) => { if (!cancelled) setMcpConnected(Boolean(connected)); })
+      .then(({ connected, allowed }) => {
+        if (cancelled) return;
+        setMcpConnected(Boolean(connected));
+        setMcpAllowed(Boolean(allowed));
+      })
       .catch(() => {});
     return () => { cancelled = true; };
   }, [user?.uid]);
@@ -259,6 +265,37 @@ export default function MyPageScreen({ user, profile, onProfileSave, onNavChange
 
   return (
     <div className="flex flex-col h-full bg-ui-1 relative">
+      {mcpGuideOpen && (
+        <div className="fixed inset-0 z-[100] flex flex-col justify-end">
+          <div onClick={() => setMcpGuideOpen(false)} className="absolute inset-0 bg-[#171719]/50" />
+          <div className="relative w-full max-w-[430px] mx-auto bg-white rounded-t-[24px] px-5 pt-3 pb-[calc(32px+env(safe-area-inset-bottom))] shadow-lg">
+            <div className="w-10 h-1 mx-auto mb-4 rounded-full bg-ui-3" />
+            <h2 className="font-pretendard font-bold text-body-l text-typo-strong tracking-[-0.45px]">Claude 다시 연결하기</h2>
+            <p className="mt-1 font-pretendard text-body-s text-typo-secondary tracking-[-0.35px]">연결은 Claude 쪽에서 시작해야 해요. 아래 순서대로 하면 돼요.</p>
+            <ol className="mt-4 flex flex-col gap-3">
+              {[
+                'claude.ai에서 설정 → 커넥터로 들어가요.',
+                '목록의 Context Health에서 "연결"을 눌러요.',
+                '이 앱 화면이 열리면 "허용"을 눌러요.',
+              ].map((step, index) => (
+                <li key={step} className="flex gap-3">
+                  <span className="flex-none w-6 h-6 rounded-full bg-brand-light text-brand font-pretendard font-bold text-caption-l flex items-center justify-center">{index + 1}</span>
+                  <span className="font-pretendard text-body-s text-typo-normal tracking-[-0.35px] leading-6">{step}</span>
+                </li>
+              ))}
+            </ol>
+            <a
+              href="https://claude.ai/settings/connectors"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setMcpGuideOpen(false)}
+              className="mt-5 flex items-center justify-center h-12 rounded-xl bg-brand font-pretendard font-bold text-body-s text-white tracking-[-0.35px]"
+            >
+              Claude 커넥터 설정 열기
+            </a>
+          </div>
+        </div>
+      )}
       {activeModal === 'terms' && <LegalModal title="이용약관" content={TERMS_CONTENT} onClose={() => setActiveModal(null)} />}
       {activeModal === 'privacy' && <LegalModal title="개인정보처리방침" content={PRIVACY_CONTENT} onClose={() => setActiveModal(null)} />}
       <ConfirmModal
@@ -440,6 +477,16 @@ export default function MyPageScreen({ user, profile, onProfileSave, onNavChange
             >
               <span className="font-pretendard font-medium text-body-s text-typo-normal tracking-[-0.35px]">Claude 연결됨 (기록 조회)</span>
               <span className="font-pretendard font-semibold text-caption-l text-[#e03e52] tracking-[-0.3px]">{mcpDisconnecting ? '해제 중...' : '연결 해제'}</span>
+            </button>
+          )}
+          {/* 연결을 해제한 뒤에도 다시 연결하는 방법을 찾을 수 있게 한다. 연결은 claude.ai 쪽에서 시작해야 한다. */}
+          {!mcpConnected && mcpAllowed && (
+            <button
+              onClick={() => setMcpGuideOpen(true)}
+              className="flex items-center justify-between w-full py-3.5 border-b border-ui-2"
+            >
+              <span className="font-pretendard font-medium text-body-s text-typo-normal tracking-[-0.35px]">Claude 연결하기 (기록 조회)</span>
+              <span className="font-pretendard font-semibold text-caption-l text-brand tracking-[-0.3px]">방법 보기</span>
             </button>
           )}
           <button
