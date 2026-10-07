@@ -1,19 +1,22 @@
 import React, { useEffect, useRef } from 'react';
 
-/* 토스식 카드 눌림 효과 (Figma 📚 스터디 1155:9637).
-   누르는 순간 진한 색이 카드 가운데에서 바깥으로 퍼진다. 처음 70%까지는 눈에 안 보일 만큼 빠르게,
-   나머지 가장자리까지는 눈에 보이는 속도로 채워진다. 동시에 카드가 0.99배로 살짝 줄었다가
-   누르고 있는 동안 원래 크기로 돌아온다. 가장자리 1px은 흰색으로 남고, 손을 떼면 색이 빠진다.
+/* 토스식 카드 눌림 효과 (Figma 📚 스터디 1158:9684).
+   구조: 흰 카드 안쪽으로 4px 들어간 영역(모서리 16)이 따로 있고, 누르면 그 영역에만 색이 찬다.
+   누르는 순간 진한 색이 가운데에서 바깥으로 퍼진다. 처음 70%까지는 눈에 안 보일 만큼 빠르게,
+   나머지 가장자리까지는 눈에 보이는 속도로 채워진다. 카드는 0.98배로 줄어든 채 누르는 동안 유지되고,
+   손을 떼면 색이 빠지면서 원래 크기로 돌아온다.
    카드 안쪽 영역에 불투명한 배경을 두면 퍼지는 색을 가리므로 두지 않는다. */
 
 export const PRESS = {
   color: '#e9ecef',
-  scale: 0.99,
+  scale: 0.98,
+  inset: 4,         // 흰 카드 가장자리와 눌리는 영역 사이 간격
+  innerRadius: 16,  // 눌리는 영역의 모서리
   fastCover: 0.7,   // 순식간에 채워지는 범위 (카드 폭 대비)
   fastMs: 35,       // 그 범위까지 걸리는 시간
   fillMs: 200,      // 나머지 가장자리까지 채워지는 시간
-  dipMs: 300,       // 줄었다가 돌아오는 전체 시간
-  dipAt: 0.2,       // 그중 가장 작아지는 시점
+  pressMs: 110,     // 줄어드는 시간
+  backMs: 300,      // 손을 뗐을 때 원래 크기로 돌아오는 시간
   releaseMs: 240,   // 손을 뗐을 때 색이 빠지는 시간
   cancelMs: 100,    // 스크롤로 판단됐을 때 색이 빠지는 시간
   touchDelayMs: 20, // 스크롤하려고 댄 손인지 볼 짧은 대기
@@ -55,20 +58,27 @@ export default function PressCard({ children, className = '', radius = 16, onCli
         { duration: total, fill: 'forwards' },
       );
     }
-    rootRef.current?.animate?.(
-      [
-        { transform: 'scale(1)', easing: 'cubic-bezier(0.2, 0, 0.4, 1)' },
-        { transform: `scale(${PRESS.scale})`, offset: PRESS.dipAt, easing: 'cubic-bezier(0.25, 1.2, 0.4, 1)' },
-        { transform: 'scale(1)' },
-      ],
-      { duration: PRESS.dipMs },
+    scaleTo(PRESS.scale, PRESS.pressMs, 'cubic-bezier(0.2, 0.8, 0.3, 1)');
+  }
+
+  /* 지금 크기에서 target 크기로 이어서 움직인다 (누르는 도중에 손을 떼도 튀지 않게). */
+  function scaleTo(target, duration, easing) {
+    const root = rootRef.current;
+    if (!root?.animate) return;
+    const from = getComputedStyle(root).transform;
+    root.getAnimations().forEach(animation => animation.cancel());
+    const animation = root.animate(
+      [{ transform: from === 'none' ? 'scale(1)' : from }, { transform: `scale(${target})` }],
+      { duration, easing, fill: 'forwards' },
     );
+    if (target === 1) animation.onfinish = () => animation.cancel();
   }
 
   function fadeOut(duration) {
     const s = state.current;
     const overlay = overlayRef.current;
     s.activeAt = 0;
+    scaleTo(1, PRESS.backMs, 'cubic-bezier(0.3, 1.35, 0.5, 1)'); // 살짝 탄성 있게 복귀
     if (!overlay?.animate) return;
     const fade = overlay.animate([{ opacity: 1 }, { opacity: 0 }], { duration, easing: 'ease-out', fill: 'forwards' });
     fade.onfinish = () => overlay.getAnimations().forEach(animation => animation.cancel());
@@ -136,10 +146,10 @@ export default function PressCard({ children, className = '', radius = 16, onCli
       style={{ borderRadius: radius, WebkitTapHighlightColor: 'transparent' }}
       {...rest}
     >
-      <span aria-hidden="true" className="absolute inset-px overflow-hidden pointer-events-none" style={{ borderRadius: radius - 1 }}>
+      <span aria-hidden="true" className="absolute overflow-hidden pointer-events-none" style={{ inset: PRESS.inset, borderRadius: PRESS.innerRadius }}>
         <span ref={overlayRef} className="absolute inset-0 will-change-transform" style={{ background: BAND, opacity: 0, transform: 'scaleX(0)' }} />
       </span>
-      <div className="relative">{children}</div>
+      <div className="relative" style={{ padding: PRESS.inset }}>{children}</div>
     </div>
   );
 }

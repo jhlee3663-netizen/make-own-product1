@@ -71,7 +71,9 @@ const WorkoutCard = ({ data, perfGrade = 'success', onCardClick, onDelete, onCha
         onClick={() => onCardClick(data)}
         className="bg-white shadow-[0_0_25px_rgba(3,27,38,0.08)] cursor-pointer"
       >
-        <div className="p-4 flex flex-col gap-4">
+        {/* 눌리는 영역 안쪽 여백 8 + 영역 바깥 4 = 기존 카드 여백과 비슷한 12 (Figma 1158:9684) */}
+        <div className="p-2 flex flex-col gap-4">
+        <div className="flex flex-col gap-4">
 
           {/* Header */}
           <div className="flex flex-col gap-2">
@@ -190,6 +192,7 @@ const WorkoutCard = ({ data, perfGrade = 'success', onCardClick, onDelete, onCha
             </div>
           </div>
         ) : null}
+        </div>
       </PressCard>
       <Toast show={toast.show} message={toast.message} />
     </div>
