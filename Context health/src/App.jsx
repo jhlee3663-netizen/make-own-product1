@@ -6,6 +6,7 @@ import { loadUserData, saveUserData, loadAllCoachRooms, saveCoachRoom, deleteCoa
 import { clearLegacyPersonalStorage, getUserStorage, getUserStorageKeys, prepareUserStorage, removeUserStorage, setUserStorage } from './lib/userStorage';
 
 import LoginScreen      from './components/screens/LoginScreen';
+import SplashScreen     from './components/screens/SplashScreen';
 import OnboardingScreen from './components/screens/OnboardingScreen';
 import HomeScreen       from './components/screens/HomeScreen';
 import WorkoutMemoScreen from './components/screens/WorkoutMemoScreen';
@@ -525,11 +526,13 @@ function App() {
     setAiGoals(next);
   }
 
-  /* ── 로딩 ── */
+  /* ── 로딩 (시작 화면) ── */
   if (user === undefined || (user && !userDataReady)) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <div className="w-8 h-8 border-2 border-[#7171FF]/20 border-t-[#7171FF] rounded-full animate-spin" />
+      <div className="min-h-dvh bg-[#f1f3f5] flex justify-center items-start sm:items-center">
+        <div className="w-full max-w-[430px] h-dvh relative overflow-hidden shadow-2xl">
+          <SplashScreen />
+        </div>
       </div>
     );
   }
@@ -630,6 +633,8 @@ function App() {
                 profile={profile}
                 active={tab === 'analysis'}
                 onAskCoach={(message) => handleOpenCoachWithMessage('powerbuilding', message)}
+                onBack={() => handleNavChange('home')}
+                onEditGoal={() => handleNavChange('my')}
                 onRecord={(type) => {
                   if (type === 'workout') {
                     setEditingLog(null);

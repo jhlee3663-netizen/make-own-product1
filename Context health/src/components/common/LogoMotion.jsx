@@ -51,7 +51,9 @@ function easeOutBack(t, s) {
 }
 const seg = (t, from, to) => (t - from) / (to - from);
 
-export default function LogoMotion({ size = 228 }) {
+/* tone='white'는 시작 화면용: 그라데이션 배경 위에 흰 로고만, 주변 칩 없이 같은 모션으로 그린다. */
+export default function LogoMotion({ size = 228, tone = 'gradient' }) {
+  const white = tone === 'white';
   const id = useId();
   const el = useRef({});
   const reduced = typeof window !== 'undefined'
@@ -125,7 +127,7 @@ export default function LogoMotion({ size = 228 }) {
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }}>
       {/* 기록 조각들이 로고로 빨려 들어간다 */}
-      {!reduced && CHIPS.map(({ text, x, y, bg, opacity, delay, dur }) => (
+      {!reduced && !white && CHIPS.map(({ text, x, y, bg, opacity, delay, dur }) => (
         <div
           key={text}
           className="absolute left-1/2 top-1/2 w-0 h-0 pointer-events-none"
@@ -152,7 +154,8 @@ export default function LogoMotion({ size = 228 }) {
             <stop offset="1" stopColor="#ea78ff" />
           </linearGradient>
           <mask id={`${id}-m`} maskUnits="userSpaceOnUse" x="-200" y="-200" width="1400" height="1400">
-            <g fill="#fff">
+            {/* 맞닿은 도형 사이에 실금이 비치지 않도록 살짝 겹치게 그린다 */}
+            <g fill="#fff" stroke="#fff" strokeWidth="3" strokeLinejoin="round">
               <polygon ref={bind('hub')} />
               <polygon ref={bind('t1')} />
               <polygon ref={bind('t2')} />
@@ -175,8 +178,8 @@ export default function LogoMotion({ size = 228 }) {
           </mask>
         </defs>
         <g mask={`url(#${id}-m)`}>
-          <rect x="-200" y="-200" width="1400" height="1400" fill={`url(#${id}-g)`} />
-          <image href="/logo-gradient-fill.jpg" x="0" y="0" width="1000" height="1000" preserveAspectRatio="none" />
+          <rect x="-200" y="-200" width="1400" height="1400" fill={white ? '#fff' : `url(#${id}-g)`} />
+          {!white && <image href="/logo-gradient-fill.jpg" x="0" y="0" width="1000" height="1000" preserveAspectRatio="none" />}
         </g>
       </svg>
     </div>

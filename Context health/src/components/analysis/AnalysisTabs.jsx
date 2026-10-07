@@ -1,4 +1,6 @@
 import React, { useId, useState } from 'react';
+import { IcBack, IcMore } from '../icons/Icons';
+import Pressable from '../common/Pressable';
 
 /* 분석 탭: 요약 | 체중 | 식단 | 운동.
    수치·색·그라데이션은 Figma 시안(📚 스터디 1135:6792 / 6882 / 6982 / 7103 / 7209) 그대로다.
@@ -550,6 +552,29 @@ function IntakeChart({ days, from, to, maintenance, weightSeries }) {
   const weightTop = line.length > 1 ? flowPoints(reducePoints(line.map(p => [px(p.x), wy(p.avg)]), 7)) : [];
   const weightArea = weightTop.length ? `${toPath(weightTop)} L ${weightTop[weightTop.length - 1][0].toFixed(2)} ${H} L ${weightTop[0][0].toFixed(2)} ${H} Z` : '';
   const day = days[index];
+  // 기록이 기간 중간에서 시작하거나 끝나면 면적이 잘린 것처럼 보인다. 그 가장자리는 서서히 사라지게 한다.
+  const edgeFade = (id, curve) => {
+    if (curve.length < 2) return null;
+    const x0 = curve[0][0]; const x1 = curve[curve.length - 1][0];
+    const fade = Math.min(28, (x1 - x0) / 3);
+    const left = x0 > 2; const right = x1 < W - 2;
+    if (!left && !right) return null;
+    return (
+      <>
+        <linearGradient id={`${id}-g`} gradientUnits="userSpaceOnUse" x1={x0} y1="0" x2={x1} y2="0">
+          <stop offset="0" stopColor="#fff" stopOpacity={left ? 0 : 1} />
+          <stop offset={fade / (x1 - x0)} stopColor="#fff" />
+          <stop offset={1 - fade / (x1 - x0)} stopColor="#fff" />
+          <stop offset="1" stopColor="#fff" stopOpacity={right ? 0 : 1} />
+        </linearGradient>
+        <mask id={id} maskUnits="userSpaceOnUse" x="0" y="0" width={W} height={H}>
+          <rect x={x0} y="0" width={x1 - x0} height={H} fill={`url(#${id}-g)`} />
+        </mask>
+      </>
+    );
+  };
+  const intakeMask = edgeFade('intake-edge', top);
+  const weightMask = edgeFade('weight-edge', weightTop);
   const pick = (event) => {
     const rect = event.currentTarget.getBoundingClientRect();
     const x = from + (Math.min(rect.width, Math.max(0, event.clientX - rect.left)) / rect.width) * spanX;
@@ -576,6 +601,8 @@ function IntakeChart({ days, from, to, maintenance, weightSeries }) {
             <stop offset="0" stopColor={POINT} stopOpacity="0.2" />
             <stop offset="1" stopColor={POINT} />
           </linearGradient>
+          {intakeMask}
+          {weightMask}
           <linearGradient id="intake-maint" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2={W} y2="0">
             <stop offset="0" stopColor="#f1f3f5" />
             <stop offset="1" stopColor="#868e96" />
@@ -584,12 +611,18 @@ function IntakeChart({ days, from, to, maintenance, weightSeries }) {
         {maintenance.ready && (
           <line x1="0" x2={W} y1={ky(maintenance.tdee)} y2={ky(maintenance.tdee)} stroke="url(#intake-maint)" strokeWidth="1" strokeDasharray="3 4" strokeLinecap="round" />
         )}
-        {area && <path d={area} fill="url(#intake-fill)" />}
-        {area && <path d={area} fill="url(#intake-haze)" opacity="0.4" />}
-        {weightArea && <path d={weightArea} fill="url(#weight-fill)" />}
-        {weightArea && <path d={weightArea} fill="url(#intake-haze)" opacity="0.4" />}
-        {weightTop.length > 1 && (
-          <path d={toPath(weightTop)} fill="none" stroke="url(#intake-line)" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" />
+        {area && (
+          <g mask={intakeMask ? 'url(#intake-edge)' : undefined}>
+            <path d={area} fill="url(#intake-fill)" />
+            <path d={area} fill="url(#intake-haze)" opacity="0.4" />
+          </g>
+        )}
+        {weightArea && (
+          <g mask={weightMask ? 'url(#weight-edge)' : undefined}>
+            <path d={weightArea} fill="url(#weight-fill)" />
+            <path d={weightArea} fill="url(#intake-haze)" opacity="0.4" />
+            <path d={toPath(weightTop)} fill="none" stroke="url(#intake-line)" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" />
+          </g>
         )}
       </svg>
       <Tooltip leftPct={(px(day.x) / W) * 100} lines={[`${comma(day.kcal)}kcal`, formatDay(day.date)]} />
@@ -806,16 +839,99 @@ function WorkoutTab({ strength, weekly, week, weeks, setWeeks, onRecord }) {
   );
 }
 
+/* ── 더보기 메뉴 ── */
+const MENU_ICONS = {
+  refresh: <><path d="M21 12a9 9 0 1 1-2.64-6.36L21 8" /><path d="M21 3v5h-5" /></>,
+  report: <><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z" /><path d="M19 16l.7 2.3L22 19l-2.3.7L19 22l-.7-2.3L16 19l2.3-.7L19 16Z" /></>,
+  goal: <><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1" /></>,
+  info: <><circle cx="12" cy="12" r="9" /><path d="M12 11v5" /><path d="M12 8h.01" /></>,
+};
+
+const GUIDE = [
+  ['7일 평균 체중', '매일의 체중은 수분·식사에 따라 흔들려요. 최근 7일 기록의 평균으로 흐름만 보여드려요.'],
+  ['유지 칼로리', '최근 4주간 먹은 양과 체중 변화를 맞춰 계산해요. 체중 1kg 변화를 약 7,700kcal로 보고, 식단 10일·체중 2주 이상 기록이 있어야 나와요.'],
+  ['추정 1RM', '기록한 무게와 횟수로 계산한 1회 최대 중량이에요 (무게 × (1 + 횟수 ÷ 30)). 15회를 넘는 세트는 계산에서 빼요.'],
+  ['정체', '같은 종목을 3번 이상 했는데 3주 넘게 최고 기록을 넘지 못하면 정체로 표시해요.'],
+];
+
+function Sheet({ onClose, children }) {
+  return (
+    <div className="fixed inset-0 z-[100] flex flex-col justify-end">
+      <div onClick={onClose} className="absolute inset-0 bg-[#171719]/50 animate-[bsFadeIn_0.3s_cubic-bezier(0.16,1,0.3,1)_forwards]" />
+      <div className="relative w-full max-w-[430px] mx-auto bg-white rounded-t-[24px] px-4 pb-[calc(40px+env(safe-area-inset-bottom))] flex flex-col items-center animate-[bottomSheetUp_0.4s_cubic-bezier(0.2,0.8,0.2,1)_forwards] shadow-lg">
+        <div className="py-3 w-full flex justify-center"><div className="w-10 h-1 rounded-full bg-[#e9ecef]" /></div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function MoreMenu({ view, setView, actions }) {
+  if (!view) return null;
+  const close = () => setView(null);
+  if (view === 'guide') {
+    return (
+      <Sheet onClose={close}>
+        <div className="w-full pb-2">
+          <h2 className={`px-1 pb-3 font-pretendard font-bold text-[18px] leading-7 text-[#171a1d] ${TRACKING}`}>숫자는 이렇게 계산해요</h2>
+          <dl className="flex flex-col gap-4 px-1">
+            {GUIDE.map(([term, text]) => (
+              <div key={term}>
+                <dt className={`font-pretendard font-semibold text-[14px] leading-5 text-[#171a1d] ${TRACKING}`}>{term}</dt>
+                <dd className={`mt-0.5 font-pretendard text-[14px] leading-[22px] text-[#646d76] ${TRACKING}`}>{text}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </Sheet>
+    );
+  }
+  const items = [
+    { icon: 'refresh', title: '새로고침', sub: '방금 추가한 기록까지 다시 불러와요', run: actions.onRefresh },
+    { icon: 'report', title: 'AI 리포트 다시 쓰기', sub: '지금 기록으로 이번 주 리포트를 새로 만들어요', run: actions.onRegenerateReport },
+    { icon: 'goal', title: '목표 체중 바꾸기', sub: '마이페이지에서 목표 체중을 수정해요', run: actions.onEditGoal },
+    { icon: 'info', title: '숫자 계산 기준', sub: '유지 칼로리·추정 1RM을 어떻게 구하는지 봐요', run: () => setView('guide'), keepOpen: true },
+  ];
+  return (
+    <Sheet onClose={close}>
+      <div className="w-full flex flex-col divide-y divide-[#f1f3f5]">
+        {items.map(item => (
+          <button
+            key={item.title}
+            onClick={() => { if (!item.keepOpen) close(); item.run?.(); }}
+            className="flex items-center gap-3 w-full py-4 text-left active:opacity-50 text-[#495057]"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="flex-none" aria-hidden="true">{MENU_ICONS[item.icon]}</svg>
+            <span className="flex flex-col gap-0.5">
+              <span className={`font-pretendard font-medium text-[16px] leading-6 text-[#495057] ${TRACKING}`}>{item.title}</span>
+              <span className={`font-pretendard text-[14px] leading-5 text-[#868e96] ${TRACKING}`}>{item.sub}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+    </Sheet>
+  );
+}
+
 /* ── 화면 ── */
-export default function AnalysisTabsView({ status = 'ready', model, report, reportStatus, onAskCoach, onRecord, onRetry, onRetryReport, initialTab = 'summary' }) {
+export default function AnalysisTabsView({ status = 'ready', model, report, reportStatus, onAskCoach, onRecord, onRetry, onRetryReport, onBack, onRegenerateReport, onEditGoal, initialTab = 'summary' }) {
   const [tab, setTab] = useState(initialTab);
+  const [menu, setMenu] = useState(null); // null | 'menu' | 'guide'
   const [weeks, setWeeks] = useState(8);
   const ready = status === 'ready' && model;
 
   return (
     <div className="flex flex-col h-full bg-[#f8f9fa]">
-      <header className="flex-none bg-white pt-14 border-b border-[#f1f3f5]">
-        <h1 className={`px-5 pb-3 font-pretendard font-bold text-[24px] leading-8 text-[#171a1d] ${TRACKING}`}>분석</h1>
+      <header className="flex-none bg-white border-b border-[#f1f3f5]" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+        <div className="flex items-center gap-4 h-14 px-4">
+          <Pressable pressScale={0.85} onClick={onBack} aria-label="홈으로" className="flex items-center justify-center w-6 h-6 flex-none">
+            <IcBack />
+          </Pressable>
+          <h1 className={`flex-1 pl-1 font-pretendard font-semibold text-[20px] leading-[30px] text-black ${TRACKING}`}>분석</h1>
+          <Pressable pressScale={0.85} onClick={() => setMenu('menu')} aria-label="더보기" className="flex items-center justify-center w-6 h-6 flex-none">
+            <IcMore />
+          </Pressable>
+        </div>
         <div role="tablist" className="flex">
           {TABS.map(item => {
             const on = tab === item.id;
@@ -853,6 +969,7 @@ export default function AnalysisTabsView({ status = 'ready', model, report, repo
           {ready && tab === 'workout' && <WorkoutTab strength={model.strength} weekly={model.weekly} week={model.week} weeks={weeks} setWeeks={setWeeks} onRecord={onRecord} />}
         </div>
       </main>
+      <MoreMenu view={menu} setView={setMenu} actions={{ onRefresh: onRetry, onRegenerateReport, onEditGoal }} />
     </div>
   );
 }

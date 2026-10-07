@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover" />
     <title>Context Health</title>
     <meta name="color-scheme" content="light" />
-    <meta name="theme-color" content="#ffffff" />
-    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#ffffff" />
+    <meta name="theme-color" content="#3aa0ff" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#3aa0ff" />
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -26,33 +26,25 @@
         min-height: 100dvh;
       }
 
+      /* 앱 코드가 뜨기 전에도 시작 화면과 같은 배경이 먼저 보이게 한다 */
       .app-boot-loader {
         min-height: 100dvh;
         display: flex;
-        align-items: center;
         justify-content: center;
-        background: #ffffff;
+        background: #f1f3f5;
       }
 
-      .app-boot-spinner {
-        width: 32px;
-        height: 32px;
-        border-radius: 9999px;
-        border: 2px solid rgba(113, 113, 255, 0.2);
-        border-top-color: #7171FF;
-        animation: appBootSpin 0.8s linear infinite;
-      }
-
-      @keyframes appBootSpin {
-        to {
-          transform: rotate(360deg);
-        }
+      .app-boot-splash {
+        width: 100%;
+        max-width: 430px;
+        min-height: 100dvh;
+        background: linear-gradient(to bottom right, #3aa0ff, #f79fff);
       }
     </style>
   </head>
   <body>
     <div id="boot-loader" class="app-boot-loader" aria-label="앱을 불러오는 중">
-      <div class="app-boot-spinner"></div>
+      <div class="app-boot-splash"></div>
     </div>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>

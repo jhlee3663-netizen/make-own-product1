@@ -37,10 +37,17 @@ export const EXERCISES = [
 
 export const BODYWEIGHT_BASES = new Set(['풀업', '친업', '딥스', '푸쉬업', '와이드 푸쉬업', '행잉 니 레이즈', '행잉 레그 레이즈']);
 
-export function filterExercises(query) {
+/* custom: 사용자가 직접 적었던 종목 이름. 기본 목록보다 먼저 추천한다. */
+export function filterExercises(query, custom = []) {
   if (!query?.trim()) return [];
   const q = query.toLowerCase().replace(/\s/g, '');
-  return EXERCISES.filter(e => e.toLowerCase().replace(/\s/g, '').includes(q)).slice(0, 8);
+  const seen = new Set();
+  return [...custom, ...EXERCISES].filter((name) => {
+    const key = name.toLowerCase().replace(/\s/g, '');
+    if (!key.includes(q) || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 8);
 }
 
 export function filterBodyParts(query) {

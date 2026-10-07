@@ -68,7 +68,7 @@ function buildBodySegments(body) {
   return segments;
 }
 
-const WorkoutTaskItem = ({ title, body, onTitleChange, onBodyChange, onBodyBlur, isAI = false, prevVolume, prevMaxReps, onAiClick, aiActive = false, isConverting, suppressSupersetBadge = false }) => {
+const WorkoutTaskItem = ({ title, body, onTitleChange, onBodyChange, onBodyBlur, isAI = false, prevVolume, prevMaxReps, onAiClick, aiActive = false, isConverting, suppressSupersetBadge = false, customExercises = [] }) => {
   const currentVolume = useMemo(() => parseVolumeFromBody(body), [body]);
   const delta = prevVolume != null && currentVolume > 0 ? Math.round(currentVolume - prevVolume) : null;
   const currentReps = useMemo(() => parseTotalRepsFromText(body), [body]);
@@ -175,7 +175,7 @@ const WorkoutTaskItem = ({ title, body, onTitleChange, onBodyChange, onBodyBlur,
               value={title}
               onChange={(e) => {
                 onTitleChange(e.target.value);
-                setSuggestions(filterExercises(e.target.value));
+                setSuggestions(filterExercises(e.target.value, customExercises));
               }}
               onBlur={() => {
                 setEditingTitle(false);

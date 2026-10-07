@@ -23,6 +23,8 @@ import {
 import { buildWorkoutSummaryMessage, findComparableLastVolumeFromLogs, formatCardioDuration, parseCardioMinutes, parseVolume, parseVolumeFromBody, sumReps } from '../../utils/utils';
 import { generateContent, extractText } from '../../lib/aiClient';
 import { BODY_PARTS, filterBodyParts, BODYWEIGHT_BASES } from '../../utils/exerciseData';
+import { KEEP_REMARKS_RULE, preserveUserRemarks } from '../../utils/workoutNotes';
+import { loadCustomExercises, rememberCustomExercises } from '../../lib/customExercises';
 import {
   Bold, Italic, Underline, Strikethrough,
   AlignLeft, AlignCenter, AlignRight,
@@ -347,6 +349,7 @@ export default function WorkoutMemoScreen({ onBack, onSave, initialData, uid, pr
 
   // 더보기 바텀시트
   const [moreSheetOpen, setMoreSheetOpen] = useState(false);
+  const [customExercises, setCustomExercises] = useState(() => loadCustomExercises(uid));
 
   // 워크아웃 모드 (과부하 / 디로딩)
   const [workoutMode, setWorkoutMode] = useState(restoredDraft?.workoutMode || 'overload');
@@ -488,6 +491,23 @@ export default function WorkoutMemoScreen({ onBack, onSave, initialData, uid, pr
       .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
   }
 
+  /* 예전에 직접 적었던 종목 이름을 지난 기록에서 모아 다음 입력 때 추천한다 (다른 기기에서 적은 것 포함). */
+  useEffect(() => {
+    if (!uid) return undefined;
+    let cancelled = false;
+    fetchRecentWorkoutLogs(80)
+      .then((logs) => {
+        if (cancelled) return;
+        const names = logs.flatMap(log => [
+          ...(log.sections || []).flatMap(sec => (sec.items || []).map(item => item.title)),
+          ...(log.exercises || []).map(ex => ex.name),
+        ]);
+        setCustomExercises(rememberCustomExercises(uid, names, { append: true }));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [uid]);
+
   async function findComparableLastVolume(currentSections, currentTitle, currentDocId) {
     const sorted = await fetchRecentWorkoutLogs(80);
     return findComparableLastVolumeFromLogs(sorted, currentSections, currentTitle, currentDocId);
@@ -570,7 +590,8 @@ export default function WorkoutMemoScreen({ onBack, onSave, initialData, uid, pr
      item2: title "레터럴레이즈", supersetGroup 1, body "• 세트 1: 7kg 12회 (슈퍼세트)"
 7. [가장 중요] 세트 기록과 함께 또는 독립적으로 적힌 주관적 느낌·코멘트 (예: "확실히 10회는 빡세다", "가슴&어깨 마사지받음, 확실히 나아짐", "자세가 흔들림", "다음엔 무게 늘려보자") 는 반드시 note 필드로 분리해. 쉼표로 이어진 문장 전체를 하나의 note로 합쳐야 해. 절대 일부만 잘라 넣지 마. kg/회/세트 숫자나 세트 타입 표기가 아닌 주관적 경험·느낌 텍스트만 note로. 없으면 note 필드 생략.
 8. 운동 기록이 전혀 없고 코멘트만 있는 경우(예: "가슴 마사지받음"), body는 빈 문자열로, note에 해당 문장 전체를 넣어.
-9. JSON 이외의 다른 텍스트(마크다운 등)는 절대 포함하지 마.
+9. ${KEEP_REMARKS_RULE}
+10. JSON 이외의 다른 텍스트(마크다운 등)는 절대 포함하지 마.
 
 사용자 입력:
 ${rawText}`;
@@ -578,7 +599,7 @@ ${rawText}`;
       const text = extractText(json);
       if (!text) throw new Error("AI 응답 실패");
       const cleanText = text.replace(/```json/gi, '').replace(/```/g, '').trim();
-      const parsed = JSON.parse(cleanText);
+      const parsed = preserveUserRemarks(JSON.parse(cleanText), sections);
       const mappedSections = parsed.map(s => ({
         id: Date.now() + Math.random(),
         part: s.part || "운동 부위",
@@ -1022,6 +1043,7 @@ JSON 형식으로만 반환해줘:
 7. 운동 기록이 전혀 없고 코멘트만 있는 경우, body는 빈 문자열로, note에 해당 문장 전체를 넣어.
 8. JSON 이외의 다른 텍스트(마크다운 등)는 절대 포함하지 마.
 9. [중요] 풀업/친업/딥스 계열 종목은 반드시 아래 세 가지 중 하나로 명확히 구분해서 title에 표기해줘: 보조 기구(어시스티드 머신)를 사용한 경우 → "어시스티드 풀업"/"어시스티드 친업"/"어시스티드 딥스", 체중에 무게를 추가한 경우 → "가중 풀업"/"가중 친업"/"가중 딥스", 맨몸인 경우 → "풀업"/"친업"/"딥스".
+10. ${KEEP_REMARKS_RULE}
 사용자 입력:\n${rawText}`;
 
       const sumCtrl = new AbortController();
@@ -1042,7 +1064,7 @@ JSON 형식으로만 반환해줘:
       const cleanedSum = sumText.replace(/```json/gi, '').replace(/```/g, '').trim();
       const jsonMatch = cleanedSum.match(/\[[\s\S]*\]/);
       if (!jsonMatch) throw new Error("JSON 배열 파싱 실패: " + cleanedSum.slice(0, 200));
-      const parsed = JSON.parse(jsonMatch[0]);
+      const parsed = preserveUserRemarks(JSON.parse(jsonMatch[0]), rawTextOverride || currentSections);
 
       const structuredSections = parsed.map(s => ({
         part: s.part || "운동 부위",
@@ -1108,6 +1130,7 @@ JSON 형식으로만 반환해줘:
 
   /* ── 저장 ── */
   async function handleSave() {
+    setCustomExercises(rememberCustomExercises(uid, sections.flatMap(sec => sec.items.map(item => item.title))));
     if (saveInFlightRef.current) return;
     saveInFlightRef.current = true;
     setSaving(true);
@@ -1550,7 +1573,9 @@ JSON 형식으로만 반환해줘:
                       key={item.id}
                       title={item.title}
                       body={item.body}
-                      onTitleChange={(val) => updateItem(sec.id, item.id, "title", val)}
+                      customExercises={customExercises}
+                      customExercises={customExercises}
+                  onTitleChange={(val) => updateItem(sec.id, item.id, "title", val)}
                       onBodyChange={(val) => updateItem(sec.id, item.id, "body", val)}
                       onBodyBlur={(val) => handleBodyBlur(sec.id, item.id, val)}
                       isAI={item.isAI}

@@ -23,6 +23,7 @@ import DailyNutritionCard from '../dashboard/DailyNutritionCard';
 import WeeklyCalorieChart from '../dashboard/WeeklyCalorieChart';
 import MorningWeightRow from '../dashboard/MorningWeightRow';
 import { IcSpark } from '../icons/Icons';
+import { KEEP_REMARKS_RULE, preserveUserRemarks } from '../../utils/workoutNotes';
 import TopNav from '../common/TopNav';
 import MainTab from '../common/MainTab';
 import Toast from '../common/Toast';
@@ -313,6 +314,7 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
 2. 여러 세트인 경우 쉼표(,) 대신 반드시 줄바꿈(\\n)으로 구분해서 작성해줘.
 3. [가장 중요] 세트 번호(N)는 종목이 바뀌더라도 절대 1부터 다시 시작하지 말고, 이전 종목의 마지막 세트 번호에 이어서 전체 누적으로 계속 카운트해줘.
 4. "양쪽" / "각 사이드" 같이 좌우 양쪽을 뜻하는 표기는 절대 삭제하지 말고 해당 세트의 body 텍스트 안에 그대로 유지해.
+7. ${KEEP_REMARKS_RULE}
 8. JSON 이외의 다른 텍스트(마크다운 등)는 절대 포함하지 마.
 사용자 입력:\n${rawText}`;
       const ctrl1 = new AbortController();
@@ -325,7 +327,7 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
       const cleaned = text.replace(/```json/gi, '').replace(/```/g, '').trim();
       const match = cleaned.match(/\[[\s\S]*\]/);
       if (!match) throw new Error('JSON 배열 없음: ' + cleaned.slice(0, 100));
-      const parsed = JSON.parse(match[0]);
+      const parsed = preserveUserRemarks(JSON.parse(match[0]), data.originalText || existingSections);
       const sections = parsed.map(s => ({ part: s.part || '운동 부위', items: (s.items || []).map(it => ({ title: it.title, body: it.body, ...(it.note ? { note: it.note } : {}) })) }));
       const exercises = sections.flatMap(s => s.items.map(it => ({ name: it.title }))).filter(ex => ex.name);
       const totalVolume = parseVolume(sections, profile?.weight);

@@ -54,12 +54,12 @@ function Frame({ children }) {
 function App() {
   const [navTab, setNavTab] = useState('analysis');
   const empty = params.has('empty');
-  const w = empty ? weights.slice(0, 1) : weights;
+  const w = empty ? weights.slice(0, 1) : params.has('shortweight') ? weights.slice(0, 6) : weights;
   const d = empty ? dietLogs.slice(0, 1) : dietLogs;
   const wo = empty ? [] : workoutLogs;
   const model = {
     trend: computeWeightTrend(w, 70),
-    maintenance: computeMaintenance(d, empty ? [] : weights),
+    maintenance: computeMaintenance(d, empty ? [] : w),
     strength: computeStrength(wo, 72),
     diet: computeDietTrend(d, 72),
     weekly: computeWeeklyWorkout(wo),
@@ -87,4 +87,10 @@ if (params.has('memo')) {
 }
 if (params.has('open')) {
   setTimeout(() => [...document.querySelectorAll('button')].find(b => b.textContent === '자세히 보기')?.click(), 300);
+}
+if (params.has('menu')) {
+  setTimeout(() => document.querySelector('[aria-label="더보기"]')?.click(), 300);
+}
+if (params.has('guide')) {
+  setTimeout(() => [...document.querySelectorAll('button')].find(b => b.textContent.includes('숫자 계산 기준'))?.click(), 700);
 }

@@ -60,7 +60,7 @@ async function generateReport(input) {
   }
 }
 
-export default function AnalysisScreen({ user, profile, active, onAskCoach, onRecord }) {
+export default function AnalysisScreen({ user, profile, active, onAskCoach, onRecord, onBack, onEditGoal }) {
   const uid = user?.uid;
   const [data, setData] = useState(null);
   const [status, setStatus] = useState('loading'); // loading | ready | error
@@ -71,6 +71,7 @@ export default function AnalysisScreen({ user, profile, active, onAskCoach, onRe
   const loadedRef = useRef({ at: 0, reloadKey: 0 });
   const reportWeekRef = useRef(null);
   const resultRef = useRef(null);
+  const forceReportRef = useRef(false);
 
   useEffect(() => {
     if (!active || !uid) return undefined;
@@ -110,7 +111,7 @@ export default function AnalysisScreen({ user, profile, active, onAskCoach, onRe
     const current = resultRef.current;
     if (!uid || !current) return undefined;
     const key = weekKey();
-    if (reportWeekRef.current === key) return undefined;
+    if (reportWeekRef.current === key && !forceReportRef.current) return undefined;
     let cancelled = false;
     reportWeekRef.current = key;
     setReportStatus('loading');
@@ -118,7 +119,9 @@ export default function AnalysisScreen({ user, profile, active, onAskCoach, onRe
     (async () => {
       const saved = (await loadUserData(uid).catch(() => null))?.analysisReport;
       if (cancelled) return;
-      if (saved?.weekKey === key) {
+      const force = forceReportRef.current;
+      forceReportRef.current = false;
+      if (!force && saved?.weekKey === key) {
         setReport(saved);
         setReportStatus('ready');
         return;
@@ -164,6 +167,9 @@ export default function AnalysisScreen({ user, profile, active, onAskCoach, onRe
       onRecord={onRecord}
       onRetry={() => setReloadKey(k => k + 1)}
       onRetryReport={() => setReportTry(n => n + 1)}
+      onRegenerateReport={() => { forceReportRef.current = true; setReportTry(n => n + 1); }}
+      onBack={onBack}
+      onEditGoal={onEditGoal}
     />
   );
 }
