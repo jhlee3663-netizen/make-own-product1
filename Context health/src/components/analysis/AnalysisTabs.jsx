@@ -543,38 +543,23 @@ function IntakeChart({ days, from, to, maintenance, weightSeries }) {
   const maxKcal = Math.max(...days.map(d => d.kcal), maintenance.ready ? maintenance.tdee : 0) * 1.12;
   const px = x => ((x - from) / spanX) * W;
   const ky = kcal => H - (kcal / maxKcal) * PLOT;
-  const top = flowPoints(reducePoints(days.map(d => [px(d.x), ky(d.kcal)]), 7));
+  // 기록이 없는 앞뒤 구간은 첫 값·마지막 값으로 평평하게 이어서 면적이 항상 차트 폭을 꽉 채우게 한다.
+  const spanFull = (points) => {
+    if (!points.length) return points;
+    const out = [...points];
+    if (out[0][0] > 0.5) out.unshift([0, out[0][1]]);
+    if (out[out.length - 1][0] < W - 0.5) out.push([W, out[out.length - 1][1]]);
+    return out;
+  };
+  const top = flowPoints(spanFull(reducePoints(days.map(d => [px(d.x), ky(d.kcal)]), 7)));
   const area = top.length > 1 ? `${toPath(top)} L ${top[top.length - 1][0].toFixed(2)} ${H} L ${top[0][0].toFixed(2)} ${H} Z` : '';
   const line = weightSeries.filter(p => p.x >= from && p.x <= to);
-  const minW = Math.min(...line.map(p => p.avg));
-  const spanW = Math.max(0.6, Math.max(...line.map(p => p.avg)) - minW);
+  const minW = line.length ? Math.min(...line.map(p => p.avg)) : 0;
+  const spanW = line.length ? Math.max(0.6, Math.max(...line.map(p => p.avg)) - minW) : 1;
   const wy = v => TOP + 20 + (1 - (v - minW) / spanW) * 36;
-  const weightTop = line.length > 1 ? flowPoints(reducePoints(line.map(p => [px(p.x), wy(p.avg)]), 7)) : [];
+  const weightTop = line.length ? flowPoints(spanFull(reducePoints(line.map(p => [px(p.x), wy(p.avg)]), 7))) : [];
   const weightArea = weightTop.length ? `${toPath(weightTop)} L ${weightTop[weightTop.length - 1][0].toFixed(2)} ${H} L ${weightTop[0][0].toFixed(2)} ${H} Z` : '';
   const day = days[index];
-  // 기록이 기간 중간에서 시작하거나 끝나면 면적이 잘린 것처럼 보인다. 그 가장자리는 서서히 사라지게 한다.
-  const edgeFade = (id, curve) => {
-    if (curve.length < 2) return null;
-    const x0 = curve[0][0]; const x1 = curve[curve.length - 1][0];
-    const fade = Math.min(28, (x1 - x0) / 3);
-    const left = x0 > 2; const right = x1 < W - 2;
-    if (!left && !right) return null;
-    return (
-      <>
-        <linearGradient id={`${id}-g`} gradientUnits="userSpaceOnUse" x1={x0} y1="0" x2={x1} y2="0">
-          <stop offset="0" stopColor="#fff" stopOpacity={left ? 0 : 1} />
-          <stop offset={fade / (x1 - x0)} stopColor="#fff" />
-          <stop offset={1 - fade / (x1 - x0)} stopColor="#fff" />
-          <stop offset="1" stopColor="#fff" stopOpacity={right ? 0 : 1} />
-        </linearGradient>
-        <mask id={id} maskUnits="userSpaceOnUse" x="0" y="0" width={W} height={H}>
-          <rect x={x0} y="0" width={x1 - x0} height={H} fill={`url(#${id}-g)`} />
-        </mask>
-      </>
-    );
-  };
-  const intakeMask = edgeFade('intake-edge', top);
-  const weightMask = edgeFade('weight-edge', weightTop);
   const pick = (event) => {
     const rect = event.currentTarget.getBoundingClientRect();
     const x = from + (Math.min(rect.width, Math.max(0, event.clientX - rect.left)) / rect.width) * spanX;
@@ -601,8 +586,6 @@ function IntakeChart({ days, from, to, maintenance, weightSeries }) {
             <stop offset="0" stopColor={POINT} stopOpacity="0.2" />
             <stop offset="1" stopColor={POINT} />
           </linearGradient>
-          {intakeMask}
-          {weightMask}
           <linearGradient id="intake-maint" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2={W} y2="0">
             <stop offset="0" stopColor="#f1f3f5" />
             <stop offset="1" stopColor="#868e96" />
@@ -612,13 +595,13 @@ function IntakeChart({ days, from, to, maintenance, weightSeries }) {
           <line x1="0" x2={W} y1={ky(maintenance.tdee)} y2={ky(maintenance.tdee)} stroke="url(#intake-maint)" strokeWidth="1" strokeDasharray="3 4" strokeLinecap="round" />
         )}
         {area && (
-          <g mask={intakeMask ? 'url(#intake-edge)' : undefined}>
+          <g>
             <path d={area} fill="url(#intake-fill)" />
             <path d={area} fill="url(#intake-haze)" opacity="0.4" />
           </g>
         )}
         {weightArea && (
-          <g mask={weightMask ? 'url(#weight-edge)' : undefined}>
+          <g>
             <path d={weightArea} fill="url(#weight-fill)" />
             <path d={weightArea} fill="url(#intake-haze)" opacity="0.4" />
             <path d={toPath(weightTop)} fill="none" stroke="url(#intake-line)" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" />

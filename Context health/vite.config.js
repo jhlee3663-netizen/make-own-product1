@@ -42,7 +42,8 @@ export default defineConfig({
         short_name: 'Context Health',
         description: 'AI 기반 운동·식단 관리',
         theme_color: '#ffffff',
-        background_color: '#ffffff',
+        // 폰이 앱을 띄우는 순간 보여주는 화면의 배경. 시작 화면 그라데이션의 중간색으로 맞춘다.
+        background_color: '#999fff',
         display: 'standalone',
         orientation: 'portrait',
         scope: '/',

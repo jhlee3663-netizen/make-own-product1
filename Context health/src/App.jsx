@@ -78,11 +78,15 @@ function isAppHistoryState(state) {
 }
 
 
+const SPLASH_MIN_MS = 1600; // LogoMotion 인트로가 끝나는 시간
+
 function App() {
   const [user, setUser]       = useState(undefined); // undefined = 로딩 중
   const [profile, setProfile] = useState(null);
   const [onboardingDone, setOnboardingDone] = useState(false);
   const [userDataReady, setUserDataReady] = useState(false);
+  const [splashHold, setSplashHold] = useState(true);
+  const splashStartRef = useRef(Date.now());
   const [tab, setTab]         = useState('home');
   const [prevTab, setPrevTab] = useState('home');
   const [screen, setScreen]   = useState('home'); // home | memo | diet-detail
@@ -264,6 +268,20 @@ function App() {
   useEffect(() => {
     if (user !== undefined) setSentryUser(user);
   }, [user]);
+
+  /* 시작 화면 최소 표시 시간: 로고가 다 그려지는 SPLASH_MIN_MS 동안은 넘어가지 않는다. */
+  const loadingUser = user === undefined || Boolean(user && !userDataReady);
+  useEffect(() => {
+    if (loadingUser) {
+      splashStartRef.current = Date.now();
+      setSplashHold(true);
+      return undefined;
+    }
+    const remaining = SPLASH_MIN_MS - (Date.now() - splashStartRef.current);
+    if (remaining <= 0) { setSplashHold(false); return undefined; }
+    const timer = window.setTimeout(() => setSplashHold(false), remaining);
+    return () => window.clearTimeout(timer);
+  }, [loadingUser]);
 
   useEffect(() => {
     /* 다른 탭에서 '다른 계정'으로 바뀐 경우에만 새로고침한다.
@@ -526,8 +544,9 @@ function App() {
     setAiGoals(next);
   }
 
-  /* ── 로딩 (시작 화면) ── */
-  if (user === undefined || (user && !userDataReady)) {
+  /* ── 로딩 (시작 화면) ──
+     기록을 금방 불러와도 로고 모션이 완성될 때까지는 시작 화면을 유지한다. */
+  if (user === undefined || (user && (!userDataReady || splashHold))) {
     return (
       <div className="min-h-dvh bg-[#f1f3f5] flex justify-center items-start sm:items-center">
         <div className="w-full max-w-[430px] h-dvh relative overflow-hidden shadow-2xl">
