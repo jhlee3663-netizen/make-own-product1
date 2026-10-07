@@ -52,7 +52,7 @@ function easeOutBack(t, s) {
 const seg = (t, from, to) => (t - from) / (to - from);
 
 /* tone='white'는 시작 화면용: 그라데이션 배경 위에 흰 로고만, 주변 칩 없이 같은 모션으로 그린다. */
-export default function LogoMotion({ size = 228, tone = 'gradient' }) {
+export default function LogoMotion({ size = 228, tone = 'gradient', epoch }) {
   const white = tone === 'white';
   const id = useId();
   const el = useRef({});
@@ -97,7 +97,7 @@ export default function LogoMotion({ size = 228, tone = 'gradient' }) {
 
     let raf, start;
     function frame(now) {
-      if (start === undefined) start = now;
+      if (start === undefined) start = epoch ?? now; // epoch를 주면 화면이 바뀌어도 같은 모션이 이어진다
       const t = (now - start) / 1000;
 
       // 인트로: B가 맺히고 → A, C가 차례로 돋아나고 → 점 D가 튀어나와 끊어진다
@@ -120,7 +120,7 @@ export default function LogoMotion({ size = 228, tone = 'gradient' }) {
     }
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
-  }, [reduced]);
+  }, [reduced, epoch]);
 
   const bind = (key) => (node) => { el.current[key] = node; };
 

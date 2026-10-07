@@ -10,6 +10,7 @@ import {
 } from 'firebase/auth';
 import Pressable from '../common/Pressable';
 import LogoMotion from '../common/LogoMotion';
+import { APP_EPOCH, LOGO_INTRO_MS } from '../../lib/appEpoch';
 import { LegalModal, PRIVACY_CONTENT, TERMS_CONTENT } from './MyPageScreen';
 
 
@@ -106,7 +107,7 @@ async function exchangeSocialCode(provider, code, state) {
   return data.customToken;
 }
 
-export default function LoginScreen({ onLogin }) {
+export default function LoginScreen({ onLogin, authReady = true }) {
   const [loading, setLoading] = useState(null); // 'google' | 'kakao' | 'naver'
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
@@ -303,41 +304,46 @@ export default function LoginScreen({ onLogin }) {
       id: 'google',
       label: 'Google로 계속하기',
       icon: <GoogleIcon />,
-      bg: '#fff',
+      bg: 'transparent',
       text: '#1f1f1f',
-      border: '#e0e0e0',
+      border: 'transparent',
       handler: handleGoogle,
     },
     {
       id: 'kakao',
       label: '카카오로 계속하기',
       icon: <KakaoIcon />,
-      bg: '#FEE500',
+      bg: '#FAE64D',
       text: '#3C1E1E',
-      border: '#FEE500',
+      border: '#FAE64D',
       handler: handleKakao,
     },
     {
       id: 'naver',
       label: '네이버로 계속하기',
-      icon: <NaverIcon />,
-      bg: '#03C75A',
+      icon: null, // 시안대로 아이콘 없이 글자만
+      bg: '#5AC467',
       text: '#fff',
-      border: '#03C75A',
+      border: '#5AC467',
       handler: handleNaver,
     },
   ];
 
-  if (socialCallbackPending) {
-    return (
-      <div className="h-full flex items-center justify-center bg-white">
-        <div className="w-8 h-8 border-2 border-[#7171FF]/20 border-t-[#7171FF] rounded-full animate-spin" />
-      </div>
-    );
-  }
+  /* 처음에는 로고 모션만 보여주고, 모션이 끝나면 로고가 올라가며 글자와 로그인 버튼이 나타난다.
+     로그인 상태 확인 중이거나 카카오/네이버에서 돌아와 처리 중일 때는 로고 화면에 머문다. */
+  const [formIn, setFormIn] = useState(false);
+  useEffect(() => {
+    if (!authReady || socialCallbackPending) { setFormIn(false); return undefined; }
+    const remaining = APP_EPOCH + LOGO_INTRO_MS - performance.now();
+    if (remaining <= 0) { setFormIn(true); return undefined; }
+    const timer = setTimeout(() => setFormIn(true), remaining);
+    return () => clearTimeout(timer);
+  }, [authReady, socialCallbackPending]);
+
+  const ease = 'cubic-bezier(.4,0,.2,1)';
 
   return (
-    <div className="flex flex-col h-full relative overflow-hidden bg-white">
+    <div className="flex flex-col h-full relative overflow-hidden" style={{ background: 'linear-gradient(to bottom right, #3aa0ff, #f79fff)' }}>
       {activeLegal === 'terms' && (
         <LegalModal title="이용약관" content={TERMS_CONTENT} onClose={() => setActiveLegal(null)} />
       )}
@@ -345,57 +351,39 @@ export default function LoginScreen({ onLogin }) {
         <LegalModal title="개인정보처리방침" content={PRIVACY_CONTENT} onClose={() => setActiveLegal(null)} />
       )}
 
-      {/* 배경 그라디언트 — 위에서 빛이 번지듯 채워진 뒤 천천히 흐른다 */}
+      {/* 로고: 화면 가운데에서 시작해 위로 올라가고, 그 아래로 글자가 나타난다 (시안 402×874 기준 308 → 177) */}
       <div
-        className="absolute inset-0 pointer-events-none"
-        style={{ transformOrigin: '50% 0%', animation: 'loginBgBloom 1.8s cubic-bezier(.2,.7,.2,1) both' }}
-      >
-        <div
-          className="absolute inset-y-0 -left-1/4 w-[150%]"
-          style={{
-            background: 'radial-gradient(ellipse 51.22% 76.83% at 50% 0%, #d9efff 0%, #ecf2fe 29.33%, #fbfdff 63.94%, #ffffff 100%)',
-            transformOrigin: '50% 0%',
-            animation: 'loginBgDrift 14s 1.8s ease-in-out infinite alternate',
-          }}
-        />
-      </div>
-      {/* 중앙 화이트 글로우 */}
-      <div
-        className="absolute inset-0 pointer-events-none"
+        className="absolute left-1/2 top-1/2 z-10 flex flex-col items-center"
         style={{
-          background: 'radial-gradient(ellipse 46.62% 46.62% at 50% 46.62%, #ffffff 0%, rgba(255,255,255,0) 100%)',
-          animation: 'loginGradientIn 1.8s cubic-bezier(.4,0,.2,1) both',
+          transform: `translate(-50%, ${formIn ? 'max(-260px, calc(-50dvh + 40px))' : '-129px'})`,
+          transition: `transform 0.8s ${ease}`,
         }}
-      />
-
-      {/* 중앙 콘텐츠 — 시안(402×874) 기준 상단 160 : 하단 173 비율로 배치 */}
-      <div className="relative z-10 flex flex-col items-center flex-1 min-h-0">
-        <div style={{ flex: '160 1 0' }} />
-        <div className="flex flex-col items-center gap-6 shrink-0">
-          <div
-            className="flex flex-col items-center gap-1 text-center"
-            style={{ animation: 'loginTextIn 0.8s 0.2s cubic-bezier(.4,0,.2,1) both' }}
-          >
-            {/* 그라디언트는 서브카피 폭 전체에 걸쳐 있고 타이틀은 그 가운데 구간만 보인다 */}
-            <h1
-              className="w-full font-pretendard font-bold text-[28px] leading-[normal] bg-clip-text text-transparent"
-              style={{ backgroundImage: 'linear-gradient(90deg, #3AA0FF 0%, #F152FF 100%)' }}
-            >
-              Context Health
-            </h1>
-            <p className="font-pretendard font-normal text-[15px] leading-[normal] text-[#646d76] whitespace-nowrap">
-              AI 기반 운동·식단 관리로 더 건강한 하루를 만들어요
-            </p>
-          </div>
-          <LogoMotion />
+      >
+        <LogoMotion tone="white" epoch={APP_EPOCH} />
+        <div
+          className="flex flex-col items-center gap-1.5 text-center"
+          style={{ opacity: formIn ? 1 : 0, transform: formIn ? 'none' : 'translateY(8px)', transition: `opacity 0.6s 0.25s ${ease}, transform 0.6s 0.25s ${ease}` }}
+        >
+          <h1 className="font-pretendard font-bold text-[28px] leading-[33px] text-white">Context Health</h1>
+          <p className="font-pretendard font-normal text-[14px] leading-[17px] text-white whitespace-nowrap">
+            AI 기반 운동·식단 관리로 더 건강한 하루를 만들어요
+          </p>
         </div>
-        <div style={{ flex: '173 1 0' }} />
       </div>
+
+      <div className="flex-1" />
 
       {/* 하단 로그인 버튼 영역 */}
       <div
-        className="relative z-10 px-5 flex flex-col gap-2"
-        style={{ paddingBottom: 'max(40px, calc(env(safe-area-inset-bottom) + 16px))', animation: 'loginButtonsIn 0.7s 0.4s cubic-bezier(.4,0,.2,1) both' }}
+        className="relative z-10 px-5 flex flex-col gap-3"
+        aria-hidden={!formIn}
+        style={{
+          paddingBottom: 'max(36px, calc(env(safe-area-inset-bottom) + 16px))',
+          opacity: formIn ? 1 : 0,
+          transform: formIn ? 'none' : 'translateY(16px)',
+          pointerEvents: formIn ? 'auto' : 'none',
+          transition: `opacity 0.6s 0.35s ${ease}, transform 0.6s 0.35s ${ease}`,
+        }}
       >
         {isInAppBrowser ? (
           <div className="w-full rounded-[16px] border border-[#e9ecef] bg-white/85 px-4 py-4 shadow-[0_8px_24px_rgba(23,26,29,0.08)]">
@@ -416,7 +404,7 @@ export default function LoginScreen({ onLogin }) {
         ) : (
           <>
             {error && (
-              <p className="font-pretendard text-[13px] text-[#e05a2b] text-center tracking-[-0.325px] -mb-1">{error}</p>
+              <p role="alert" className="font-pretendard font-medium text-[13px] text-white text-center tracking-[-0.325px] rounded-xl bg-black/20 px-3 py-2">{error}</p>
             )}
 
             {BUTTONS.map(({ id, label, icon, bg, text, border, handler }) => (
@@ -424,8 +412,8 @@ export default function LoginScreen({ onLogin }) {
                 key={id}
                 pressScale={0.98}
                 onClick={handler}
-                disabled={!!loading}
-                className="w-full h-[52px] flex items-center justify-center gap-3 rounded-[14px] font-pretendard font-semibold text-[15px] tracking-[-0.375px] disabled:opacity-60"
+                disabled={!!loading || !formIn}
+                className="w-full h-[48px] flex items-center justify-center gap-3 rounded-[14px] font-pretendard font-semibold text-[14px] tracking-[-0.35px] disabled:opacity-60"
                 style={{ background: bg, color: text, border: `1.5px solid ${border}` }}
               >
                 {loading === id ? (
@@ -443,7 +431,7 @@ export default function LoginScreen({ onLogin }) {
         )}
 
         {!isInAppBrowser && (
-          <p className="font-pretendard text-[12px] text-[#adb5bd] text-center tracking-[-0.3px] mt-2">
+          <p className="font-pretendard text-[12px] leading-[18px] text-white/80 text-center tracking-[-0.3px]">
             로그인 시 <button type="button" className="underline" onClick={() => setActiveLegal('terms')}>이용약관</button>
             {' 및 '}
             <button type="button" className="underline" onClick={() => setActiveLegal('privacy')}>개인정보처리방침</button>에 동의합니다
@@ -451,7 +439,7 @@ export default function LoginScreen({ onLogin }) {
         )}
 
         {isInAppBrowser && error && (
-          <p className="font-pretendard text-[13px] text-[#e05a2b] text-center tracking-[-0.325px] -mb-1">{error}</p>
+          <p role="alert" className="font-pretendard font-medium text-[13px] text-white text-center tracking-[-0.325px] rounded-xl bg-black/20 px-3 py-2">{error}</p>
         )}
       </div>
     </div>

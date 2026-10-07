@@ -86,6 +86,7 @@ function App() {
   const [onboardingDone, setOnboardingDone] = useState(false);
   const [userDataReady, setUserDataReady] = useState(false);
   const [splashHold, setSplashHold] = useState(true);
+  const hadSessionRef = useRef(Boolean(localStorage.getItem('auth_user'))); // 이 기기에 로그인 기록이 있는지
   const splashStartRef = useRef(Date.now());
   const [tab, setTab]         = useState('home');
   const [prevTab, setPrevTab] = useState('home');
@@ -544,6 +545,19 @@ function App() {
     setAiGoals(next);
   }
 
+  /* ── 로그인 화면 ──
+     로그인된 적이 없는 기기에서는 로그인 상태를 확인하는 동안에도 같은 로그인 화면(로고 모션)을 띄워
+     확인이 끝난 뒤 화면이 바뀌지 않고 그대로 버튼이 나타나게 한다. */
+  if (user === null || (user === undefined && !hadSessionRef.current)) {
+    return (
+      <div className="min-h-dvh bg-[#f1f3f5] flex justify-center items-start sm:items-center">
+        <div className="w-full max-w-[430px] h-dvh relative overflow-hidden shadow-2xl">
+          <LoginScreen onLogin={handleLogin} authReady={user === null} />
+        </div>
+      </div>
+    );
+  }
+
   /* ── 로딩 (시작 화면) ──
      기록을 금방 불러와도 로고 모션이 완성될 때까지는 시작 화면을 유지한다. */
   if (user === undefined || (user && (!userDataReady || splashHold))) {
@@ -571,18 +585,6 @@ function App() {
   return (
     <div className="min-h-dvh bg-[#f1f3f5] flex justify-center items-start sm:items-center">
       <div className="w-full max-w-[430px] h-dvh bg-white relative overflow-hidden shadow-2xl">
-
-        {/* ── 로그인 ── */}
-        {!user && (
-          <div className="absolute inset-0 z-50">
-            <LoginScreen onLogin={handleLogin} />
-          </div>
-        )}
-
-        {/* ── Claude 커넥터 연결 동의 ── */}
-        {user && mcpAuthorizeRequest && (
-          <McpAuthorizeScreen user={user} request={mcpAuthorizeRequest} onClose={() => setMcpAuthorizeRequest(null)} />
-        )}
 
         {/* ── 온보딩 ── */}
         {user && !onboardingDone && (

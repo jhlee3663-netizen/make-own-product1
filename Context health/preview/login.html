@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="UTF-8" /><title>로그인 화면 미리보기</title></head>
+<body style="margin:0;background:#f1f3f5"><div id="root"></div>
+<script type="module">
+/* ?intro 를 붙이면 로고만 보이는 첫 단계, 없으면 버튼까지 나온 상태를 보여준다. */
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import '../src/index.css';
+import LoginScreen from '../src/components/screens/LoginScreen';
+const h = React.createElement;
+const intro = new URLSearchParams(location.search).has('intro');
+createRoot(document.getElementById('root')).render(
+  h('div', { style: { width: 402, height: 874, position: 'relative', overflow: 'hidden', margin: '0 auto' } },
+    h(LoginScreen, { onLogin() {}, authReady: !intro })));
+</script></body></html>
