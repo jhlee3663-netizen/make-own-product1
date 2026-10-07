@@ -27,6 +27,8 @@ if (new URLSearchParams(location.search).has('auto')) {
     const el = document.querySelector('#root .relative');
     const r = el.getBoundingClientRect();
     el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'mouse', button: 0, clientX: r.left + 100, clientY: r.top + 60 }));
+    const at = Number(new URLSearchParams(location.search).get('at'));
+    if (at) document.getAnimations().forEach(animation => { animation.pause(); animation.currentTime = at; });
   }, 300);
 }
 </script></body></html>
