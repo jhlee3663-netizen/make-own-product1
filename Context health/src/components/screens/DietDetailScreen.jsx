@@ -8,7 +8,8 @@ import ConfirmModal from '../common/ConfirmModal';
 import Pressable from '../common/Pressable';
 import Toast from '../common/Toast';
 import { getDietSummaryComment } from '../../utils/dietFeedback';
-import { estimateFoodNutrition, estimateMealNutrition, findCustomFood, normalizeFoodKey, searchMfdsFoods } from '../../utils/nutritionLookup';
+import { estimateFoodNutrition, estimateMealNutrition, findCustomFood, normalizeFoodKey, searchMfdsFoods, splitFoodMemoLocally } from '../../utils/nutritionLookup';
+import { aiErrorMessage } from '../../lib/aiClient';
 import { getUserStorage, setUserStorage } from '../../lib/userStorage';
 import { clearRecordDraft, loadRecordDraft, saveRecordDraft, withSaveTimeout } from '../../lib/recordDrafts';
 import {
@@ -346,6 +347,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResult, setSearchResult] = useState(null);
   const [searchResults, setSearchResults] = useState([]);
+  const [multiSearch, setMultiSearch] = useState(false);
   const [searching, setSearching]     = useState(false);
   const [estimatingSearch, setEstimatingSearch] = useState(false);
   const searchInputRef = useRef(null);
@@ -549,7 +551,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
       setAiInputs(prev => ({ ...prev, [secId]: '' }));
       setRecentFoods(prev => pushRecent(uid, newItems, prev));
     } catch (e) {
-      alert('AI 분석 오류: ' + e.message);
+      alert('AI 분석 오류: ' + aiErrorMessage(e));
     } finally {
       analyzingIds.current.delete(secId);
       setAnalyzingVersion(v => v + 1);
@@ -562,11 +564,19 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
     setSearching(true);
     setSearchResult(null);
     setSearchResults([]);
+    setMultiSearch(false);
     try {
       const custom = findCustomFood(customFoods, searchQuery);
       if (custom) {
         setSearchResult(normalizeSearchItem(custom));
         setSearchResults([]);
+        return;
+      }
+      /* 음식을 여러 개 적으면 하나씩 나눠서 각각 결과로 보여준다. */
+      if (splitFoodMemoLocally(searchQuery).length > 1) {
+        const items = await estimateMealNutrition(searchQuery, customFoods);
+        setMultiSearch(true);
+        setSearchResults(items);
         return;
       }
       const mfdsItems = await searchMfdsFoods(searchQuery);
@@ -576,7 +586,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
         setSearchResult(normalizeSearchItem(item));
       }
     } catch (e) {
-      alert('검색 실패: ' + e.message);
+      alert('검색 실패: ' + aiErrorMessage(e));
     } finally {
       setSearching(false);
     }
@@ -605,6 +615,10 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
       sec.id === searchModal ? { ...sec, items: mergeFoodPortionItems(sec.items || [], [item]) } : sec
     ));
     setRecentFoods(prev => pushRecent(uid, [item], prev));
+    /* 여러 음식 검색이면 남은 음식도 이어서 담을 수 있게 시트를 열어 둔다. */
+    const rest = multiSearch ? searchResults.filter(r => r.name !== food.name) : [];
+    if (rest.length > 0) { setSearchResults(rest); return; }
+    setMultiSearch(false);
     setSearchResult(null);
     setSearchResults([]);
     setSearchQuery('');
@@ -623,7 +637,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
       setSearchResult(normalizeSearchItem(item));
       setSearchResults([]);
     } catch (e) {
-      alert('AI 추정 실패: ' + e.message);
+      alert('AI 추정 실패: ' + aiErrorMessage(e));
     } finally {
       setEstimatingSearch(false);
     }
@@ -892,7 +906,8 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
       clearRecordDraft(uid, 'diet', draftTargetId);
       onSave();
     } catch (e) {
-      alert('저장 실패: ' + e.message);
+      console.error(e);
+      alert('저장 실패: ' + aiErrorMessage(e));
     } finally {
       saveInFlightRef.current = false;
       setSaving(false);
@@ -1254,13 +1269,15 @@ export default function DietDetailScreen({ onBack, onSave, initialData, uid, pro
               <div className="mb-4 flex-1 overflow-y-auto">
                 <div className="flex items-center justify-between mb-2">
                   <p className="font-pretendard font-semibold text-[12px] text-[#868e96] uppercase tracking-[0.5px] m-0">검색 결과</p>
-                  <button
-                    onClick={handleUseAiEstimate}
-                    disabled={estimatingSearch}
-                    className="font-pretendard font-semibold text-[12px] text-[#7171FF] disabled:opacity-40"
-                  >
-                    {estimatingSearch ? '추정 중...' : 'AI 추정값 사용'}
-                  </button>
+                  {!multiSearch && (
+                    <button
+                      onClick={handleUseAiEstimate}
+                      disabled={estimatingSearch}
+                      className="font-pretendard font-semibold text-[12px] text-[#7171FF] disabled:opacity-40"
+                    >
+                      {estimatingSearch ? '추정 중...' : 'AI 추정값 사용'}
+                    </button>
+                  )}
                 </div>
                 <div className="flex flex-col">
                   {searchResults.map(food => (

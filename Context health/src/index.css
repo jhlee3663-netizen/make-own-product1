@@ -366,3 +366,12 @@ textarea:focus {
 @media (prefers-reduced-motion: reduce) {
   .stagger-in > *, .chart-draw, .chart-wipe, .chart-bar, .chart-grow-x, .chart-dot { animation: none; }
 }
+
+/* 홈: 점 표의 점은 왼쪽부터 톡톡 나타나고, 폴더 탭의 흰 바탕은 옆으로 미끄러진다 */
+.chart-dot-in { animation: chartDot 300ms ease-out backwards; animation-delay: var(--d, 0ms); }
+.home-tab-slider { transition: transform 380ms cubic-bezier(0.3, 1.15, 0.4, 1); will-change: transform; }
+.home-day { transition: background-color 180ms ease, color 180ms ease; }
+@media (prefers-reduced-motion: reduce) {
+  .chart-dot-in { animation: none; }
+  .home-tab-slider, .home-day { transition: none; }
+}

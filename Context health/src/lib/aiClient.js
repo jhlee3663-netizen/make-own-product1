@@ -88,3 +88,34 @@ export function extractText(data) {
   const chosen = parts.find(p => !p.thought) ?? parts[parts.length - 1];
   return typeof chosen?.text === 'string' ? chosen.text : '';
 }
+
+/** AI 답에서 JSON만 꺼낸다. 앞뒤에 다른 말이 붙어도 읽고, 못 읽으면 'parse' 오류를 던진다. */
+export function parseAiJson(text, open = '{') {
+  const cleaned = String(text || '').replace(/```json/gi, '').replace(/```/g, '');
+  const start = cleaned.indexOf(open);
+  const end = cleaned.lastIndexOf(open === '[' ? ']' : '}');
+  if (start < 0 || end <= start) throw new AiRequestError('parse');
+  try {
+    return JSON.parse(cleaned.slice(start, end + 1));
+  } catch {
+    throw new AiRequestError('parse');
+  }
+}
+
+const AI_ERROR_MESSAGES = {
+  unauthenticated: '로그인이 만료됐어요. 다시 로그인해 주세요.',
+  'rate-limited': '요청이 많아요. 잠시 후 다시 시도해 주세요.',
+  'too-large': '내용이 너무 길어요. 줄여서 다시 시도해 주세요.',
+  timeout: '응답이 늦어지고 있어요. 잠시 후 다시 시도해 주세요.',
+  network: '네트워크 연결을 확인한 뒤 다시 시도해 주세요.',
+  parse: 'AI 응답을 읽지 못했어요. 다시 시도해 주세요.',
+};
+
+/** 알림에 보여줄 안내 문구. 영어 오류 원문은 화면에 내보내지 않는다. */
+export function aiErrorMessage(error) {
+  if (error instanceof AiRequestError) {
+    return AI_ERROR_MESSAGES[error.kind] || '일시적인 문제로 처리하지 못했어요. 잠시 후 다시 시도해 주세요.';
+  }
+  const message = String(error?.message || '');
+  return /[가-힣]/.test(message) ? message : '일시적인 문제로 처리하지 못했어요. 잠시 후 다시 시도해 주세요.';
+}

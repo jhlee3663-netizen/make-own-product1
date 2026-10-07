@@ -1,4 +1,5 @@
 const { onRequest } = require('firebase-functions/v2/https');
+const crypto = require('crypto');
 const Anthropic = require('@anthropic-ai/sdk');
 const { Octokit } = require('@octokit/rest');
 const { initializeApp } = require('firebase-admin/app');
@@ -15,6 +16,7 @@ const ALLOWED_ORIGINS = new Set([
   'https://context-health-3eb84.web.app',
   'https://context-health-3eb84.firebaseapp.com',
   'http://localhost:5173',
+  'https://localhost', // 안드로이드 앱(Capacitor)
 ]);
 
 function setCors(req, res) {
@@ -489,6 +491,15 @@ exports.mcp = onRequest({ region: 'us-central1', timeoutSeconds: 60, secrets: ['
 
 exports.sentryWebhook = onRequest({ secrets: ['ANTHROPIC_KEY', 'GITHUB_TOKEN'] }, async (req, res) => {
   if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
+
+  // Sentry가 보낸 요청인지 서명으로 확인한다. 비밀값(SENTRY_CLIENT_SECRET)이 없으면 아무 요청도 받지 않는다.
+  const sentrySecret = process.env.SENTRY_CLIENT_SECRET;
+  if (!sentrySecret) return res.status(503).send('Webhook not configured');
+  const expected = crypto.createHmac('sha256', sentrySecret).update(req.rawBody || '').digest('hex');
+  const received = String(req.get('sentry-hook-signature') || '');
+  if (received.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(received), Buffer.from(expected))) {
+    return res.status(401).send('Invalid signature');
+  }
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_KEY });
   const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });

@@ -604,7 +604,7 @@ function App() {
             {/* 홈 탭 */}
             <div className={tabClass('home')} style={tabStyle('home')} inert={tab !== 'home' ? '' : undefined} aria-hidden={tab !== 'home'}>
               <HomeScreen
-                active={tab === 'home'}
+                active={tab === 'home' && screen === 'home'}
                 user={user}
                 profile={profile}
                 aiGoals={aiGoals}

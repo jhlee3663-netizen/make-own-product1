@@ -21,7 +21,7 @@ import {
   runTransaction
 } from 'firebase/firestore';
 import { buildWorkoutSummaryMessage, findComparableLastVolumeFromLogs, formatCardioDuration, parseCardioMinutes, parseVolume, parseVolumeFromBody, sumReps } from '../../utils/utils';
-import { generateContent, extractText } from '../../lib/aiClient';
+import { generateContent, extractText, parseAiJson, aiErrorMessage } from '../../lib/aiClient';
 import { BODY_PARTS, filterBodyParts, BODYWEIGHT_BASES } from '../../utils/exerciseData';
 import { KEEP_REMARKS_RULE, preserveUserRemarks } from '../../utils/workoutNotes';
 import { loadCustomExercises, rememberCustomExercises } from '../../lib/customExercises';
@@ -598,8 +598,7 @@ ${rawText}`;
       const json = await generateContent({ contents: [{ parts: [{ text: prompt }] }] });
       const text = extractText(json);
       if (!text) throw new Error("AI 응답 실패");
-      const cleanText = text.replace(/```json/gi, '').replace(/```/g, '').trim();
-      const parsed = preserveUserRemarks(JSON.parse(cleanText), sections);
+      const parsed = preserveUserRemarks(parseAiJson(text, '['), sections);
       const mappedSections = parsed.map(s => ({
         id: Date.now() + Math.random(),
         part: s.part || "운동 부위",
@@ -661,7 +660,8 @@ ${rawText}`;
       }
     } catch (e) {
       console.error("AI 글 정리 에러:", e);
-      alert("AI 글 정리 오류: " + e.message);
+      console.error(e);
+      alert("AI 글 정리 오류: " + aiErrorMessage(e));
     } finally {
       setIsBsLoading(false);
     }
@@ -786,9 +786,7 @@ JSON 형식으로만 반환해줘:
 4. JSON만 반환`;
 
         const json = await generateContent({ contents: [{ parts: [{ text: prompt }] }] });
-        const resParts = json.candidates[0].content.parts;
-        const text = (resParts.find(p => !p.thought) ?? resParts[resParts.length - 1]).text;
-        const parsed = JSON.parse(text.replace(/```json/gi, '').replace(/```/g, '').trim());
+        const parsed = parseAiJson(extractText(json));
 
         const theoryNote = parsed.theory ? `\n\n💬 ${parsed.theory}` : '';
         setSections(prev => prev.map(s => s.id !== secId ? s : {
@@ -822,9 +820,7 @@ JSON 형식으로만 반환해줘:
 4. JSON만 반환`;
 
         const json = await generateContent({ contents: [{ parts: [{ text: prompt }] }] });
-        const resParts = json.candidates[0].content.parts;
-        const text = (resParts.find(p => !p.thought) ?? resParts[resParts.length - 1]).text;
-        const parsed = JSON.parse(text.replace(/```json/gi, '').replace(/```/g, '').trim());
+        const parsed = parseAiJson(extractText(json));
 
         const items = parsed.items || [];
         setSections(prev => prev.map(s => s.id !== secId ? s : {
@@ -836,7 +832,8 @@ JSON 형식으로만 반환해줘:
         }
       }
     } catch (e) {
-      alert("AI 루틴 생성 오류: " + e.message);
+      console.error(e);
+      alert("AI 루틴 생성 오류: " + aiErrorMessage(e));
     } finally {
       setSectionAiLoading(null);
     }
@@ -873,7 +870,8 @@ JSON 형식으로만 반환해줘:
         }
         setRecentSheet(prev => ({ ...prev, records: matching, loading: false }));
       } catch (e) {
-        alert("기록 조회 오류: " + e.message);
+        console.error(e);
+        alert("기록 조회 오류: " + aiErrorMessage(e));
         setRecentSheet(prev => ({ ...prev, loading: false }));
       }
     } else {
@@ -898,7 +896,8 @@ JSON 형식으로만 반환해줘:
         }
         setRecentSheet(prev => ({ ...prev, records: matching, loading: false }));
       } catch (e) {
-        alert("기록 조회 오류: " + e.message);
+        console.error(e);
+        alert("기록 조회 오류: " + aiErrorMessage(e));
         setRecentSheet(prev => ({ ...prev, loading: false }));
       }
     }
@@ -1251,7 +1250,8 @@ JSON 형식으로만 반환해줘:
       // 백그라운드 AI 처리 (컴포넌트 언마운트 후에도 계속 실행됨)
       runBackgroundAI(docRef, sections, title, workoutMode, undefined, aiRevision).catch(() => {});
     } catch (e) {
-      alert("저장 중 오류가 발생했습니다: " + e.message);
+      console.error(e);
+      alert("저장 실패: " + aiErrorMessage(e));
     } finally {
       saveInFlightRef.current = false;
       setSaving(false);

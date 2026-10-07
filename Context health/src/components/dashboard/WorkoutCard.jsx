@@ -1,5 +1,4 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { QuoteIcon } from '../icons/Icons';
 import Pressable from '../common/Pressable';
 import PressCard from '../common/PressCard';
 import useDismiss from '../../lib/useDismiss';
@@ -9,7 +8,7 @@ import { shareText, buildWorkoutShareText } from '../../utils/share';
 
 const enteredCards = new Set();
 
-const WorkoutCard = ({ data, perfGrade = 'success', onCardClick, onDelete, onChangeDate, isDeleting, onRetryAI }) => {
+const WorkoutCard = ({ data, perfGrade = 'success', highlight = false, onCardClick, onDelete, onChangeDate, isDeleting, onRetryAI }) => {
   if (!data) return null;
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -64,47 +63,36 @@ const WorkoutCard = ({ data, perfGrade = 'success', onCardClick, onDelete, onCha
   const isError = isStaleProcessing || (aiStatus === 'error' && !displayComment);
 
   const dt = data.timestamp ? new Date(data.timestamp.seconds * 1000) : new Date();
-  const ds = `${String(dt.getFullYear()).slice(2)}. ${dt.getMonth() + 1}. ${dt.getDate()}`;
+  // 올해 기록은 월·일만, 지난 해 기록은 연도까지 보여준다
+  const ds = `${dt.getFullYear() === new Date().getFullYear() ? '' : `${String(dt.getFullYear()).slice(2)}. `}${dt.getMonth() + 1}. ${dt.getDate()}`;
 
-  const gid = "wc_" + (docId || "temp");
 
   return (
-    <div onAnimationEnd={() => setEntering(false)} className={`px-4 py-2 ${isDeleting ? 'card-exit-wrapper' : entering ? 'card-enter' : ''}`}>
+    <div onAnimationEnd={() => setEntering(false)} className={`px-4 ${isDeleting ? 'card-exit-wrapper' : entering ? 'card-enter' : ''}`}>
+      {/* 고른 날짜의 기록은 그라데이션 테두리로 구분한다 (Figma 1163:12392) */}
+      <div className="rounded-[20px] shadow-[0_2px_12px_rgba(3,27,38,0.05)]" style={highlight ? { padding: 1, background: 'linear-gradient(100deg, #7171FF, #f79fff)' } : undefined}>
       <PressCard
         onClick={() => onCardClick(data)}
         onLongPress={() => setMenuOpen(true)}
-        className="bg-white shadow-[0_0_25px_rgba(3,27,38,0.08)] cursor-pointer"
+        radius={highlight ? 19 : 20}
+        className="bg-white cursor-pointer"
       >
-        {/* 흰 선 4 + 눌리는 영역 안쪽 여백 12 = 내용은 카드 가장자리에서 16. 한마디 글도 같은 선에 맞춘다. */}
-        <div className="p-3 flex flex-col gap-4">
-        <div className="flex flex-col gap-4">
+        {/* 흰 선 4 + 안쪽 여백 = 내용은 카드 가장자리에서 좌우 20, 위아래 18 */}
+        <div className="px-4 py-[14px] flex flex-col gap-3">
+        <div className="flex flex-col gap-3">
 
           {/* Header */}
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-3">
             <div className="flex items-center justify-between">
-              <div className={`px-2 py-1 rounded-[8px] ${perfGrade === 'meh' ? 'bg-[#f07800]/10' : 'bg-[#7171FF]/10'}`}>
-                <p className={`font-pretendard text-[13px] tracking-[-0.325px] whitespace-nowrap ${perfGrade === 'meh' ? 'text-[#f07800]' : 'text-[#7171FF]'}`}>
+              <div className={`px-[10px] py-1 rounded-full ${perfGrade === 'meh' ? 'bg-[#f1f3f5]' : 'bg-[#7171FF]/10'}`}>
+                <p className={`font-pretendard font-semibold text-[12px] leading-[14px] tracking-[-0.3px] whitespace-nowrap ${perfGrade === 'meh' ? 'text-[#868e96]' : 'text-[#7171FF]'}`}>
                   {perfGrade === 'meh' ? '아쉬워요 💭' : '성공 🔥'}
                 </p>
               </div>
               <div className="relative" ref={menuRef}>
-                <Pressable
-                  pressScale={0.85}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setMenuOpen(!menuOpen);
-                  }}
-                  className={`w-6 h-6 flex items-center justify-center rounded-full ${menuOpen ? 'bg-ui-2' : 'hover:bg-ui-2'}`}
-                >
-                  <svg width="20" height="4" viewBox="0 0 20 4" fill="none">
-                    <circle cx="2" cy="2" r="2" fill="#ADB5BD"/>
-                    <circle cx="10" cy="2" r="2" fill="#ADB5BD"/>
-                    <circle cx="18" cy="2" r="2" fill="#ADB5BD"/>
-                  </svg>
-                </Pressable>
                 {menuOpen && (
                   <>
-                    <div className="absolute top-8 right-0 bg-white rounded-[12px] shadow-lg py-1 z-[99] min-w-[120px]" onClick={e => e.stopPropagation()}>
+                    <div className="absolute top-0 right-0 bg-white rounded-[12px] shadow-lg py-1 z-[99] min-w-[120px]" onClick={e => e.stopPropagation()}>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -141,10 +129,10 @@ const WorkoutCard = ({ data, perfGrade = 'success', onCardClick, onDelete, onCha
               </div>
             </div>
             <div className="flex items-center justify-between">
-              <p className="font-pretendard font-semibold text-[18px] text-[#171a1d] tracking-[-0.45px] m-0">
+              <p className="font-pretendard font-bold text-[18px] leading-[22px] text-[#171a1d] tracking-[-0.45px] m-0 min-w-0 truncate">
                 {title}
               </p>
-              <p className="font-pretendard text-[14px] text-[#646d76] tracking-[-0.35px] text-right m-0">
+              <p className="flex-none pl-3 font-pretendard text-[13px] text-[#868e96] tracking-[-0.325px] text-right m-0">
                 {ds}
               </p>
             </div>
@@ -186,17 +174,15 @@ const WorkoutCard = ({ data, perfGrade = 'success', onCardClick, onDelete, onCha
             )}
           </div>
         ) : displayComment ? (
-          <div className="border-t border-[#f1f3f5] pt-4 pb-1 flex gap-2 items-start">
-            <QuoteIcon gid={gid} />
-            <div className="flex-1 mt-0.5 min-w-0">
-              <p className="font-pretendard font-medium text-[14px] text-transparent bg-clip-text bg-gradient-to-r from-[#228bed] to-[#c509d6] tracking-[-0.35px] leading-[20px] m-0 truncate">
-                {displayComment}
-              </p>
-            </div>
+          <div className="border-t border-[#f1f3f5] pt-3">
+            <p className="font-pretendard font-semibold text-[13px] leading-4 text-[#7171FF] tracking-[-0.325px] m-0 truncate">
+              {displayComment}
+            </p>
           </div>
         ) : null}
         </div>
       </PressCard>
+      </div>
       <Toast show={toast.show} message={toast.message} />
     </div>
   );

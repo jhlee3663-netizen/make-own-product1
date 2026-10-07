@@ -402,9 +402,19 @@ function getStandardFood(query, amountText = query) {
 }
 
 function extractJson(raw, fallbackPattern) {
-  const match = raw.match(fallbackPattern);
-  if (!match) throw new Error('JSON 파싱 실패');
-  return JSON.parse(match[0]);
+  const failMessage = 'AI 응답을 읽지 못했어요. 다시 시도해 주세요.';
+  const match = raw.replace(/```json/gi, '').replace(/```/g, '').match(fallbackPattern);
+  if (!match) throw new Error(failMessage);
+  try {
+    return JSON.parse(match[0]);
+  } catch {
+    /* 객체 하나를 요청했는데 여러 개가 이어져 온 경우 첫 객체만 쓴다. */
+    const first = match[0].startsWith('{') && match[0].match(/\{[^{}]*\}/);
+    if (first) {
+      try { return JSON.parse(first[0]); } catch { /* 아래에서 안내 문구로 처리 */ }
+    }
+    throw new Error(failMessage);
+  }
 }
 
 const geminiCache = new Map();

@@ -18,14 +18,14 @@ import {
 import WorkoutCard from '../dashboard/WorkoutCard';
 import DietCard from '../dashboard/DietCard';
 import GoalCard from '../dashboard/GoalCard';
-import WeeklyVolumeChart from '../dashboard/WeeklyVolumeChart';
-import DailyNutritionCard from '../dashboard/DailyNutritionCard';
-import WeeklyCalorieChart from '../dashboard/WeeklyCalorieChart';
-import MorningWeightRow from '../dashboard/MorningWeightRow';
+import HomeHeader from '../home/HomeHeader';
+import WeightInputRow from '../home/WeightInputRow';
+import WorkoutSummary from '../home/WorkoutSummary';
+import { IntakeCard, MealList } from '../home/DietDay';
+import { localDateKey } from '../../lib/bodyLogs';
+import { cardioWeek, dietDay, groupByDate, lastDays, logDateKey, partGrid, weekOf } from '../../lib/homeSummary';
 import { IcSpark } from '../icons/Icons';
 import { KEEP_REMARKS_RULE, preserveUserRemarks } from '../../utils/workoutNotes';
-import TopNav from '../common/TopNav';
-import MainTab from '../common/MainTab';
 import Toast from '../common/Toast';
 import ConfirmModal from '../common/ConfirmModal';
 import Pressable from '../common/Pressable';
@@ -70,26 +70,25 @@ function parseDietGoalDetail(detail = '') {
   };
 }
 
-function calcStreak(workoutLogs) {
-  const DAY = 86400000;
-  const uniqueDays = new Set(
-    workoutLogs.map(log => {
-      const d = log.timestamp?.seconds ? new Date(log.timestamp.seconds * 1000) : null;
-      if (!d) return null;
-      return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-    }).filter(Boolean)
+function ListLabel({ children }) {
+  return (
+    <div className="px-5 pt-1.5 flex items-center gap-2">
+      <span className="font-pretendard font-semibold text-[12px] leading-[14px] text-[#868e96] tracking-[-0.3px]">{children}</span>
+      <span className="flex-1 h-px bg-[#e9ecef]" />
+    </div>
   );
-  const todayTime = new Date(new Date().setHours(0, 0, 0, 0)).getTime();
-  const start = uniqueDays.has(todayTime) ? todayTime : todayTime - DAY;
-  if (!uniqueDays.has(start)) return 0;
-  let streak = 0;
-  let cur = start;
-  while (uniqueDays.has(cur)) { streak++; cur -= DAY; }
-  return streak;
 }
 
 function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, onCardClick, onDietCardClick, onOpenCoachRoom, onNavChange, active = true }) {
   const [mainTab, setMainTab] = useState("workout");
+  const [dateKey, setDateKey] = useState(() => localDateKey());
+  // 홈이 보이는 동안에는 폰 상단 바 색을 보라 상단에 맞춘다
+  useEffect(() => {
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (!meta) return undefined;
+    meta.setAttribute('content', active ? '#7171FF' : '#ffffff');
+    return () => meta.setAttribute('content', '#ffffff');
+  }, [active]);
   // 홈으로 돌아올 때마다 카드가 한 줄씩 다시 쌓여 올라오게 한다 (목록을 새로 그리지 않고 모션만 다시 재생)
   const listRef = useRef(null);
   const enteredRef = useRef(false);
@@ -513,74 +512,29 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
     </div>
   ) : null;
 
-  return (
-    <div className="flex flex-col h-full overflow-hidden">
-      <ConfirmModal
-        isOpen={!!deleteTarget}
-        title={deleteTarget?.type === 'diet' ? '식단 기록을 삭제할까요?' : '운동 메모를 삭제할까요?'}
-        subtitle={`${deleteTarget?.type === 'diet' ? '식단' : (deleteTarget?.title || '이')} 기록이 휴지통으로 이동됩니다.\n마이페이지 휴지통에서 30일 내 복원할 수 있습니다.`}
-        confirmText="삭제"
-        cancelText="취소"
-        confirmVariant="danger"
-        onConfirm={handleDeleteConfirm}
-        onCancel={handleDeleteCancel}
-      />
+  /* ── 날짜 중심 보기 ── */
+  const todayKey = localDateKey();
+  const isToday = dateKey === todayKey;
+  const week = weekOf(dateKey);
+  const recentDays = lastDays(dateKey, 7);
+  const workoutByDate = groupByDate(visibleWorkoutLogs);
+  const dietByDate = groupByDate(visibleDietLogs);
+  const markedDays = new Set((mainTab === 'workout' ? workoutByDate : dietByDate).keys());
+  const dayWorkouts = workoutByDate.get(dateKey) || [];
+  const previousWorkouts = visibleWorkoutLogs.filter(log => logDateKey(log) < dateKey);
+  const dayDietLogs = dietByDate.get(dateKey) || [];
+  const dayDiet = dietDay(dayDietLogs);
+  const previousDiets = visibleDietLogs.filter(log => logDateKey(log) < dateKey);
+  // 새 식단 기록은 오늘 날짜로 저장되므로, 지난 날짜는 이미 있는 기록만 고칠 수 있다
+  const dietEditable = isToday || dayDietLogs.length > 0;
+  const openDayDiet = () => onDietCardClick(dayDietLogs[0] || null);
 
-      {/* 헤더 */}
-      <header className="z-20 flex-none flex flex-col">
-        <TopNav title="내 상태" onTodoClick={() => setRoutineOpen(true)} />
-        <MainTab 
-          tabs={[{ id: 'workout', label: '운동' }, { id: 'diet', label: '식단' }]} 
-          activeId={mainTab} 
-          onChange={setMainTab} 
-        />
-      </header>
+  const workoutCard = (d, highlight) => (
+    <WorkoutCard key={d.docId} data={d} highlight={highlight} perfGrade={getWorkoutPerfGrade(d, visibleWorkoutLogs.slice(visibleWorkoutLogs.indexOf(d) + 1))} onCardClick={onCardClick} onDelete={handleDeleteRequest} onChangeDate={handleDateChangeRequest} isDeleting={d.docId === deletingId} onRetryAI={handleRetryAI} />
+  );
 
-      {/* Pull-to-refresh 파동 효과 */}
-      {rippleKey > 0 && (
-        <div
-          key={rippleKey}
-          className="absolute rounded-full pointer-events-none"
-          style={{
-            width: 1400,
-            height: 1400,
-            top: -570,
-            left: '50%',
-            marginLeft: -700,
-            background: 'radial-gradient(circle, rgba(113,113,255,0.13) 0%, transparent 70%)',
-            animation: 'pullRefreshRipple 0.85s cubic-bezier(0.2, 0.8, 0.2, 1) forwards',
-            zIndex: 10,
-          }}
-        />
-      )}
-
-      {/* Pull-to-refresh 인디케이터 */}
-      <div
-        className="flex-none flex justify-center items-center overflow-hidden"
-        style={{
-          height: isRefreshing ? 56 : pullDistance,
-          transition: pullDistance === 0 ? 'height 0.45s cubic-bezier(.2,.8,.2,1)' : 'none',
-        }}
-      >
-        <div
-          className={`w-6 h-6 border-2 border-ui-3 border-t-brand rounded-full ${isRefreshing ? 'animate-spin' : ''}`}
-          style={{
-            opacity: isRefreshing ? 1 : Math.min(1, pullDistance / PULL_THRESHOLD),
-            transform: isRefreshing ? undefined : `rotate(${pullDistance * 4}deg)`,
-          }}
-        />
-      </div>
-
-      {/* 콘텐츠 */}
-      <main
-        ref={mainRef}
-        className="flex-1 overflow-y-auto pb-[120px]"
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-      >
-        <MorningWeightRow uid={user?.uid} todayOnly />
-
-      {/* AI 코칭 인사이트 카드 — 해당 탭에서만 노출 */}
+  const insightCard = (
+    <>
         {coachingInsight && coachingInsight.category === mainTab && (
           <div className="mx-4 mt-4 mb-1 bg-white rounded-2xl border border-ui-2 shadow-card overflow-hidden">
             <div className="flex items-center justify-between px-4 pt-4 pb-3">
@@ -610,62 +564,118 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
             </PressCard>
           </div>
         )}
-
-        {/* AI 추천 목표 카드 */}
+    </>
+  );
+  const goalCards = (
+    <>
         {aiGoals?.filter(g => g.type === mainTab).map(goal => (
           <GoalCard key={goal.id} goal={goal} onComplete={handleGoalComplete} onDismiss={onRemoveGoal} />
         ))}
-        
-        {/* 기존 로그 렌더링 시작 직전 구분선 (목표 카드가 있을 때만) */}
-        {aiGoals?.some(g => g.type === mainTab) && (
-          <div className="mx-4 mt-6 mb-4 flex items-center gap-3">
-             <div className="h-px bg-ui-2 flex-1" />
-             <span className="font-pretendard text-caption-m text-typo-alternative tracking-[-0.3px]">이전 기록</span>
-             <div className="h-px bg-ui-2 flex-1" />
-          </div>
-        )}
+    </>
+  );
 
-        <div ref={listRef} className="stagger-in">
+  return (
+    <div className="flex flex-col h-full overflow-hidden bg-brand">
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        title={deleteTarget?.type === 'diet' ? '식단 기록을 삭제할까요?' : '운동 메모를 삭제할까요?'}
+        subtitle={`${deleteTarget?.type === 'diet' ? '식단' : (deleteTarget?.title || '이')} 기록이 휴지통으로 이동됩니다.\n마이페이지 휴지통에서 30일 내 복원할 수 있습니다.`}
+        confirmText="삭제"
+        cancelText="취소"
+        confirmVariant="danger"
+        onConfirm={handleDeleteConfirm}
+        onCancel={handleDeleteCancel}
+      />
+
+      <HomeHeader
+        dateKey={dateKey}
+        todayKey={todayKey}
+        week={week}
+        markedDays={markedDays}
+        tab={mainTab}
+        onTabChange={setMainTab}
+        onDateChange={setDateKey}
+        onTodoClick={() => setRoutineOpen(true)}
+      />
+
+      {/* Pull-to-refresh 파동 효과 */}
+      {rippleKey > 0 && (
+        <div
+          key={rippleKey}
+          className="absolute rounded-full pointer-events-none"
+          style={{
+            width: 1400,
+            height: 1400,
+            top: -570,
+            left: '50%',
+            marginLeft: -700,
+            background: 'radial-gradient(circle, rgba(113,113,255,0.13) 0%, transparent 70%)',
+            animation: 'pullRefreshRipple 0.85s cubic-bezier(0.2, 0.8, 0.2, 1) forwards',
+            zIndex: 10,
+          }}
+        />
+      )}
+
+      {/* Pull-to-refresh 인디케이터 */}
+      <div
+        className="flex-none flex justify-center items-center overflow-hidden"
+        style={{
+          height: isRefreshing ? 56 : pullDistance,
+          transition: pullDistance === 0 ? 'height 0.45s cubic-bezier(.2,.8,.2,1)' : 'none',
+        }}
+      >
+        <div
+          className={`w-6 h-6 border-2 border-white/30 border-t-white rounded-full ${isRefreshing ? 'animate-spin' : ''}`}
+          style={{
+            opacity: isRefreshing ? 1 : Math.min(1, pullDistance / PULL_THRESHOLD),
+            transform: isRefreshing ? undefined : `rotate(${pullDistance * 4}deg)`,
+          }}
+        />
+      </div>
+
+
+      {/* 콘텐츠: 보라 상단 아래로 이어지는 흰 시트 */}
+      <main
+        ref={mainRef}
+        className="flex-1 overflow-y-auto bg-[#f8f9fa] rounded-t-[24px] pt-[14px] pb-[120px]"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
+        <div ref={listRef} key={`${mainTab}-${dateKey}`} className="stagger-in flex flex-col gap-3">
         {mainTab === "workout" ? (
           visibleWorkoutLogs.length === 0 ? (
-            <div className="flex flex-col items-center justify-center px-8 pt-16 gap-3">
-              <div className="w-16 h-16 rounded-2xl bg-ui-1 flex items-center justify-center text-3xl mb-1">🏋️</div>
-              <p className="font-pretendard font-bold text-[17px] text-typo-strong tracking-[-0.4px]">첫 운동을 기록해봐요!</p>
-              <p className="font-pretendard text-body-s text-typo-alternative text-center tracking-[-0.3px] leading-relaxed">AI가 거친 메모를 깔끔하게 정리해드려요</p>
-              <Pressable pressScale={0.97} onClick={onNavigateToMemo} className="mt-2 px-6 py-3 bg-brand text-white rounded-2xl font-pretendard font-bold text-body-s tracking-[-0.35px]">
-                기록 시작하기
-              </Pressable>
-            </div>
-          ) : (() => {
-            const streak = calcStreak(workoutLogs);
-            return (
-              <>
-                {streak >= 2 && (
-                  <div className="mx-4 mt-4 mb-1 flex items-center gap-2.5 bg-white rounded-[16px] border border-ui-2 px-4 py-3 shadow-[0_0_16px_rgba(3,27,38,0.06)]">
-                    <span className="text-xl">🔥</span>
-                    <p className="font-pretendard font-bold text-body-s text-typo-strong tracking-[-0.35px]">{streak}일 연속 운동 중!</p>
-                    <p className="font-pretendard text-caption-m text-typo-alternative tracking-[-0.3px]">Keep going</p>
-                  </div>
-                )}
-                <WeeklyVolumeChart workoutLogs={workoutLogs} />
-                {visibleWorkoutLogs.map((d, i) => (
-                  <WorkoutCard key={d.docId} data={d} perfGrade={getWorkoutPerfGrade(d, visibleWorkoutLogs.slice(i + 1))} onCardClick={onCardClick} onDelete={handleDeleteRequest} onChangeDate={handleDateChangeRequest} isDeleting={d.docId === deletingId} onRetryAI={handleRetryAI} />
-                ))}
-              </>
-            );
-          })()
-        ) : (
-          visibleDietLogs.length === 0 ? (
-            <div className="flex flex-col items-center justify-center px-8 pt-16 gap-3">
-              <div className="w-16 h-16 rounded-2xl bg-ui-1 flex items-center justify-center text-3xl mb-1">🥗</div>
-              <p className="font-pretendard font-bold text-[17px] text-typo-strong tracking-[-0.4px]">오늘 뭐 먹었나요?</p>
-              <p className="font-pretendard text-body-s text-typo-alternative text-center tracking-[-0.3px] leading-relaxed">자연어로 입력하면 AI가 영양소를 분석해요</p>
-              <Pressable pressScale={0.97} onClick={() => onDietCardClick(null)} className="mt-2 px-6 py-3 bg-brand text-white rounded-2xl font-pretendard font-bold text-body-s tracking-[-0.35px]">
-                식단 기록하기
-              </Pressable>
-            </div>
+            <>
+              <WeightInputRow uid={user?.uid} dateKey={dateKey} />
+              <div className="flex flex-col items-center px-8 pt-20 gap-2">
+                <p className="font-pretendard font-bold text-[17px] text-typo-strong tracking-[-0.4px]">아직 운동 기록이 없어요</p>
+                <p className="font-pretendard text-body-s text-typo-alternative text-center tracking-[-0.3px] leading-relaxed">첫 운동을 기록하면 여기에 차곡차곡 쌓여요</p>
+                <Pressable pressScale={0.97} onClick={onNavigateToMemo} className="mt-3 px-6 py-3 bg-brand text-white rounded-2xl font-pretendard font-bold text-body-s tracking-[-0.35px]">
+                  운동 기록하기
+                </Pressable>
+              </div>
+            </>
           ) : (
             <>
+              <WeightInputRow uid={user?.uid} dateKey={dateKey} />
+              <WorkoutSummary days={recentDays} grid={partGrid(workoutByDate, recentDays)} cardio={cardioWeek(workoutByDate, recentDays)} />
+              {insightCard}
+              {goalCards}
+              {dayWorkouts.length > 0 ? dayWorkouts.map(d => workoutCard(d, true)) : (
+                <div className="px-4">
+                  <div className="rounded-[20px] border border-dashed border-[#dee2e6] px-4 py-3 flex items-center justify-between gap-3">
+                    <p className="font-pretendard font-medium text-[14px] leading-5 text-[#868e96] tracking-[-0.35px]">{isToday ? '오늘은 아직 운동 기록이 없어요' : '이 날은 운동 기록이 없어요'}</p>
+                    {isToday && (
+                      <Pressable pressScale={0.93} onClick={onNavigateToMemo} className="flex-none font-pretendard font-bold text-[13px] text-brand tracking-[-0.325px]">기록하기</Pressable>
+                    )}
+                  </div>
+                </div>
+              )}
+              {previousWorkouts.length > 0 && <ListLabel>이전 기록</ListLabel>}
+              {previousWorkouts.map(d => workoutCard(d, false))}
+            </>
+          )
+        ) : (
+          <>
               {!profile?.targetKcal && (
                 <div className="mx-4 mt-4 mb-1 bg-[#fff8f0] rounded-[20px] border border-[#ffd8a8] px-4 py-3.5 flex items-center gap-3">
                   <span className="text-xl flex-shrink-0">🎯</span>
@@ -678,13 +688,22 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
                   </Pressable>
                 </div>
               )}
-              <DailyNutritionCard dietLogs={dietLogs} profile={profile} />
-              <WeeklyCalorieChart dietLogs={dietLogs} profile={profile} />
-              {visibleDietLogs.map((d) => (
+
+            <IntakeCard
+              totals={dayDiet.totals}
+              target={Number(profile?.targetKcal || 0)}
+              week={recentDays.map(day => ({ ...day, kcal: (dietByDate.get(day.key) || []).reduce((sum, log) => sum + Number(log.kcal || 0), 0) }))}
+              onClick={dietEditable ? openDayDiet : undefined}
+              onLongPress={dayDietLogs[0] ? () => handleDeleteRequest(dayDietLogs[0]) : undefined}
+            />
+            <MealList meals={dayDiet.meals} editable={dietEditable} onOpen={openDayDiet} />
+            {insightCard}
+            {goalCards}
+            {previousDiets.length > 0 && <ListLabel>최근 기록</ListLabel>}
+            {previousDiets.map((d) => (
                 <DietCard key={d.docId} data={d} onCardClick={onDietCardClick} isDeleting={d.docId === deletingId} targetKcal={profile?.targetKcal} profile={profile} onDelete={handleDeleteRequest} onChangeDate={handleDateChangeRequest} />
-              ))}
-            </>
-          )
+            ))}
+          </>
         )}
         </div>
         {(hasOlderLogs || olderLogsError) && (

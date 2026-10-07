@@ -21,7 +21,7 @@
 - **Frontend**: React 18 + Vite
 - **Styling**: Tailwind CSS (TDS 기반 — 화이트 톤, Pretendard 서체)
 - **Backend**: Firebase Firestore
-- **AI**: Gemini 2.0 Flash (REST API, `VITE_GEMINI_KEY`)
+- **AI**: Gemini 3.6 Flash — 서버(Cloud Functions `aiGenerate`)를 거쳐서만 호출, 키는 서버에만 있음
 - **Hosting**: Firebase Hosting
 - **아이콘**: lucide-react
 
@@ -47,12 +47,13 @@ src/
 │       ├── HomeScreen.jsx
 │       ├── WorkoutMemoScreen.jsx
 │       └── DietDetailScreen.jsx
-├── services/
-│   ├── aiService.js         # Gemini API 호출 (운동 요약, 동기부여 코멘트)
-│   └── workoutService.js    # Firestore CRUD + 볼륨 계산
+├── utils/                   # 영양 조회(nutritionLookup), 식단 분량, 운동 메모 등
 └── lib/
+    ├── aiClient.js          # AI 호출 공통 (generateContent, parseAiJson, aiErrorMessage)
     └── firebase.js          # Firebase 초기화
+functions/                   # Cloud Functions: aiGenerate, socialAuth, deleteAccount, mcp, sentryWebhook
 ```
+(위 목록은 일부만 적은 것 — 화면은 `src/components/screens/` 참고)
 
 ## 화면 구조 (Screen Navigation)
 
@@ -80,10 +81,9 @@ React Router 없이 `App.jsx`의 `screen` state로 전환:
 
 ## AI 연동 패턴
 
-`aiService.js`에서 Gemini REST API 직접 호출:
-- `summarizeWorkout(sections)` — 거친 메모 → 정형화된 JSON
-- `generateAIComment(summary, overloadMsg)` — 동기부여 한줄평 생성
-- 응답에서 마크다운 코드블록 제거 후 JSON.parse 처리
+`src/lib/aiClient.js`로 서버 `/api/ai-generate`를 호출 (브라우저에서 Gemini 직접 호출 금지):
+- `generateContent(...)` → `extractText(json)` → `parseAiJson(text)` 순서로 사용
+- 실패 알림은 `aiErrorMessage(e)`로 한글 문구만 표시
 
 ## 주요 기능
 
@@ -115,7 +115,10 @@ npm run deploy    # Firebase Hosting 배포
 ## 환경 변수
 
 ```
-VITE_GEMINI_KEY=   # Gemini API 키
+VITE_FIREBASE_*=            # Firebase 설정 6개
+VITE_KAKAO_REST_API_KEY=    # 카카오 로그인
+VITE_NAVER_CLIENT_ID=       # 네이버 로그인
+VITE_SENTRY_DSN=            # 오류 수집
 ```
 (Firebase 설정은 `src/lib/firebase.js`에 하드코딩 또는 env로 관리)
 
@@ -123,5 +126,5 @@ VITE_GEMINI_KEY=   # Gemini API 키
 
 - **컴포넌트**: 함수형, props drilling (Context 미사용)
 - **스타일**: Tailwind utility classes, 커스텀 색상은 인라인 hex
-- **AI 응답**: 항상 JSON 파싱 전 마크다운 제거 (`replace(/```json/gi, '')`)
+- **AI 응답**: JSON은 항상 `parseAiJson`으로 읽기 (직접 `JSON.parse` 금지)
 - **1인 개발**: 불필요한 추상화 없이 실용적으로 구현

@@ -48,11 +48,12 @@ export default function DietCard({ data, isDeleting, targetKcal, profile, onDele
   const summaryComment = getDietSummaryComment(data, profile, effectiveGoal);
 
   return (
-    <div onAnimationEnd={() => setEntering(false)} className={`px-4 py-2 ${isDeleting ? 'card-exit-wrapper' : entering ? 'card-enter' : ''}`}>
+    <div onAnimationEnd={() => setEntering(false)} className={`px-4 ${isDeleting ? 'card-exit-wrapper' : entering ? 'card-enter' : ''}`}>
       <PressCard
         onClick={() => onCardClick?.(data)}
         onLongPress={() => setMenuOpen(true)}
-        className="bg-white shadow-[0_0_25px_rgba(3,27,38,0.08)] cursor-pointer"
+        radius={20}
+        className="bg-white shadow-[0_2px_12px_rgba(3,27,38,0.05)] cursor-pointer"
       >
         {/* 흰 선 4 + 눌리는 영역 안쪽 여백 12 = 내용은 카드 가장자리에서 16 (운동 카드와 같은 구조) */}
         <div className="p-3 flex flex-col gap-4">
