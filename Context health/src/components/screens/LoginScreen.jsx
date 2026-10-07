@@ -304,27 +304,27 @@ export default function LoginScreen({ onLogin, authReady = true }) {
       id: 'google',
       label: 'Google로 계속하기',
       icon: <GoogleIcon />,
-      bg: 'transparent',
+      bg: '#fff',
       text: '#1f1f1f',
-      border: 'transparent',
+      border: '#e0e0e0',
       handler: handleGoogle,
     },
     {
       id: 'kakao',
       label: '카카오로 계속하기',
       icon: <KakaoIcon />,
-      bg: '#FAE64D',
+      bg: '#FEE500',
       text: '#3C1E1E',
-      border: '#FAE64D',
+      border: '#FEE500',
       handler: handleKakao,
     },
     {
       id: 'naver',
       label: '네이버로 계속하기',
-      icon: null, // 시안대로 아이콘 없이 글자만
-      bg: '#5AC467',
+      icon: <NaverIcon />,
+      bg: '#03C75A',
       text: '#fff',
-      border: '#5AC467',
+      border: '#03C75A',
       handler: handleNaver,
     },
   ];
@@ -375,10 +375,10 @@ export default function LoginScreen({ onLogin, authReady = true }) {
 
       {/* 하단 로그인 버튼 영역 */}
       <div
-        className="relative z-10 px-5 flex flex-col gap-3"
+        className="relative z-10 px-5 flex flex-col gap-2"
         aria-hidden={!formIn}
         style={{
-          paddingBottom: 'max(36px, calc(env(safe-area-inset-bottom) + 16px))',
+          paddingBottom: 'max(40px, calc(env(safe-area-inset-bottom) + 16px))',
           opacity: formIn ? 1 : 0,
           transform: formIn ? 'none' : 'translateY(16px)',
           pointerEvents: formIn ? 'auto' : 'none',
@@ -413,7 +413,7 @@ export default function LoginScreen({ onLogin, authReady = true }) {
                 pressScale={0.98}
                 onClick={handler}
                 disabled={!!loading || !formIn}
-                className="w-full h-[48px] flex items-center justify-center gap-3 rounded-[14px] font-pretendard font-semibold text-[14px] tracking-[-0.35px] disabled:opacity-60"
+                className="w-full h-[52px] flex items-center justify-center gap-3 rounded-[14px] font-pretendard font-semibold text-[15px] tracking-[-0.375px] disabled:opacity-60"
                 style={{ background: bg, color: text, border: `1.5px solid ${border}` }}
               >
                 {loading === id ? (
@@ -431,7 +431,7 @@ export default function LoginScreen({ onLogin, authReady = true }) {
         )}
 
         {!isInAppBrowser && (
-          <p className="font-pretendard text-[12px] leading-[18px] text-white/80 text-center tracking-[-0.3px]">
+          <p className="font-pretendard text-[12px] leading-[18px] text-white/80 text-center tracking-[-0.3px] mt-2">
             로그인 시 <button type="button" className="underline" onClick={() => setActiveLegal('terms')}>이용약관</button>
             {' 및 '}
             <button type="button" className="underline" onClick={() => setActiveLegal('privacy')}>개인정보처리방침</button>에 동의합니다
