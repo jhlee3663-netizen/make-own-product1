@@ -54,8 +54,8 @@ export default function DietCard({ data, isDeleting, targetKcal, profile, onDele
         onLongPress={() => setMenuOpen(true)}
         className="bg-white shadow-[0_0_25px_rgba(3,27,38,0.08)] cursor-pointer"
       >
-        {/* 눌리는 영역 안쪽 여백 8 + 영역 바깥 4 (운동 카드와 같은 구조) */}
-        <div className="p-2 flex flex-col gap-4">
+        {/* 흰 선 4 + 눌리는 영역 안쪽 여백 12 = 내용은 카드 가장자리에서 16 (운동 카드와 같은 구조) */}
+        <div className="p-3 flex flex-col gap-4">
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-2 pb-4 border-b border-[#f1f3f5]">
             <div className="flex items-center justify-between">
@@ -126,7 +126,7 @@ export default function DietCard({ data, isDeleting, targetKcal, profile, onDele
           </div>
         </div>
         {summaryComment && (
-          <div className="border-t border-[#f1f3f5] p-4 flex gap-2 items-start">
+          <div className="border-t border-[#f1f3f5] pt-4 pb-1 flex gap-2 items-start">
             <QuoteIcon gid={gid} />
             <div className="flex-1 mt-0.5 min-w-0">
               <p className="font-pretendard font-medium text-[14px] text-transparent bg-clip-text bg-gradient-to-r from-[#228bed] to-[#c509d6] tracking-[-0.35px] leading-[20px] m-0 truncate">
