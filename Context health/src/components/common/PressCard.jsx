@@ -19,7 +19,7 @@ export const PRESS = {
   backMs: 300,      // 손을 뗐을 때 원래 크기로 돌아오는 시간
   releaseMs: 240,   // 손을 뗐을 때 색이 빠지는 시간
   cancelMs: 100,    // 스크롤로 판단됐을 때 색이 빠지는 시간
-  touchDelayMs: 20, // 스크롤하려고 댄 손인지 볼 짧은 대기
+  longPressMs: 1500, // 이만큼 누르고 있으면 onLongPress 실행 (더보기 메뉴 등)
   minHoldMs: 120,   // 톡 눌렀을 때도 효과가 보이는 최소 시간
   moveCancelPx: 8,
 };
@@ -30,20 +30,21 @@ const SOLID = 0.8;
 const FULL_SCALE = 1 / SOLID + 0.02;
 const BAND = `linear-gradient(90deg, transparent 0%, ${PRESS.color} ${(0.5 - SOLID / 2) * 100}%, ${PRESS.color} ${(0.5 + SOLID / 2) * 100}%, transparent 100%)`;
 
-export default function PressCard({ children, className = '', radius = 16, onClick, ...rest }) {
+export default function PressCard({ children, className = '', radius = 16, onClick, onLongPress, ...rest }) {
   const rootRef = useRef(null);
   const overlayRef = useRef(null);
-  const state = useRef({ timer: null, releaseTimer: null, startX: 0, startY: 0, down: false, activeAt: 0 });
+  const state = useRef({ releaseTimer: null, longTimer: null, startX: 0, startY: 0, down: false, activeAt: 0, longFired: false });
+  const longPressRef = useRef(onLongPress);
+  longPressRef.current = onLongPress;
 
   useEffect(() => () => {
-    clearTimeout(state.current.timer);
+    clearTimeout(state.current.longTimer);
     clearTimeout(state.current.releaseTimer);
   }, []);
 
   function activate() {
     const s = state.current;
     const overlay = overlayRef.current;
-    clearTimeout(s.timer);
     clearTimeout(s.releaseTimer);
     s.activeAt = performance.now();
     if (overlay?.animate) {
@@ -86,7 +87,7 @@ export default function PressCard({ children, className = '', radius = 16, onCli
 
   function release(cancelled = false) {
     const s = state.current;
-    clearTimeout(s.timer);
+    clearTimeout(s.longTimer);
     if (!s.activeAt) return;
     clearTimeout(s.releaseTimer);
     if (cancelled) { fadeOut(PRESS.cancelMs); return; }
@@ -101,11 +102,19 @@ export default function PressCard({ children, className = '', radius = 16, onCli
     if (inner && inner !== rootRef.current && rootRef.current?.contains(inner)) return;
     const s = state.current;
     s.down = true;
+    s.longFired = false;
     s.startX = event.clientX;
     s.startY = event.clientY;
-    clearTimeout(s.timer);
-    if (event.pointerType === 'mouse') activate();
-    else s.timer = setTimeout(activate, PRESS.touchDelayMs);
+    activate(); // 손이 닿는 즉시 반응한다. 스크롤이면 handlePointerMove에서 바로 취소한다.
+    clearTimeout(s.longTimer);
+    if (longPressRef.current) {
+      s.longTimer = setTimeout(() => {
+        if (!s.down) return;
+        s.longFired = true; // 손을 뗄 때 카드가 열리지 않게 한다
+        navigator.vibrate?.(10);
+        longPressRef.current?.();
+      }, PRESS.longPressMs);
+    }
   }
 
   function handlePointerMove(event) {
@@ -121,9 +130,12 @@ export default function PressCard({ children, className = '', radius = 16, onCli
     const s = state.current;
     if (!s.down) return;
     s.down = false;
-    // 기다리는 사이에 손을 뗀 짧은 탭이면 지금 바로 효과를 보여준다
-    if (!s.activeAt) activate();
     release();
+  }
+
+  function handleClick(event) {
+    if (state.current.longFired) { state.current.longFired = false; return; }
+    onClick?.(event);
   }
 
   function handlePointerCancel() {
@@ -136,14 +148,16 @@ export default function PressCard({ children, className = '', radius = 16, onCli
   return (
     <div
       ref={rootRef}
-      onClick={onClick}
+      onClick={handleClick}
+      onContextMenu={event => event.preventDefault()}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerLeave={handlePointerCancel}
       onPointerCancel={handlePointerCancel}
-      className={`relative ${className}`}
-      style={{ borderRadius: radius, WebkitTapHighlightColor: 'transparent' }}
+      className={`relative select-none ${className}`}
+      // 꾹 눌렀을 때 폰의 글자 선택·복사 메뉴가 뜨면 터치가 취소되어 눌림이 풀린다. 카드에서는 끈다.
+      style={{ borderRadius: radius, WebkitTapHighlightColor: 'transparent', WebkitTouchCallout: 'none', WebkitUserSelect: 'none' }}
       {...rest}
     >
       <span aria-hidden="true" className="absolute overflow-hidden pointer-events-none" style={{ inset: PRESS.inset, borderRadius: PRESS.innerRadius }}>

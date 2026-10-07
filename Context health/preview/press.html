@@ -4,13 +4,14 @@
 <script type="module">
 /* 카드를 직접 눌러볼 수 있다. ?auto 를 붙이면 0.3초 뒤 자동으로 누른 상태가 된다(스크린샷용). */
 import React from 'react';
+window.__log = [];
 import { createRoot } from 'react-dom/client';
 import '../src/index.css';
 import PressCard from '../src/components/common/PressCard';
 const h = React.createElement;
 const chip = t => h('span', { key: Math.random(), className: 'px-4 py-2 rounded-full bg-ui-2 font-pretendard text-[13px] text-typo-normal whitespace-nowrap' }, t);
 function Card() {
-  return h(PressCard, { className: 'bg-white shadow-[0_0_25px_rgba(3,27,38,0.08)] cursor-pointer', onClick() {} },
+  return h(PressCard, { className: 'bg-white shadow-[0_0_25px_rgba(3,27,38,0.08)] cursor-pointer', onClick() { window.__log.push('click'); }, onLongPress() { window.__log.push('long'); } },
     h('div', { className: 'p-2 flex flex-col gap-4' }, h('div', { className: 'flex flex-col gap-4' },
       h('div', { className: 'flex items-center justify-between' },
         h('span', { className: 'px-2 py-1 rounded-[8px] bg-[#7171FF]/10 font-pretendard text-[13px] text-[#7171FF]' }, '성공 🔥'),
@@ -29,6 +30,47 @@ if (new URLSearchParams(location.search).has('auto')) {
     el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'mouse', button: 0, clientX: r.left + 100, clientY: r.top + 60 }));
     const at = Number(new URLSearchParams(location.search).get('at'));
     if (at) document.getAnimations().forEach(animation => { animation.pause(); animation.currentTime = at; });
+  }, 300);
+}
+
+/* ?test: 눌림 동작을 자동으로 확인해 결과를 화면에 적는다 */
+if (new URLSearchParams(location.search).has('test')) {
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  const fire = (el, type, x, y) => el.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerType: 'touch', button: 0, clientX: x, clientY: y }));
+  setTimeout(async () => {
+    const el = document.querySelector('#root .relative');
+    const r = el.getBoundingClientRect(); const x = r.left + 100; const y = r.top + 60;
+    const scaleNow = () => new DOMMatrix(getComputedStyle(el).transform).a.toFixed(3);
+    const out = {};
+    // 1) 짧은 탭 → click
+    fire(el, 'pointerdown', x, y); await wait(60); out.scaleAt60ms = scaleNow(); fire(el, 'pointerup', x, y); el.click(); await wait(500);
+    out.afterTap = [...window.__log]; out.scaleAfterTap = scaleNow();
+    // 2) 1초 누르고 있기 → 계속 작아져 있어야 함
+    window.__log.length = 0; fire(el, 'pointerdown', x, y); await wait(1000); out.scaleHeld1s = scaleNow();
+    // 3) 1.5초 넘김 → long, 이후 click은 무시
+    await wait(700); out.afterHold = [...window.__log]; out.scaleHeld1_7s = scaleNow(); fire(el, 'pointerup', x, y); el.click(); await wait(500);
+    out.afterRelease = [...window.__log]; out.scaleEnd = scaleNow();
+    // 4) 스크롤(이동) → 취소, click 없음
+    window.__log.length = 0; fire(el, 'pointerdown', x, y); await wait(30); fire(el, 'pointermove', x, y + 30); await wait(1700); out.afterScroll = [...window.__log];
+    out.userSelect = getComputedStyle(el).userSelect;
+    document.body.innerHTML = '<pre id="result">' + JSON.stringify(out) + '</pre>';
+  }, 300);
+}
+
+if (new URLSearchParams(location.search).has('test2')) {
+  setTimeout(() => {
+    const el = document.querySelector('#root .relative');
+    const r = el.getBoundingClientRect();
+    el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch', button: 0, clientX: r.left + 100, clientY: r.top + 60 }));
+    const anims = el.getAnimations();
+    const info = anims.map(a => ({ state: a.playState, fill: a.effect.getTiming().fill, dur: a.effect.getTiming().duration, frames: a.effect.getKeyframes().map(k => k.transform) }));
+    anims.forEach(a => a.finish());
+    const held = new DOMMatrix(getComputedStyle(el).transform).a.toFixed(3);
+    el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerType: 'touch', button: 0, clientX: r.left + 100, clientY: r.top + 60 }));
+    setTimeout(() => {
+      const after = el.getAnimations().map(a => ({ state: a.playState, frames: a.effect.getKeyframes().map(k => k.transform) }));
+      document.body.innerHTML = '<pre id="result">' + JSON.stringify({ cls: el.className.slice(0, 30), info, held, after }) + '</pre>';
+    }, 200);
   }, 300);
 }
 </script></body></html>

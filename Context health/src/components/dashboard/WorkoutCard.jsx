@@ -69,6 +69,7 @@ const WorkoutCard = ({ data, perfGrade = 'success', onCardClick, onDelete, onCha
     <div onAnimationEnd={() => setEntering(false)} className={`px-4 py-2 ${isDeleting ? 'card-exit-wrapper' : entering ? 'card-enter' : ''}`}>
       <PressCard
         onClick={() => onCardClick(data)}
+        onLongPress={() => setMenuOpen(true)}
         className="bg-white shadow-[0_0_25px_rgba(3,27,38,0.08)] cursor-pointer"
       >
         {/* 눌리는 영역 안쪽 여백 8 + 영역 바깥 4 = 기존 카드 여백과 비슷한 12 (Figma 1158:9684) */}
