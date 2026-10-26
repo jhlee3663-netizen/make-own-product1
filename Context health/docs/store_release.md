@@ -53,10 +53,11 @@ npx cap open ios       # Xcode에서 실행
 - ☐ 실기기에서: 4가지 로그인 → 기록 작성(AI) → 수정 → 삭제 → 휴지통 복원 → 공유 링크 → 탈퇴. 로그인 창을 그냥 닫았을 때 버튼이 다시 눌리는지도.
 
 ### F. 스토어 제출 자료
-- ☐ 스크린샷: iPhone 6.9"(1320×2868) / Android 폰 2장 이상
-- ☐ 아이콘 1024×1024 (iOS, 투명 X), 512×512 (Play), Play 그래픽 이미지 1024×500
+- ☐ 스크린샷: iPhone 6.9"(1320×2868) / Android 폰 2장 이상 — 찍을 화면과 얹을 문구는 `docs/store_listing.md` 맨 아래
+- ✅ 아이콘·그래픽 (2026-10-26) — `store/` 폴더에 있다: `app-store-icon-1024.png`(iOS, 투명 X), `play-icon-512.png`, `play-feature-1024x500.png`. 앱 안의 런처 아이콘(Android mipmap)·iOS 앱 아이콘·스플래시도 지금 로고(그라데이션)로 다시 만들었다. 다시 만들 일이 있으면 `LOGO/기본 로고.png`(블롭 마스크)와 `#3aa0ff → #f79fff` 그라데이션으로 뽑는다.
 - ☐ 개인정보처리방침 URL: `https://context-health-3eb84.web.app/privacy-policy.html`
 - ☐ 계정 삭제 URL(Play 필수): `https://context-health-3eb84.web.app/account-deletion.html`
+- ☐ 등록 문구(앱 이름·설명·키워드·심사 메모): `docs/store_listing.md`에 다 써 뒀다. 콘솔에 붙여 넣기만 하면 된다.
 - ☐ Play: 데이터 보안 양식, **건강 앱 신고**, 콘텐츠 등급, 타깃 연령(14세 이상)
 - ☐ App Store: 개인정보 라벨(건강·피트니스·이메일·이름·사용자 ID·사용자 콘텐츠·충돌 데이터, 모두 "추적 안 함"), 심사용 데모 계정, 심사 메모에 "AI 영양 추정은 참고용"
 - ☐ 지원 URL·연락 이메일
@@ -66,6 +67,9 @@ npx cap open ios       # Xcode에서 실행
 - ✅ **건강정보 별도 동의 화면** (2026-10-26) — `src/components/screens/ConsentScreen.jsx`. 로그인 직후 온보딩 앞에서 뜨고, 전체 동의 + 약관·개인정보·건강정보 3개(모두 필수, 각각 전문 보기). 동의 내용은 `users/{uid}.consent`(항목·버전·시각)에 저장하고, 서버에 `consent.health`가 없으면 다시 받는다.
 - ✅ **게시물·댓글 신고 기능** (2026-10-26) — 피드 더보기 → 신고하기, 댓글 길게 누르기 → 신고하기. 사유 7가지(기타는 직접 입력). 서버 `report` 액션이 `reports/{reporterUid}_{key}`에 남기고, 신고한 사람 피드에서는 `users/{uid}/prefs/feedHidden`으로 즉시 가린다. 약관 문구도 앱 내 신고로 수정.
   - ☐ 신고 들어온 것을 보는 방법: 지금은 Firestore 콘솔의 `reports` 컬렉션을 직접 봐야 한다(`status: 'open'`). 알림이 필요하면 나중에.
-- ☐ App Check (Play Integrity / App Attest / 웹 reCAPTCHA) — 콘솔 키 발급 후 붙이기
-- ☐ 앱 푸시 알림 (`@capacitor/push-notifications`, iOS는 APNs 키 업로드) — 지금 웹 푸시는 앱에서 동작하지 않음
+- ◐ **App Check** (2026-10-26) — 웹 쪽 코드는 넣었다(`src/lib/firebase.js`). 켜려면: Firebase 콘솔 → App Check → 웹 앱에 **reCAPTCHA Enterprise** 등록 → 사이트 키를 `.env`의 `VITE_RECAPTCHA_SITE_KEY`에 넣고 배포. 콘솔에서 처음에는 '모니터링'으로 두고, 정상 트래픽만 들어오는 것을 확인한 뒤 '강제'로 바꾼다. 앱(웹뷰)은 reCAPTCHA가 맞지 않아 빼 두었다 — 네이티브까지 하려면 Play Integrity·App Attest 플러그인이 따로 필요하다.
+- ◐ **앱 푸시 알림** (2026-10-26) — `@capacitor-firebase/messaging`으로 코드 완료(`src/lib/push.js`, `src/App.jsx`). 앱에서도 FCM 토큰을 받아 웹과 같은 `users/{uid}/pushTokens`에 저장하므로 서버는 그대로다. 안드로이드 `POST_NOTIFICATIONS` 권한도 넣었다. 남은 것:
+  - ☐ `google-services.json` / `GoogleService-Info.plist` 넣기 (없으면 토큰을 못 받는다)
+  - ☐ iOS: Apple Developer에서 **APNs 인증 키(.p8)** 만들어 Firebase 콘솔 → 클라우드 메시징에 업로드, Xcode에서 **Push Notifications** + **Background Modes > Remote notifications** 추가
+  - ☐ 실기기에서 친구 1명 만든 뒤 알림 권한 → 박수/댓글 알림 수신 확인
 - ✅ 마이페이지 "Claude 연결"은 앱에서 숨김 (웹에서만)

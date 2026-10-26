@@ -4,6 +4,15 @@
 
 ---
 
+## 2026-10-26 - 스토어 준비: 아이콘·등록 문구·App Check·앱 푸시
+- 결과: 코드 PASS (`npm run build`), 콘솔 설정이 있어야 켜지는 항목은 미완
+- 변경 파일: 신규 `docs/store_listing.md`, `store/{app-store-icon-1024,play-icon-512,play-feature-1024x500}.png` / 수정 `src/lib/{firebase,push}.js`, `src/App.jsx`, `android/app/src/main/AndroidManifest.xml`, `ios/App/App/Info.plist`, android mipmap·drawable, iOS AppIcon·Splash, `package.json`, `docs/store_release.md`
+- 아이콘·스플래시: 네이티브 아이콘이 예전 3D 아이콘으로 남아 있어 지금 로고(그라데이션 블롭)로 다시 만들었다. 블롭 마스크는 `LOGO/기본 로고.png`의 알파를 쓰고, 그라데이션은 `SplashScreen.jsx`와 같은 `#3aa0ff → #f79fff`로 그려서 앱 스플래시와 네이티브 스플래시가 이어지게 했다. 런처 아이콘은 블롭을 가운데 68%로 두어 둥근 아이콘에서 잘리지 않게 했다.
+- 스토어 문구: `docs/store_listing.md`에 Play(앱 이름·간단한 설명·자세한 설명)와 App Store(부제목·프로모션·키워드·심사 메모), 데이터 보안 양식과 개인정보 라벨 답변안, 스크린샷 목록까지 정리했다. 심사 메모에 AI 영양 수치는 추정값이고 의료 조언이 아니라는 점, 신고·차단 위치를 적었다.
+- App Check: 웹만 `initializeAppCheck` + reCAPTCHA Enterprise를 넣고 `VITE_RECAPTCHA_SITE_KEY`가 있을 때만 켜지게 했다. 키가 없으면 아무 일도 하지 않는다. 앱(웹뷰)은 reCAPTCHA가 맞지 않아 뺐다.
+- 앱 푸시: `@capacitor-firebase/messaging`을 넣고 `push.js`를 웹/앱 두 갈래로 고쳤다. 앱도 FCM 토큰을 받아 같은 `users/{uid}/pushTokens`에 저장하므로 서버(`notify.js`)는 그대로다. 권한 확인을 `Notification.permission` 직접 참조에서 `pushPermission()`으로 바꿨고(앱에는 그 전역이 없다), 알림을 눌러 열었을 때도 알림 목록으로 가게 `onNativePushOpen`을 붙였다. 안드로이드 `POST_NOTIFICATIONS`, iOS `UIBackgroundModes: remote-notification`도 넣었다.
+- 미검증: App Check와 푸시 모두 콘솔 키(reCAPTCHA 사이트 키, `google-services.json`/`GoogleService-Info.plist`, APNs .p8)가 있어야 실제로 켜진다. 실기기 확인 전이다.
+
 ## 2026-10-26 - 건강정보 별도 동의 화면 · 게시물·댓글 신고 기능
 - 결과: PASS (운영 배포 `functions:social` + hosting, 사용자 확인)
 - 변경 파일: 신규 `src/components/screens/ConsentScreen.jsx`, `src/components/social/ReportSheet.jsx` / 수정 `src/App.jsx`, `src/components/screens/MyPageScreen.jsx`, `src/components/social/{FeedScreen,DetailScreens}.jsx`, `functions/social/index.js`, `docs/store_release.md`

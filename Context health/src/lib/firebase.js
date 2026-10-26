@@ -30,6 +30,24 @@ export const auth = isNativeApp
   ? initializeAuth(app, { persistence: indexedDBLocalPersistence })
   : getAuth(app);
 
+/* App Check (웹). 콘솔에서 reCAPTCHA Enterprise 사이트 키를 발급해 VITE_RECAPTCHA_SITE_KEY에 넣으면 켜진다.
+   앱(웹뷰)은 reCAPTCHA가 제대로 뜨지 않아 켜지 않는다 — 네이티브는 Play Integrity/App Attest 플러그인이 필요하다.
+   서버에서 강제(enforce)하기 전에는 켜도 영향이 없으므로, 콘솔에서 '모니터링'으로 먼저 지켜본 뒤 강제한다. */
+const APP_CHECK_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
+if (APP_CHECK_KEY && !isNativeApp && typeof window !== 'undefined') {
+  if (import.meta.env.DEV && import.meta.env.VITE_APP_CHECK_DEBUG_TOKEN) {
+    globalThis.FIREBASE_APPCHECK_DEBUG_TOKEN = import.meta.env.VITE_APP_CHECK_DEBUG_TOKEN;
+  }
+  import('firebase/app-check')
+    .then(({ initializeAppCheck, ReCaptchaEnterpriseProvider }) => {
+      initializeAppCheck(app, {
+        provider: new ReCaptchaEnterpriseProvider(APP_CHECK_KEY),
+        isTokenAutoRefreshEnabled: true,
+      });
+    })
+    .catch(() => { /* App Check가 막혀도 앱은 그대로 쓴다 */ });
+}
+
 if (import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true' && !globalThis.__contextHealthFirebaseEmulatorsConnected) {
   connectFirestoreEmulator(db, '127.0.0.1', 8080);
   connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });

@@ -26,7 +26,7 @@ import SocialLayer, { BellButton } from './components/social/SocialLayer';
 import { MyTab } from './components/social/ProfileScreen';
 import { InvitePreviewPage } from './components/social/InviteParts';
 import { socialCall } from './lib/socialApi';
-import { enablePush, pushSupported, refreshPushToken } from './lib/push';
+import { enablePush, onNativePushOpen, pushPermission, pushSupported, refreshPushToken } from './lib/push';
 
 /* 초대 링크(/i/{code})로 들어오면 코드를 기억해 두고 주소는 앱 첫 화면으로 바꾼다.
    로그인·온보딩이 끝난 뒤 초대 받기 시트를 연다. */
@@ -653,10 +653,15 @@ function App() {
   /* 첫 친구가 생긴 순간에만 폰 알림 권한을 묻는다 */
   useEffect(() => {
     const count = socialMe?.profile?.friendCount || 0;
-    if (!user?.uid || count < 1 || !pushSupported() || Notification.permission !== 'default') return;
+    if (!user?.uid || count < 1 || !pushSupported()) return;
     if (getUserStorage(user.uid, 'push_asked')) return;
-    setUserStorage(user.uid, 'push_asked', '1');
-    setPushAsk({ name: null });
+    let cancelled = false;
+    pushPermission().then((permission) => {
+      if (cancelled || permission !== 'default') return;
+      setUserStorage(user.uid, 'push_asked', '1');
+      setPushAsk({ name: null });
+    }).catch(() => { /* 다음에 다시 */ });
+    return () => { cancelled = true; };
   }, [socialMe?.profile?.friendCount, user?.uid]);
 
   /* 폰 알림을 눌러 앱이 열리면 알림 목록으로 */
@@ -666,6 +671,13 @@ function App() {
     navigator.serviceWorker.addEventListener('message', onMessage);
     return () => navigator.serviceWorker.removeEventListener('message', onMessage);
   });
+
+  /* 앱(iOS·Android)에서 알림을 눌렀을 때도 같은 곳으로 */
+  useEffect(() => {
+    let stop = null;
+    onNativePushOpen(() => socialNav.push('notifications', {})).then((off) => { stop = off; }).catch(() => {});
+    return () => { if (stop) stop(); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   function pushSocial(type, props = {}) {
     stackSeqRef.current += 1;
