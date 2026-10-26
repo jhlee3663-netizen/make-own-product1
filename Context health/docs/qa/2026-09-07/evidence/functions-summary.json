@@ -1,0 +1,20 @@
+[
+  {
+    "id": "sentryWebhook",
+    "region": "us-central1",
+    "state": "ACTIVE",
+    "uri": "https://us-central1-context-health-3eb84.cloudfunctions.net/sentryWebhook",
+    "ingressSettings": "ALLOW_ALL",
+    "timeoutSeconds": 60,
+    "concurrency": 80
+  },
+  {
+    "id": "socialAuth",
+    "region": "us-central1",
+    "state": "ACTIVE",
+    "uri": "https://us-central1-context-health-3eb84.cloudfunctions.net/socialAuth",
+    "ingressSettings": "ALLOW_ALL",
+    "timeoutSeconds": 30,
+    "concurrency": 80
+  }
+]

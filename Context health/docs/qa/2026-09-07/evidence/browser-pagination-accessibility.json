@@ -1,0 +1,43 @@
+{
+  "date": "2026-09-09",
+  "target": "http://127.0.0.1:5173",
+  "firebaseProject": "demo-context-health",
+  "productionTouched": false,
+  "observations": [
+    {
+      "case": "home cursor pagination",
+      "fixture": "205 logs",
+      "before": "first page ended at workout record 199 and exposed 이전 기록 더 보기",
+      "action": "clicked 이전 기록 더 보기",
+      "after": "workout records 201, 203, and 205 appeared",
+      "weeklyVolumeBeforeKg": 100000,
+      "weeklyVolumeAfterKg": 100000,
+      "pass": true
+    },
+    {
+      "case": "coach room access and visible cap",
+      "fixture": "105 dynamic rooms with two messages each",
+      "after": "the 100 most recent rooms were exposed and a visible recent-100 limit notice appeared",
+      "notice": "최근 대화 100개를 표시하고 있어요. 더 오래된 대화는 현재 목록에서 열 수 없습니다.",
+      "pass": true
+    },
+    {
+      "case": "inactive tab accessibility",
+      "action": "switched home -> coach -> my and pressed Tab 12 times on coach",
+      "after": "inactive tab contents were absent from the accessibility tree; focus remained on active coach room QA 대화 34",
+      "hiddenToastPresent": false,
+      "pass": true
+    },
+    {
+      "case": "desktop rendering smoke check",
+      "viewport": "Chrome desktop with centered 430px app shell",
+      "after": "weekly chart, numeric text, Korean labels, and workout cards rendered without overlap or glyph corruption",
+      "pass": true
+    }
+  ],
+  "limitations": [
+    "VoiceOver and TalkBack speech output was not tested.",
+    "Visible toast role/status was verified from the rendered component implementation; a screen-reader speech announcement was not tested.",
+    "No production deployment or production Firebase read/write was performed."
+  ]
+}

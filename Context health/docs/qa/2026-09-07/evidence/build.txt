@@ -1,0 +1,33 @@
+vite v5.4.21 building for production...
+
+(!) outDir /tmp/context-health-qa-build is not inside project root and will not be emptied.
+Use --emptyOutDir to override.
+
+transforming...
+✓ 2241 modules transformed.
+[plugin:vite:reporter] [plugin vite:reporter] 
+(!) /Users/imbc/Documents/AI 작업물/Context health/node_modules/firebase/firestore/dist/esm/index.esm.js is dynamically imported by /Users/imbc/Documents/AI 작업물/Context health/src/components/screens/HomeScreen.jsx but also statically imported by /Users/imbc/Documents/AI 작업물/Context health/src/components/screens/AICoachScreen.jsx, /Users/imbc/Documents/AI 작업물/Context health/src/components/screens/DietDetailScreen.jsx, /Users/imbc/Documents/AI 작업물/Context health/src/components/screens/HomeScreen.jsx, /Users/imbc/Documents/AI 작업물/Context health/src/components/screens/MyPageScreen.jsx, /Users/imbc/Documents/AI 작업물/Context health/src/components/screens/WorkoutMemoScreen.jsx, /Users/imbc/Documents/AI 작업물/Context health/src/lib/firebase.js, /Users/imbc/Documents/AI 작업물/Context health/src/lib/userStore.js, dynamic import will not move module into another chunk.
+
+[plugin:vite:reporter] [plugin vite:reporter] 
+(!) /Users/imbc/Documents/AI 작업물/Context health/src/utils/utils.js is dynamically imported by /Users/imbc/Documents/AI 작업물/Context health/src/components/screens/HomeScreen.jsx, /Users/imbc/Documents/AI 작업물/Context health/src/components/screens/HomeScreen.jsx but also statically imported by /Users/imbc/Documents/AI 작업물/Context health/src/components/common/WorkoutTaskItem.jsx, /Users/imbc/Documents/AI 작업물/Context health/src/components/dashboard/WeeklyCalorieChart.jsx, /Users/imbc/Documents/AI 작업물/Context health/src/components/dashboard/WeeklyVolumeChart.jsx, /Users/imbc/Documents/AI 작업물/Context health/src/components/dashboard/WorkoutCard.jsx, /Users/imbc/Documents/AI 작업물/Context health/src/components/screens/HomeScreen.jsx, /Users/imbc/Documents/AI 작업물/Context health/src/components/screens/WorkoutMemoScreen.jsx, dynamic import will not move module into another chunk.
+
+rendering chunks...
+computing gzip size...
+../../../../../tmp/context-health-qa-build/registerSW.js                  0.13 kB
+../../../../../tmp/context-health-qa-build/manifest.webmanifest           0.45 kB
+../../../../../tmp/context-health-qa-build/index.html                     1.98 kB │ gzip:   0.87 kB
+../../../../../tmp/context-health-qa-build/assets/index-BGY0rgCc.css     48.50 kB │ gzip:   9.19 kB
+../../../../../tmp/context-health-qa-build/assets/index-CKOo1DWA.js   1,410.56 kB │ gzip: 409.45 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 2.18s
+
+PWA v1.2.0
+mode      generateSW
+precache  10 entries (1467.54 KiB)
+files generated
+  ../../../../../tmp/context-health-qa-build/sw.js
+  ../../../../../tmp/context-health-qa-build/workbox-8c29f6e4.js

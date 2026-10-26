@@ -1,5 +1,6 @@
 import { parseVolume } from '../utils/utils';
 import { localDateKey } from './bodyLogs';
+import { analyzeSession } from './strengthProgress';
 
 /* 분석 탭 계산. 화면·네트워크와 무관한 순수 함수만 둔다. */
 
@@ -304,7 +305,7 @@ export function computeWeeklyWorkout(workoutLogs, weeks = 8, today = new Date())
   const buckets = Array.from({ length: weeks }, (_, i) => {
     const start = thisMonday - (weeks - 1 - i) * 7;
     const startDate = new Date(monday.getTime() - (weeks - 1 - i) * 7 * DAY_MS);
-    return { start, label: `${startDate.getMonth() + 1}/${startDate.getDate()}`, volume: 0, days: new Set() };
+    return { start, label: `${startDate.getMonth() + 1}/${startDate.getDate()}`, volume: 0, sets: 0, days: new Set() };
   });
   workoutLogs.forEach((log) => {
     const key = logDateKey(log);
@@ -312,7 +313,8 @@ export function computeWeeklyWorkout(workoutLogs, weeks = 8, today = new Date())
     const index = Math.floor((dayIndex(key) - buckets[0].start) / 7);
     if (index < 0 || index >= weeks) return;
     buckets[index].volume += log.totalVolume || 0;
+    buckets[index].sets += analyzeSession(log.sections || []).effectiveSets;
     buckets[index].days.add(key);
   });
-  return buckets.map(b => ({ label: b.label, volume: Math.round(b.volume), days: b.days.size }));
+  return buckets.map(b => ({ label: b.label, volume: Math.round(b.volume), sets: b.sets, days: b.days.size }));
 }

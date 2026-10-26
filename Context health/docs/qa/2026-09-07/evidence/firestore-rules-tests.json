@@ -1,0 +1,186 @@
+{
+  "project": "demo-context-health",
+  "productionTouched": false,
+  "results": [
+    {
+      "name": "정상 create/read/update",
+      "pass": true,
+      "detail": "created=true, updated=true"
+    },
+    {
+      "name": "필수 필드 없는 create 거절",
+      "pass": true,
+      "detail": "code=permission-denied"
+    },
+    {
+      "name": "잘못된 type create 거절",
+      "pass": true,
+      "detail": "code=permission-denied"
+    },
+    {
+      "name": "timestamp 문자열 create 거절",
+      "pass": true,
+      "detail": "code=permission-denied"
+    },
+    {
+      "name": "음수 kcal create 거절",
+      "pass": true,
+      "detail": "code=permission-denied"
+    },
+    {
+      "name": "음수 totalVolume update 거절",
+      "pass": true,
+      "detail": "code=permission-denied"
+    },
+    {
+      "name": "과대 title update 거절",
+      "pass": true,
+      "detail": "code=permission-denied"
+    },
+    {
+      "name": "기존 required type 삭제 거절",
+      "pass": true,
+      "detail": "code=permission-denied"
+    },
+    {
+      "name": "uid 변경 update 거절",
+      "pass": true,
+      "detail": "code=permission-denied"
+    },
+    {
+      "name": "타 사용자 get 거절",
+      "pass": true,
+      "detail": "code=permission-denied"
+    },
+    {
+      "name": "타 사용자 list 거절",
+      "pass": true,
+      "detail": "code=permission-denied"
+    },
+    {
+      "name": "타 uid create 거절",
+      "pass": true,
+      "detail": "code=permission-denied"
+    },
+    {
+      "name": "타 사용자 update 거절",
+      "pass": true,
+      "detail": "code=permission-denied"
+    },
+    {
+      "name": "타 사용자 delete 거절",
+      "pass": true,
+      "detail": "code=permission-denied"
+    },
+    {
+      "name": "aiUsage 클라이언트 쓰기 거절",
+      "pass": true,
+      "detail": "code=permission-denied"
+    },
+    {
+      "name": "accountDeletions 클라이언트 쓰기 거절",
+      "pass": true,
+      "detail": "code=permission-denied"
+    },
+    {
+      "name": "preWorkoutMeal 허용 값·null update",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "preWorkoutMeal 잘못된 값 거절",
+      "pass": true,
+      "detail": "code=permission-denied"
+    },
+    {
+      "name": "아침 공복 체중 create/update/read",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "체중 범위 밖 거절",
+      "pass": true,
+      "detail": "code=permission-denied"
+    },
+    {
+      "name": "체중 문자열 거절",
+      "pass": true,
+      "detail": "code=permission-denied"
+    },
+    {
+      "name": "문서 ID와 날짜 불일치 거절",
+      "pass": true,
+      "detail": "code=permission-denied"
+    },
+    {
+      "name": "허용 외 필드 거절",
+      "pass": true,
+      "detail": "code=permission-denied"
+    },
+    {
+      "name": "인바디 클라이언트 create 거절",
+      "pass": true,
+      "detail": "code=permission-denied"
+    },
+    {
+      "name": "타 사용자 체중 read 거절",
+      "pass": true,
+      "detail": "code=permission-denied"
+    },
+    {
+      "name": "타 사용자 체중 write 거절",
+      "pass": true,
+      "detail": "code=permission-denied"
+    },
+    {
+      "name": "아침 공복 체중 delete",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "인바디 본인 read 허용",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "인바디 클라이언트 update 거절",
+      "pass": true,
+      "detail": "code=permission-denied"
+    },
+    {
+      "name": "인바디 클라이언트 delete 거절",
+      "pass": true,
+      "detail": "code=permission-denied"
+    },
+    {
+      "name": "mcpTokens 클라이언트 read 거절",
+      "pass": true,
+      "detail": "code=permission-denied"
+    },
+    {
+      "name": "mcpTokens 클라이언트 write 거절",
+      "pass": true,
+      "detail": "code=permission-denied"
+    },
+    {
+      "name": "mcpAuthCodes 클라이언트 read 거절",
+      "pass": true,
+      "detail": "code=permission-denied"
+    },
+    {
+      "name": "mcpAuthCodes 클라이언트 write 거절",
+      "pass": true,
+      "detail": "code=permission-denied"
+    },
+    {
+      "name": "레거시 optional/과거 값 문서 update 호환",
+      "pass": true,
+      "detail": "seedStatus=200, unchangedLegacyKcal=-1"
+    },
+    {
+      "name": "정상 delete",
+      "pass": true,
+      "detail": "adminReadStatus=404"
+    }
+  ]
+}

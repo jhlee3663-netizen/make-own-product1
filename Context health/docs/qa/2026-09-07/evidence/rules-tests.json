@@ -1,0 +1,328 @@
+{
+  "labels": [
+    "own log get",
+    "other log get",
+    "anonymous get",
+    "own user get",
+    "other user get",
+    "other room get",
+    "forged uid create",
+    "owner change update",
+    "invalid schema own create",
+    "remove required fields update"
+  ],
+  "testCases": [
+    {
+      "expectation": "ALLOW",
+      "request": {
+        "path": "/databases/(default)/documents/logs/qa-a",
+        "method": "get",
+        "auth": {
+          "uid": "A",
+          "token": {}
+        }
+      },
+      "resource": {
+        "data": {
+          "uid": "A"
+        }
+      }
+    },
+    {
+      "expectation": "DENY",
+      "request": {
+        "path": "/databases/(default)/documents/logs/qa-a",
+        "method": "get",
+        "auth": {
+          "uid": "B",
+          "token": {}
+        }
+      },
+      "resource": {
+        "data": {
+          "uid": "A"
+        }
+      }
+    },
+    {
+      "expectation": "DENY",
+      "request": {
+        "path": "/databases/(default)/documents/logs/qa-a",
+        "method": "get",
+        "auth": null
+      },
+      "resource": {
+        "data": {
+          "uid": "A"
+        }
+      }
+    },
+    {
+      "expectation": "ALLOW",
+      "request": {
+        "path": "/databases/(default)/documents/users/A",
+        "method": "get",
+        "auth": {
+          "uid": "A",
+          "token": {}
+        }
+      },
+      "resource": {
+        "data": {}
+      }
+    },
+    {
+      "expectation": "DENY",
+      "request": {
+        "path": "/databases/(default)/documents/users/A",
+        "method": "get",
+        "auth": {
+          "uid": "B",
+          "token": {}
+        }
+      },
+      "resource": {
+        "data": {}
+      }
+    },
+    {
+      "expectation": "DENY",
+      "request": {
+        "path": "/databases/(default)/documents/users/A/coachRooms/diet",
+        "method": "get",
+        "auth": {
+          "uid": "B",
+          "token": {}
+        }
+      },
+      "resource": {
+        "data": {}
+      }
+    },
+    {
+      "expectation": "DENY",
+      "request": {
+        "path": "/databases/(default)/documents/logs/qa-new",
+        "method": "create",
+        "auth": {
+          "uid": "B",
+          "token": {}
+        },
+        "resource": {
+          "data": {
+            "uid": "A",
+            "type": "diet",
+            "timestamp": 1
+          }
+        }
+      }
+    },
+    {
+      "expectation": "DENY",
+      "request": {
+        "path": "/databases/(default)/documents/logs/qa-a",
+        "method": "update",
+        "auth": {
+          "uid": "A",
+          "token": {}
+        },
+        "resource": {
+          "data": {
+            "uid": "B"
+          }
+        }
+      },
+      "resource": {
+        "data": {
+          "uid": "A"
+        }
+      }
+    },
+    {
+      "expectation": "ALLOW",
+      "request": {
+        "path": "/databases/(default)/documents/logs/qa-new",
+        "method": "create",
+        "auth": {
+          "uid": "A",
+          "token": {}
+        },
+        "resource": {
+          "data": {
+            "uid": "A",
+            "type": "invalid",
+            "timestamp": "invalid",
+            "kcal": -100
+          }
+        }
+      }
+    },
+    {
+      "expectation": "ALLOW",
+      "request": {
+        "path": "/databases/(default)/documents/logs/qa-a",
+        "method": "update",
+        "auth": {
+          "uid": "A",
+          "token": {}
+        },
+        "resource": {
+          "data": {
+            "uid": "A"
+          }
+        }
+      },
+      "resource": {
+        "data": {
+          "uid": "A",
+          "type": "diet",
+          "timestamp": 1
+        }
+      }
+    }
+  ],
+  "result": {
+    "testResults": [
+      {
+        "state": "SUCCESS",
+        "visitedExpressions": [
+          {
+            "sourcePosition": {
+              "line": 5,
+              "column": 30,
+              "currentOffset": 144,
+              "endOffset": 150
+            },
+            "value": true
+          }
+        ]
+      },
+      {
+        "state": "SUCCESS",
+        "visitedExpressions": [
+          {
+            "sourcePosition": {
+              "line": 5,
+              "column": 30,
+              "currentOffset": 144,
+              "endOffset": 150
+            },
+            "value": false
+          }
+        ]
+      },
+      {
+        "state": "SUCCESS",
+        "visitedExpressions": [
+          {
+            "sourcePosition": {
+              "line": 5,
+              "column": 30,
+              "currentOffset": 144,
+              "endOffset": 150
+            },
+            "value": false
+          }
+        ]
+      },
+      {
+        "state": "SUCCESS",
+        "visitedExpressions": [
+          {
+            "sourcePosition": {
+              "line": 14,
+              "column": 29,
+              "currentOffset": 597,
+              "endOffset": 603
+            },
+            "value": true
+          }
+        ]
+      },
+      {
+        "state": "SUCCESS",
+        "visitedExpressions": [
+          {
+            "sourcePosition": {
+              "line": 14,
+              "column": 29,
+              "currentOffset": 597,
+              "endOffset": 603
+            },
+            "value": false
+          }
+        ]
+      },
+      {
+        "state": "SUCCESS",
+        "visitedExpressions": [
+          {
+            "sourcePosition": {
+              "line": 17,
+              "column": 29,
+              "currentOffset": 725,
+              "endOffset": 731
+            },
+            "value": false
+          }
+        ]
+      },
+      {
+        "state": "SUCCESS",
+        "visitedExpressions": [
+          {
+            "sourcePosition": {
+              "line": 9,
+              "column": 24,
+              "currentOffset": 382,
+              "endOffset": 388
+            },
+            "value": false
+          }
+        ]
+      },
+      {
+        "state": "SUCCESS",
+        "visitedExpressions": [
+          {
+            "sourcePosition": {
+              "line": 6,
+              "column": 24,
+              "currentOffset": 230,
+              "endOffset": 236
+            },
+            "value": false
+          }
+        ]
+      },
+      {
+        "state": "SUCCESS",
+        "visitedExpressions": [
+          {
+            "sourcePosition": {
+              "line": 9,
+              "column": 24,
+              "currentOffset": 382,
+              "endOffset": 388
+            },
+            "value": true
+          }
+        ]
+      },
+      {
+        "state": "SUCCESS",
+        "visitedExpressions": [
+          {
+            "sourcePosition": {
+              "line": 6,
+              "column": 24,
+              "currentOffset": 230,
+              "endOffset": 236
+            },
+            "value": true
+          }
+        ]
+      }
+    ]
+  }
+}

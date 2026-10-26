@@ -1,0 +1,25 @@
+{
+  "status": "success",
+  "result": [
+    {
+      "name": "projects/context-health-3eb84/databases/(default)",
+      "uid": "7c345c22-c03a-4daf-ab63-2ad7ae0f70c6",
+      "createTime": "2026-02-02T13:24:48.907138Z",
+      "updateTime": "2026-02-02T13:24:48.907138Z",
+      "locationId": "asia-northeast3",
+      "type": "FIRESTORE_NATIVE",
+      "concurrencyMode": "PESSIMISTIC",
+      "versionRetentionPeriod": "3600s",
+      "earliestVersionTime": "2026-09-07T06:06:15.252054Z",
+      "appEngineIntegrationMode": "DISABLED",
+      "keyPrefix": "v",
+      "pointInTimeRecoveryEnablement": "POINT_IN_TIME_RECOVERY_DISABLED",
+      "deleteProtectionState": "DELETE_PROTECTION_DISABLED",
+      "databaseEdition": "STANDARD",
+      "freeTier": true,
+      "realtimeUpdatesMode": "REALTIME_UPDATES_MODE_ENABLED",
+      "enhancedTextSearchQueryMode": "ENHANCED_QUERY_MODE_ENABLED",
+      "etag": "IJTx94f025YDMNybhdyi15ID"
+    }
+  ]
+}

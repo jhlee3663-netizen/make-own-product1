@@ -21,6 +21,7 @@ import {
   runTransaction
 } from 'firebase/firestore';
 import { buildWorkoutSummaryMessage, findComparableLastVolumeFromLogs, formatCardioDuration, parseCardioMinutes, parseVolume, parseVolumeFromBody, sumReps } from '../../utils/utils';
+import { buildStrengthMessage, compareWithPrevious, describeForPrompt } from '../../lib/strengthProgress';
 import { generateContent, extractText, parseAiJson, aiErrorMessage } from '../../lib/aiClient';
 import { BODY_PARTS, filterBodyParts, BODYWEIGHT_BASES } from '../../utils/exerciseData';
 import { KEEP_REMARKS_RULE, preserveUserRemarks } from '../../utils/workoutNotes';
@@ -50,6 +51,19 @@ const SUMMARY_SET_TYPES = [
 ];
 
 const BODY_PART_OPTIONS = BODY_PARTS.join(', ');
+
+/* 툴바 글정리와 저장 시 백그라운드 정리가 같은 규칙을 쓰도록 한곳에 둔다 */
+const SUPERSET_RULE = `[가장 중요] 슈퍼세트 처리 규칙:
+   - 종목명 사이에 '+' 기호가 있거나, 명시적으로 (슈퍼세트)라고 적힌 경우 슈퍼세트로 판단해.
+   - 슈퍼세트를 구성하는 각 종목은 별도의 item으로 분리해. 각 item의 body 모든 세트 라인 끝에 (슈퍼세트) 태그를 붙여줘.
+   - 같은 슈퍼세트 묶음에 속하는 item들은 동일한 supersetGroup 정수(1부터 시작)를 부여해. 슈퍼세트가 아닌 item은 supersetGroup을 null로.
+   - 슈퍼세트가 여러 개면 각각 다른 번호(1, 2, 3...)를 부여해.
+   - 예시 — "킥백 + 레터럴레이즈 1set 킥백 8kg 10 + 레터럴 7kg 12" 입력 시:
+     item1: title "덤벨킥백", supersetGroup 1, body "• 세트 1: 8kg 10회 (슈퍼세트)"
+     item2: title "레터럴레이즈", supersetGroup 1, body "• 세트 1: 7kg 12회 (슈퍼세트)"
+   - 예시 — 종목 "풀업 + 딥스", 기록 "5회씩 5세트" 입력 시: 두 종목 모두 같은 횟수·세트로 본다.
+     item1: title "풀업", supersetGroup 1, body "• 세트 1: 5회 (슈퍼세트)\\n… 세트 5까지"
+     item2: title "딥스", supersetGroup 1, body "• 세트 6: 5회 (슈퍼세트)\\n… 세트 10까지"`;
 
 function groupBySupersets(items) {
   const groups = [];
@@ -230,9 +244,10 @@ async function updateWorkoutIfCurrent(docRef, revision, fields) {
 
 export default function WorkoutMemoScreen({ onBack, onSave, initialData, uid, profile, onOpenCoachWithMessage, registerBackGuard }) {
   const draftTargetId = initialData?.docId || 'new';
-  const restoredDraftRef = useRef(loadRecordDraft(uid, 'workout', draftTargetId));
+  // 피드에서 가져온 루틴(imported)은 남아 있던 임시 저장보다 우선하고, 저장 전이면 나갈 때 확인을 묻는다.
+  const restoredDraftRef = useRef(initialData?.imported ? null : loadRecordDraft(uid, 'workout', draftTargetId));
   const restoredDraft = restoredDraftRef.current;
-  const originalSectionsRef = useRef(JSON.stringify(normalizeWorkoutSections(initialData)));
+  const originalSectionsRef = useRef(JSON.stringify(initialData?.imported ? createEmptyWorkoutSections() : normalizeWorkoutSections(initialData)));
   const saveInFlightRef = useRef(false);
   const pendingCreateRef = useRef(null);
   const [showExitModal, setShowExitModal] = useState(false);
@@ -495,22 +510,32 @@ export default function WorkoutMemoScreen({ onBack, onSave, initialData, uid, pr
   useEffect(() => {
     if (!uid) return undefined;
     let cancelled = false;
-    fetchRecentWorkoutLogs(80)
+    fetchRecentWorkoutLogs(400)
       .then((logs) => {
         if (cancelled) return;
+        // 최근 기록부터 순서대로 모아, 자주·최근에 쓴 이름이 앞에 오게 한다
         const names = logs.flatMap(log => [
           ...(log.sections || []).flatMap(sec => (sec.items || []).map(item => item.title)),
           ...(log.exercises || []).map(ex => ex.name),
         ]);
-        setCustomExercises(rememberCustomExercises(uid, names, { append: true }));
+        setCustomExercises(current => rememberCustomExercises(uid, [...current, ...names], { append: false }));
       })
       .catch(() => {});
     return () => { cancelled = true; };
   }, [uid]);
 
-  async function findComparableLastVolume(currentSections, currentTitle, currentDocId) {
-    const sorted = await fetchRecentWorkoutLogs(80);
-    return findComparableLastVolumeFromLogs(sorted, currentSections, currentTitle, currentDocId);
+  /* 저장할 요약 문구. 과부하 판정은 종목별 탑세트 추정 1RM 기준(src/lib/strengthProgress.js).
+     디로딩은 볼륨을 줄이는 날이라 기존처럼 볼륨으로 판정하고, 무게 기록이 없으면(유산소 등) 기존 문구를 쓴다. */
+  async function buildOverloadSummary(currentSections, currentTitle, currentDocId, totalVolume, cardioMinutes, capturedMode) {
+    const logs = await fetchRecentWorkoutLogs(80);
+    const self = logs.find(log => log.id === currentDocId);
+    const at = self?.timestamp?.seconds;
+    const older = logs.filter(log => log.id !== currentDocId && (!at || (log.timestamp?.seconds || 0) < at));
+    const progress = compareWithPrevious(currentSections, older);
+    const lastVolume = findComparableLastVolumeFromLogs(older, currentSections, currentTitle, currentDocId);
+    const volumeMsg = buildWorkoutSummaryMessage(totalVolume, lastVolume, capturedMode, cardioMinutes);
+    const overloadMsg = capturedMode === 'deload' ? volumeMsg : (buildStrengthMessage(progress) || volumeMsg);
+    return { overloadMsg, progress };
   }
 
   async function fetchPrevWeight(exerciseName) {
@@ -580,14 +605,7 @@ export default function WorkoutMemoScreen({ onBack, onSave, initialData, uid, pr
 3. [가장 중요] 세트 번호(N)는 종목이 바뀌더라도 절대 1부터 다시 시작하지 말고, 이전 종목의 마지막 세트 번호에 이어서 전체 누적으로 계속 카운트해줘.
 4. [가장 중요] 원문에 있는 (드랍), (드랍세트), (슈퍼세트), (컴파운드), (강제반복), (저중량) 같은 세트 타입 표기와, "양쪽" / "각 사이드" 같이 좌우 양쪽을 뜻하는 표기는 절대 삭제하지 말고 해당 세트의 body 텍스트 안에 그대로 유지해.
 5. 드랍/슈퍼세트 등 세트 타입 표기는 note로 분리하지 마. 우리 앱은 body 안의 텍스트를 감지해 별도 뱃지로 처리한다.
-6. [가장 중요] 슈퍼세트 처리 규칙:
-   - 종목명 사이에 '+' 기호가 있거나, 명시적으로 (슈퍼세트)라고 적힌 경우 슈퍼세트로 판단해.
-   - 슈퍼세트를 구성하는 각 종목은 별도의 item으로 분리해. 각 item의 body 모든 세트 라인 끝에 (슈퍼세트) 태그를 붙여줘.
-   - 같은 슈퍼세트 묶음에 속하는 item들은 동일한 supersetGroup 정수(1부터 시작)를 부여해. 슈퍼세트가 아닌 item은 supersetGroup을 null로.
-   - 슈퍼세트가 여러 개면 각각 다른 번호(1, 2, 3...)를 부여해.
-   - 예시 — "킥백 + 레터럴레이즈 1set 킥백 8kg 10 + 레터럴 7kg 12" 입력 시:
-     item1: title "덤벨킥백", supersetGroup 1, body "• 세트 1: 8kg 10회 (슈퍼세트)"
-     item2: title "레터럴레이즈", supersetGroup 1, body "• 세트 1: 7kg 12회 (슈퍼세트)"
+6. ${SUPERSET_RULE}
 7. [가장 중요] 세트 기록과 함께 또는 독립적으로 적힌 주관적 느낌·코멘트 (예: "확실히 10회는 빡세다", "가슴&어깨 마사지받음, 확실히 나아짐", "자세가 흔들림", "다음엔 무게 늘려보자") 는 반드시 note 필드로 분리해. 쉼표로 이어진 문장 전체를 하나의 note로 합쳐야 해. 절대 일부만 잘라 넣지 마. kg/회/세트 숫자나 세트 타입 표기가 아닌 주관적 경험·느낌 텍스트만 note로. 없으면 note 필드 생략.
 8. 운동 기록이 전혀 없고 코멘트만 있는 경우(예: "가슴 마사지받음"), body는 빈 문자열로, note에 해당 문장 전체를 넣어.
 9. ${KEEP_REMARKS_RULE}
@@ -1005,8 +1023,7 @@ JSON 형식으로만 반환해줘:
     const exercisesForSave = sectionsForSave.flatMap(s => s.items.map(it => ({ name: it.title }))).filter(ex => ex.name);
     const totalVolume = parseVolume(sectionsForSave, profile?.weight);
     const cardioMinutes = parseCardioMinutes(sectionsForSave);
-    const lastVolume = await findComparableLastVolume(sectionsForSave, fallbackTitle, docId);
-    const overloadMsg = buildWorkoutSummaryMessage(totalVolume, lastVolume, capturedMode, cardioMinutes);
+    const { overloadMsg } = await buildOverloadSummary(sectionsForSave, fallbackTitle, docId, totalVolume, cardioMinutes, capturedMode);
     return { sectionsForSave, exercisesForSave, totalVolume, cardioMinutes, overloadMsg };
   }
 
@@ -1029,7 +1046,7 @@ JSON 형식으로만 반환해줘:
         `부위: ${s.part}\n${s.items.map(i => `- 종목: ${i.title}\n  기록: ${i.body}`).join('\n')}`
       ).join('\n\n');
       const summarizePrompt = `다음 사용자의 거친 운동 메모 데이터를 보기 좋게 정리해서 JSON 배열로 반환해줘.
-응답 형식: [{ "part": "운동부위", "items": [{ "title": "운동종목", "body": "• 세트 1: 20kg 15회\\n• 세트 2: 40kg 20회", "note": "느낀점(선택)" }] }]
+응답 형식: [{ "part": "운동부위", "items": [{ "title": "운동종목", "body": "• 세트 1: 20kg 15회\\n• 세트 2: 40kg 20회", "note": "느낀점(선택)", "supersetGroup": null }] }]
 중요 규칙:
 0. part는 반드시 다음 카테고리 중 하나여야 한다: ${BODY_PART_OPTIONS}
 0-1. 클라이밍, 러닝/조깅, 사이클, 인터벌, 줄넘기, 로잉머신 등 유산소성 운동은 반드시 '유산소'로 분류할 것.
@@ -1043,6 +1060,7 @@ JSON 형식으로만 반환해줘:
 8. JSON 이외의 다른 텍스트(마크다운 등)는 절대 포함하지 마.
 9. [중요] 풀업/친업/딥스 계열 종목은 반드시 아래 세 가지 중 하나로 명확히 구분해서 title에 표기해줘: 보조 기구(어시스티드 머신)를 사용한 경우 → "어시스티드 풀업"/"어시스티드 친업"/"어시스티드 딥스", 체중에 무게를 추가한 경우 → "가중 풀업"/"가중 친업"/"가중 딥스", 맨몸인 경우 → "풀업"/"친업"/"딥스".
 10. ${KEEP_REMARKS_RULE}
+11. ${SUPERSET_RULE}
 사용자 입력:\n${rawText}`;
 
       const sumCtrl = new AbortController();
@@ -1067,14 +1085,13 @@ JSON 형식으로만 반환해줘:
 
       const structuredSections = parsed.map(s => ({
         part: s.part || "운동 부위",
-        items: (s.items || []).map(it => ({ title: it.title, body: it.body, ...(it.note ? { note: it.note } : {}) }))
+        items: (s.items || []).map(it => ({ title: it.title, body: it.body, ...(it.note ? { note: it.note } : {}), ...(it.supersetGroup ? { supersetGroup: it.supersetGroup } : {}) }))
       }));
       const structuredExercises = structuredSections.flatMap(s => s.items.map(it => ({ name: it.title }))).filter(ex => ex.name);
       const totalVolume = parseVolume(structuredSections, profile?.weight);
       const cardioMinutes = parseCardioMinutes(structuredSections);
 
-      const lastVolume = await findComparableLastVolume(structuredSections, title, docRef.id);
-      const overloadMsg = buildWorkoutSummaryMessage(totalVolume, lastVolume, capturedMode, cardioMinutes);
+      const { overloadMsg, progress } = await buildOverloadSummary(structuredSections, title, docRef.id, totalVolume, cardioMinutes, capturedMode);
 
       const summaryApplied = await updateWorkoutIfCurrent(docRef, revision, {
         sections: structuredSections,
@@ -1091,9 +1108,9 @@ JSON 형식으로만 반환해줘:
 필수 포함 문구: "${overloadMsg}"
 규칙:
 1. 반드시 저 문구가 제일 앞에 나오게 해.
-2. 30자 이내로 짧고 강렬하게 한국어로 써.
+2. 저 문구 뒤에 15자 이내의 짧고 강렬한 한마디만 한국어로 덧붙여.
 3. 순수 텍스트만 반환해.
-정보: 운동부위: ${title}, 총 볼륨: ${totalVolume}kg, 유산소 시간: ${cardioMinutes}분`;
+정보: 운동부위: ${title}, 종목별 기록: ${describeForPrompt(progress)}, 총 볼륨: ${totalVolume}kg, 유산소 시간: ${cardioMinutes}분`;
 
       let aiComment = overloadMsg;
       const commentCtrl = new AbortController();
@@ -1273,8 +1290,9 @@ JSON 형식으로만 반환해줘:
       {/* 상단 네비게이션 */}
       <header className="flex-none bg-white/90 backdrop-blur-[32px] border-b border-ui-3/50">
         <div className="flex items-center justify-between px-4 h-14">
-          <div className="flex items-center gap-2">
-            <Pressable pressScale={0.85} onClick={handleBackClick} className="flex items-center justify-center w-8 h-8 rounded-full bg-transparent">
+          {/* Figma Memo/TopBar: 아이콘 24, 아이콘–제목 16, 좌우 여백 16. 누르는 영역은 40이지만 -m-2로 자리는 24만 차지한다. */}
+          <div className="flex items-center gap-4">
+            <Pressable pressScale={0.85} onClick={handleBackClick} className="flex items-center justify-center w-10 h-10 -m-2 rounded-full bg-transparent">
               <IcBack />
             </Pressable>
             <h1 className="font-pretendard text-[20px] font-semibold text-black tracking-[-0.5px] leading-[36px] whitespace-nowrap m-0">
@@ -1282,7 +1300,7 @@ JSON 형식으로만 반환해줘:
             </h1>
           </div>
           <div className="flex items-center gap-4">
-            <Pressable pressScale={0.85} onClick={() => setMoreSheetOpen(true)} className="flex items-center justify-center w-8 h-8 rounded-full">
+            <Pressable pressScale={0.85} onClick={() => setMoreSheetOpen(true)} className="flex items-center justify-center w-10 h-10 -m-2 rounded-full">
               <IcMore />
             </Pressable>
           </div>
@@ -1324,11 +1342,12 @@ JSON 형식으로만 반환해줘:
               </div>
             )}
           </div>
-          <div className="flex h-10 items-center gap-4">
+          {/* Figma Memo/Toolbar: 바 높이 48 (여백 12 + 아이콘 24 + 12). 오른쪽 묶음도 24 높이 안에 들어가야 한다. */}
+          <div className="flex h-6 items-center gap-4">
             <Pressable
               pressScale={0.88}
               onClick={() => setWorkoutMode(m => m === 'overload' ? 'deload' : 'overload')}
-              className={`h-8 flex items-center gap-1 px-3 rounded-full font-pretendard font-semibold text-[11px] tracking-[-0.2px] leading-none ${workoutMode === 'overload' ? 'bg-brand/10 text-brand' : 'bg-[#f07800]/10 text-[#f07800]'}`}
+              className={`h-6 flex items-center gap-1 px-3 rounded-full font-pretendard font-semibold text-[11px] tracking-[-0.2px] leading-none ${workoutMode === 'overload' ? 'bg-brand/10 text-brand' : 'bg-[#f07800]/10 text-[#f07800]'}`}
               style={{ WebkitTapHighlightColor: 'transparent' }}
             >
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">

@@ -1,9 +1,10 @@
 import { auth } from './firebase';
+import { apiUrl } from './native';
 
 /* QA-01: 브라우저에 Gemini 키를 두지 않는다.
    모든 호출은 Firebase ID 토큰을 붙여 서버 프록시(/api/ai-generate)로 보낸다.
    VITE_GEMINI_GENERATE_URL은 로컬 QA 모의 서버 전용이며 운영 번들에서는 비어 있다. */
-const AI_ENDPOINT = import.meta.env.VITE_GEMINI_GENERATE_URL || '/api/ai-generate';
+const AI_ENDPOINT = import.meta.env.VITE_GEMINI_GENERATE_URL || apiUrl('/api/ai-generate');
 const USING_LOCAL_MOCK = Boolean(import.meta.env.VITE_GEMINI_GENERATE_URL);
 
 export class AiRequestError extends Error {

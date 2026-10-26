@@ -34,7 +34,7 @@ export default function McpAuthorizeScreen({ user, request, onClose }) {
   if (status === 'denied') {
     return (
       <div className="absolute inset-0 z-[60] bg-white flex flex-col items-center justify-center px-8 gap-3">
-        <p className="font-pretendard font-bold text-[17px] text-typo-strong tracking-[-0.4px]">연결하지 않았어요</p>
+        <p className="font-pretendard font-bold text-[18px] text-typo-strong tracking-[-0.4px]">연결하지 않았어요</p>
         <p className="font-pretendard text-body-s text-typo-alternative text-center tracking-[-0.3px]">이 창은 닫아도 됩니다.</p>
         <Pressable pressScale={0.97} onClick={onClose} className="mt-2 px-6 py-3 bg-ui-1 rounded-2xl font-pretendard font-semibold text-body-s text-typo-normal">
           앱으로 가기
@@ -47,20 +47,20 @@ export default function McpAuthorizeScreen({ user, request, onClose }) {
     <div className="absolute inset-0 z-[60] bg-white flex flex-col px-6 pt-16 pb-[calc(24px+env(safe-area-inset-bottom))]">
       <div className="flex-1">
         <p className="font-pretendard font-bold text-[22px] text-typo-strong tracking-[-0.5px] leading-snug">
-          Claude가 내 기록을<br />조회하도록 허용할까요?
+          Claude가 내 기록을<br />보고 고치도록 허용할까요?
         </p>
         <p className="mt-2 font-pretendard text-body-s text-typo-alternative tracking-[-0.3px]">
           {user?.name}{user?.email ? ` (${user.email})` : ''} 계정
         </p>
 
         <div className="mt-6 bg-ui-1 rounded-2xl px-4 py-4">
-          <p className="font-pretendard font-semibold text-caption-l text-typo-secondary tracking-[-0.3px] mb-2">Claude가 읽을 수 있는 정보</p>
+          <p className="font-pretendard font-semibold text-caption-l text-typo-secondary tracking-[-0.3px] mb-2">Claude가 읽고 쓸 수 있는 정보</p>
           {SHARED.map(label => (
             <p key={label} className="font-pretendard text-body-s text-typo-normal tracking-[-0.3px] py-1">• {label}</p>
           ))}
         </div>
         <p className="mt-4 font-pretendard text-caption-l text-typo-alternative tracking-[-0.3px] leading-relaxed">
-          읽기 전용이에요. Claude는 기록을 수정하거나 삭제할 수 없어요. 마이페이지에서 언제든 연결을 해제할 수 있어요.
+          Claude가 운동·식단·아침 체중·프로필을 대신 기록하거나 고칠 수 있어요. 인바디는 볼 수만 있어요. Claude가 지운 기록은 휴지통에서 30일 안에 되살릴 수 있고, 마이페이지에서 언제든 연결을 해제할 수 있어요.
         </p>
         {status === 'error' && (
           <p role="alert" className="mt-4 font-pretendard text-caption-l text-[#e03e52] tracking-[-0.3px]">{errorMessage}</p>

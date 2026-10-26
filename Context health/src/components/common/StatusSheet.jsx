@@ -151,7 +151,7 @@ export default function StatusSheet({ onClose, workoutLogs, dietLogs, profile })
       >
         <div className="px-5 pt-5 pb-5 flex flex-col gap-6">
           <div className="flex items-center justify-between">
-            <h2 className="font-pretendard font-bold text-[17px] text-typo-normal tracking-[-0.4px]">내 상태</h2>
+            <h2 className="font-pretendard font-bold text-[18px] text-typo-normal tracking-[-0.4px]">내 상태</h2>
             <span className="font-pretendard text-[13px] text-typo-alternative tracking-[-0.3px]">이번 주</span>
           </div>
 

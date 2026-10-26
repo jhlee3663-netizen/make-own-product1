@@ -119,3 +119,30 @@ export function kcalRange(target) {
   const round = value => Math.round(value / 10) * 10;
   return { min: round(target * 0.9), max: round(target * 1.1) };
 }
+
+/* 섭취 칼로리 막대의 눈금 끝. 그날 먹은 양과 상관없이 목표 기준으로 고정해, 카드끼리 막대 길이를 비교할 수 있게 한다. */
+export function kcalScale(target) {
+  return target ? Math.ceil((target * 1.45) / 100) * 100 : 3000;
+}
+
+/* 그날 섭취량이 어땠는지 한마디로. 범위 숫자를 반복하는 대신 결과를 보여주는 데 쓴다.
+   - 적정인지 아닌지(색)는 적정 범위(목표 ±10%)로 가른다.
+   - 모자라거나 넘친 양(숫자)은 사용자가 정한 목표 칼로리를 기준으로 센다. 범위의 끝이 아니다.
+   - 아직 진행 중인 오늘은 모자란 양을 "부족"이 아니라 "남음"으로 말한다. */
+export const KCAL_OVER_COLOR = '#FF7043';
+export function kcalVerdict(kcal, target, { inProgress = false } = {}) {
+  const range = kcalRange(target);
+  if (!range) return null;
+  const amount = value => Math.round(value).toLocaleString();
+  if (kcal < range.min) return { tone: 'under', text: `${amount(target - kcal)} ${inProgress ? '남음' : '부족'}` };
+  if (kcal > range.max) return { tone: 'over', text: `${amount(kcal - target)} 초과` };
+  return { tone: 'ok', text: '적정' };
+}
+
+/* 막대 색: 평소엔 보라, 적정 범위를 넘긴 날만 붉은 주황. 둘 다 옅은 색에서 진한 색으로 이어진다. */
+export function kcalBarGradient(tone) {
+  return tone === 'over'
+    ? 'linear-gradient(90deg, rgba(255,112,67,0.3), #FF7043)'
+    : 'linear-gradient(90deg, rgba(113,113,255,0.3), #7171FF)';
+}
+export const kcalVerdictColor = tone => (tone === 'over' ? KCAL_OVER_COLOR : tone === 'ok' ? '#7171FF' : '#868e96');

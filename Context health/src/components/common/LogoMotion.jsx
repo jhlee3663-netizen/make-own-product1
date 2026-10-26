@@ -61,12 +61,15 @@ export default function LogoMotion({ size = 228, tone = 'gradient', epoch }) {
 
   useEffect(() => {
     const E = el.current;
+    // 화면이 바뀌어 로고가 사라진 뒤에도 마지막 프레임이 한 번 더 돌 수 있어, 그릴 대상이 없으면 넘어간다
     const setCircle = (node, c) => {
+      if (!node) return;
       node.setAttribute('cx', c ? c.x : -999);
       node.setAttribute('cy', c ? c.y : -999);
       node.setAttribute('r', c ? Math.max(c.r, 0) : 0);
     };
     const setPoly = (node, pts) => {
+      if (!node) return;
       node.setAttribute('points', pts.every(Boolean) ? pts.map(p => `${p.x},${p.y}`).join(' ') : '');
     };
 

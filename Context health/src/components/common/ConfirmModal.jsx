@@ -7,6 +7,7 @@ export default function ConfirmModal({
   subtitle,
   onConfirm,
   onCancel,
+  onDismiss = onCancel, // 바깥을 누르거나 Esc로 닫을 때 (기본은 취소와 같다)
   confirmText = '확인',
   cancelText = '취소',
   confirmVariant = 'primary',
@@ -24,27 +25,27 @@ export default function ConfirmModal({
     if (!isOpen) return undefined;
     const t = setTimeout(() => cancelButtonRef.current?.focus(), 120);
     const handleKeyDown = (e) => {
-      if (e.key === 'Escape') onCancel?.();
+      if (e.key === 'Escape') onDismiss?.();
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => {
       clearTimeout(t);
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, onCancel]);
+  }, [isOpen, onDismiss]);
 
   if (!render) return null;
 
   const confirmClass = confirmVariant === 'danger'
     ? 'bg-[#F04452] text-white active:bg-[#D92D3D]'
-    : 'bg-[#3182F6] text-white active:bg-[#1B64DA]';
+    : 'bg-[#7171FF] text-white active:bg-[#5C5CE6]';
 
   return (
     <div
       className={`fixed inset-0 z-[100] flex items-center justify-center p-5 transition-opacity duration-200 ${isOpen ? 'opacity-100 pointer-events-auto bg-black/45' : 'opacity-0 pointer-events-none bg-transparent'}`}
       role="presentation"
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onCancel?.();
+        if (e.target === e.currentTarget) onDismiss?.();
       }}
       onTransitionEnd={() => !isOpen && setRender(false)}
     >
@@ -67,7 +68,7 @@ export default function ConfirmModal({
           <Pressable
             pressScale={0.97}
             onClick={onTertiary}
-            className="w-full h-12 mb-2 bg-[#F2F4F6] text-[#4E5968] font-pretendard font-medium text-[16px] rounded-[12px] outline-none focus-visible:ring-2 focus-visible:ring-[#3182F6]/30"
+            className="w-full h-12 mb-2 bg-[#F2F4F6] text-[#4E5968] font-pretendard font-medium text-[16px] rounded-[12px] outline-none focus-visible:ring-2 focus-visible:ring-[#7171FF]/30"
           >
             {tertiaryText}
           </Pressable>
@@ -77,14 +78,14 @@ export default function ConfirmModal({
             ref={cancelButtonRef}
             pressScale={0.97}
             onClick={onCancel}
-            className="flex-1 h-12 bg-[#F2F4F6] text-[#4E5968] font-pretendard font-medium text-[16px] rounded-[12px] outline-none focus-visible:ring-2 focus-visible:ring-[#3182F6]/30"
+            className="flex-1 h-12 bg-[#F2F4F6] text-[#4E5968] font-pretendard font-medium text-[16px] rounded-[12px] outline-none focus-visible:ring-2 focus-visible:ring-[#7171FF]/30"
           >
             {cancelText}
           </Pressable>
           <Pressable
             pressScale={0.97}
             onClick={onConfirm}
-            className={`flex-1 h-12 font-pretendard font-medium text-[16px] rounded-[12px] outline-none focus-visible:ring-2 focus-visible:ring-[#3182F6]/30 ${confirmClass}`}
+            className={`flex-1 h-12 font-pretendard font-medium text-[16px] rounded-[12px] outline-none focus-visible:ring-2 focus-visible:ring-[#7171FF]/30 ${confirmClass}`}
           >
             {confirmText}
           </Pressable>

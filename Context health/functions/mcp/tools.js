@@ -232,6 +232,7 @@ function buildSession(log, filters) {
   const meal = data.preWorkoutMeal;
   const session = compact({
     id: log.id,
+    log_id: log.id,
     date: log.date,
     recorded_time: kstTime(log.ms),
     title: data.title,
@@ -389,7 +390,8 @@ async function getDiet(db, uid, args) {
   const days = new Map();
   logs.filter(isDiet).forEach((log) => {
     const data = log.data;
-    const day = days.get(log.date) || { date: log.date, totals: { kcal: 0, carb_g: 0, protein_g: 0, fat_g: 0 }, goal_kcal: null, meals: new Map(), unparsed: [] };
+    const day = days.get(log.date) || { date: log.date, totals: { kcal: 0, carb_g: 0, protein_g: 0, fat_g: 0 }, goal_kcal: null, meals: new Map(), unparsed: [], logIds: [] };
+    day.logIds.push(log.id);
     const sections = Array.isArray(data.sections) ? data.sections : [];
     const allItems = sections.flatMap(s => (Array.isArray(s?.items) ? s.items : []));
     /* 문서에 저장된 합계가 화면에 보이는 값이므로 우선한다. 없으면 항목 합으로 대신한다. */
@@ -472,6 +474,7 @@ async function getDiet(db, uid, args) {
       const totals = roundMacros(day.totals);
       return compact({
         date: day.date,
+        log_id: day.logIds[0],
         ...totals,
         goal_kcal: goal,
         kcal_vs_goal_pct: goal ? round((totals.kcal / goal) * 100) : null,

@@ -17,6 +17,7 @@ const ALLOWED_ORIGINS = new Set([
   'https://context-health-3eb84.firebaseapp.com',
   'http://localhost:5173',
   'https://localhost', // 안드로이드 앱(Capacitor)
+  'capacitor://localhost', // iOS 앱(Capacitor)
 ]);
 
 function setCors(req, res) {
@@ -408,6 +409,50 @@ exports.socialAuth = onRequest({
   }
 });
 
+/* ── 피드·친구 API (functions/social) ── */
+const { createHandler: createSocialHandler, deleteSocialData } = require('./social');
+
+exports.social = onRequest(
+  { region: 'us-central1', timeoutSeconds: 300, memory: '512MiB', secrets: ['GEMINI_KEY'] },
+  createSocialHandler({ setCors, ALLOWED_ORIGINS, consumeAiQuota, aiUpstreamBase }),
+);
+
+/* 매일 아침 유튜브 운동 루틴을 골라 큐레이션 계정으로 피드에 올린다 (functions/social/curator.js) */
+const { onSchedule } = require('firebase-functions/v2/scheduler');
+const { runCuration } = require('./social/curator');
+
+exports.curateYoutube = onSchedule(
+  { schedule: 'every day 07:00', timeZone: 'Asia/Seoul', region: 'us-central1', timeoutSeconds: 540, memory: '1GiB', secrets: ['GEMINI_KEY', 'YOUTUBE_KEY'] },
+  async () => {
+    const result = await runCuration({ apiKey: process.env.GEMINI_KEY, upstreamBase: aiUpstreamBase(), youtubeKey: process.env.YOUTUBE_KEY });
+    console.log('curateYoutube', result);
+  },
+);
+
+/* 휴지통(deletedAt이 있는 기록)에서 30일이 지난 것을 영구 삭제한다.
+   앱 화면과 개인정보처리방침에 "30일 후 자동 삭제"라고 안내하고 있다. */
+const TRASH_RETENTION_DAYS = 30;
+
+exports.purgeTrash = onSchedule(
+  { schedule: 'every day 04:00', timeZone: 'Asia/Seoul', region: 'us-central1', timeoutSeconds: 540 },
+  async () => {
+    const { Timestamp } = require('firebase-admin/firestore');
+    const db = getFirestore();
+    const cutoff = Timestamp.fromMillis(Date.now() - TRASH_RETENTION_DAYS * 86400000);
+    let deleted = 0;
+    for (;;) {
+      const snap = await db.collection('logs').where('deletedAt', '<', cutoff).limit(400).get();
+      if (snap.empty) break;
+      const batch = db.batch();
+      snap.docs.forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+      deleted += snap.size;
+      if (snap.size < 400) break;
+    }
+    console.log('purgeTrash', { deleted });
+  },
+);
+
 /* 탈퇴 요청은 최근 로그인 세션에서만 허용한다. 오래 살아 있는 토큰으로 계정이 삭제되지 않도록 한다. */
 const DELETE_RECENT_LOGIN_MAX_AGE_SEC = 10 * 60;
 
@@ -465,6 +510,7 @@ exports.deleteAccount = onRequest({ region: 'us-central1', timeoutSeconds: 300 }
     await deleteQueryBatched(db.collection('mcpTokens').where('uid', '==', uid), 'mcpTokens');
     await deleteQueryBatched(db.collection('mcpAuthCodes').where('uid', '==', uid), 'mcpTokens');
 
+    await deleteSocialData(uid);
     await db.doc(`users/${uid}`).delete();
     deleted.user = 1;
 
@@ -487,6 +533,39 @@ exports.deleteAccount = onRequest({ region: 'us-central1', timeoutSeconds: 300 }
 
 /* ── Claude 커넥터용 MCP 서버 (조회 전용) ──
    허용된 uid(MCP_ALLOWED_UIDS)의 OAuth 토큰으로만 접근할 수 있다. 구현은 ./mcp 참고. */
+/* 공용 음식 사전에 값 보내기 (functions/foods.js). 앱은 사전을 읽기만 하고, 쓰기는 여기로만 한다. */
+const { contributeFood } = require('./foods');
+const FOOD_SOURCES_FROM_APP = new Set(['ai', 'user']);
+
+exports.foodContribute = onRequest({ region: 'us-central1', timeoutSeconds: 30 }, async (req, res) => {
+  setCors(req, res);
+  if (req.method === 'OPTIONS') return res.status(204).send('');
+  if (req.method !== 'POST') return res.status(405).json({ error: 'method-not-allowed' });
+  const origin = req.get('origin');
+  if (origin && !ALLOWED_ORIGINS.has(origin)) return res.status(403).json({ error: 'origin-not-allowed' });
+  const authorization = req.get('authorization') || '';
+  if (!authorization.startsWith('Bearer ')) return res.status(401).json({ error: 'unauthorized' });
+  let uid;
+  try {
+    uid = (await getAuth().verifyIdToken(authorization.slice(7))).uid;
+  } catch {
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+  const { foods, source } = req.body || {};
+  if (!FOOD_SOURCES_FROM_APP.has(source) || !Array.isArray(foods) || foods.length === 0 || foods.length > 40) {
+    return res.status(400).json({ error: 'bad-request' });
+  }
+  const db = getFirestore();
+  const results = [];
+  for (const food of foods) {
+    try { results.push(await contributeFood(db, uid, food, source)); } catch (error) {
+      console.error('food contribute failed', { code: error.code, message: error.message });
+      results.push('error');
+    }
+  }
+  return res.status(200).json({ results });
+});
+
 exports.mcp = onRequest({ region: 'us-central1', timeoutSeconds: 60, secrets: ['MCP_ALLOWED_UIDS'] }, require('./mcp').handler);
 
 exports.sentryWebhook = onRequest({ secrets: ['ANTHROPIC_KEY', 'GITHUB_TOKEN'] }, async (req, res) => {

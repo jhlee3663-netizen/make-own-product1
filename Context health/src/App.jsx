@@ -8,6 +8,7 @@ import { clearLegacyPersonalStorage, getUserStorage, getUserStorageKeys, prepare
 import LoginScreen      from './components/screens/LoginScreen';
 import SplashScreen     from './components/screens/SplashScreen';
 import OnboardingScreen from './components/screens/OnboardingScreen';
+import ConsentScreen from './components/screens/ConsentScreen';
 import HomeScreen       from './components/screens/HomeScreen';
 import WorkoutMemoScreen from './components/screens/WorkoutMemoScreen';
 import DietDetailScreen  from './components/screens/DietDetailScreen';
@@ -20,6 +21,38 @@ import BottomNav        from './components/common/BottomNav';
 import AnalysisScreen   from './components/screens/AnalysisScreen';
 import { refineDynamicCoachRoomMeta, STATIC_COACH_ROOM_IDS } from './utils/coachRooms';
 import { captureMcpAuthorizeRequest } from './lib/mcpConnection';
+import FeedScreen from './components/social/FeedScreen';
+import SocialLayer, { BellButton } from './components/social/SocialLayer';
+import { MyTab } from './components/social/ProfileScreen';
+import { InvitePreviewPage } from './components/social/InviteParts';
+import { socialCall } from './lib/socialApi';
+import { enablePush, pushSupported, refreshPushToken } from './lib/push';
+
+/* 초대 링크(/i/{code})로 들어오면 코드를 기억해 두고 주소는 앱 첫 화면으로 바꾼다.
+   로그인·온보딩이 끝난 뒤 초대 받기 시트를 연다. */
+const PENDING_INVITE_KEY = 'pending_invite';
+/* 공유된 글 링크(/p/{key})도 기억해 두었다가 로그인 뒤 그 글을 연다 */
+const PENDING_POST_KEY = 'pending_post';
+function capturePostFromPath() {
+  const m = window.location.pathname.match(/^\/p\/([^/]{3,120})$/);
+  if (m) {
+    const key = decodeURIComponent(m[1]);
+    try { localStorage.setItem(PENDING_POST_KEY, key); } catch { /* 무시 */ }
+    window.history.replaceState(window.history.state, '', '/');
+    return key;
+  }
+  try { return localStorage.getItem(PENDING_POST_KEY); } catch { return null; }
+}
+
+function captureInviteFromPath() {
+  const m = window.location.pathname.match(/^\/i\/([A-Za-z0-9_-]{3,40})$/);
+  if (m) {
+    try { localStorage.setItem(PENDING_INVITE_KEY, m[1]); } catch { /* 저장 공간이 없으면 이번 화면에서만 쓴다 */ }
+    window.history.replaceState(window.history.state, '', '/');
+    return m[1];
+  }
+  try { return localStorage.getItem(PENDING_INVITE_KEY); } catch { return null; }
+}
 
 /* ── 프로필 localStorage 유틸 ── */
 function loadProfile(uid) {
@@ -84,6 +117,7 @@ function App() {
   const [user, setUser]       = useState(undefined); // undefined = 로딩 중
   const [profile, setProfile] = useState(null);
   const [onboardingDone, setOnboardingDone] = useState(false);
+  const [consentDone, setConsentDone] = useState(false);
   const [userDataReady, setUserDataReady] = useState(false);
   const [splashHold, setSplashHold] = useState(true);
   const hadSessionRef = useRef(Boolean(localStorage.getItem('auth_user'))); // 이 기기에 로그인 기록이 있는지
@@ -100,6 +134,7 @@ function App() {
   const [dietKey, setDietKey]           = useState(0);
   const [editingLog, setEditingLog]     = useState(null);
   const [editingDietLog, setEditingDietLog] = useState(null);
+  const [editingDietMeal, setEditingDietMeal] = useState(null);
   const [coachRooms, setCoachRooms]     = useState(() => loadCoachRooms(null));
   const [coachRoomMeta, setCoachRoomMeta] = useState({});
   const [coachRoomLimitReached, setCoachRoomLimitReached] = useState(false);
@@ -108,6 +143,18 @@ function App() {
   const [coachOverlay, setCoachOverlay] = useState(null);
   const [aiGoals, setAiGoals]           = useState([]);
   const [mcpAuthorizeRequest, setMcpAuthorizeRequest] = useState(captureMcpAuthorizeRequest);
+  /* 피드·친구 */
+  const [socialStack, setSocialStack] = useState([]);
+  const [socialMe, setSocialMe] = useState(null);
+  const [importReq, setImportReq] = useState(null);
+  const [inviteShareOpen, setInviteShareOpen] = useState(false);
+  const [pendingInvite, setPendingInvite] = useState(captureInviteFromPath);
+  const [pendingPost, setPendingPost] = useState(capturePostFromPath);
+  const [inviteSheetCode, setInviteSheetCode] = useState(null);
+  const [invitePreviewDismissed, setInvitePreviewDismissed] = useState(false);
+  const [pushAsk, setPushAsk] = useState(null);
+  const setupCallbackRef = useRef(null);
+  const stackSeqRef = useRef(0);
   const historyIndexRef = useRef(0);
   const latestViewRef = useRef({ tab: 'home', screen: 'home', coachRoom: null, coachOverlay: null });
   const popRestoringRef = useRef(false);
@@ -130,6 +177,7 @@ function App() {
   const currentView = () => ({
     tab,
     screen,
+    social: socialStack,
     coachRoom,
     coachOverlay: coachOverlay
       ? { roomId: coachOverlay.roomId, pendingMessage: coachOverlay.pendingMessage || null }
@@ -143,6 +191,7 @@ function App() {
     setScreen(view.screen || 'home');
     setCoachRoom(view.coachRoom || null);
     setCoachOverlay(view.coachOverlay || null);
+    setSocialStack(view.social || []);
     if ((view.screen || 'home') !== 'memo') setEditingLog(null);
     if ((view.screen || 'home') !== 'diet-detail') setEditingDietLog(null);
     if (view.screen === 'memo') setMemoKey(k => k + 1);
@@ -310,6 +359,7 @@ function App() {
     if (!user?.uid) {
       setProfile(null);
       setOnboardingDone(false);
+      setConsentDone(false);
       setAiGoals([]);
       setCoachRooms(loadCoachRooms(null));
       setCoachRoomMeta({});
@@ -320,6 +370,7 @@ function App() {
     const cachedProfile = loadProfile(user.uid);
     setProfile(cachedProfile);
     setOnboardingDone(Boolean(getUserStorage(user.uid, 'onboarding_completed') || cachedProfile));
+    setConsentDone(Boolean(getUserStorage(user.uid, 'consent_agreed')));
     setAiGoals(loadAiGoals(user.uid));
     setCoachRooms(loadCoachRooms(user.uid));
     setCoachRoomMeta(loadCoachRoomMeta(user.uid));
@@ -327,7 +378,7 @@ function App() {
 
   useEffect(() => {
     latestViewRef.current = currentView();
-  }, [tab, screen, coachRoom, coachOverlay]);
+  }, [tab, screen, coachRoom, coachOverlay, socialStack]);
 
   useEffect(() => {
     const initialView = currentView();
@@ -387,6 +438,14 @@ function App() {
         removeUserStorage(user.uid, 'user_profile');
         setProfile(null);
       }
+      // 건강정보 동의는 서버 기록이 기준이다. 기기 캐시만 있으면 다시 받는다.
+      if (userData?.consent?.health) {
+        setUserStorage(user.uid, 'consent_agreed', '1');
+        setConsentDone(true);
+      } else {
+        removeUserStorage(user.uid, 'consent_agreed');
+        setConsentDone(false);
+      }
       if (userData?.onboardingDone || userData?.profile) {
         setUserStorage(user.uid, 'onboarding_completed', '1');
         setOnboardingDone(true);
@@ -428,6 +487,12 @@ function App() {
   // Firebase가 확인한 인증 상태만 계정 전환의 기준으로 사용한다.
   // 공급자 콜백에서 auth_user를 먼저 덮어쓰면 레거시 캐시 소유자 판정이 바뀔 수 있다.
   function handleLogin() {}
+  async function handleConsentAgree(consent) {
+    if (!user?.uid) return;
+    await saveUserData(user.uid, { consent });
+    setUserStorage(user.uid, 'consent_agreed', '1');
+    setConsentDone(true);
+  }
   function handleOnboardingComplete(p) {
     setUserStorage(user?.uid, 'onboarding_completed', '1');
     saveProfile(user?.uid, p); setProfile(p); setOnboardingDone(true);
@@ -521,8 +586,9 @@ function App() {
     setDietKey(k => k + 1);
     showAppToast('저장되었습니다');
   }
-  function handleDietCardClick(data) {
+  function handleDietCardClick(data, mealId = null) {
     setEditingDietLog(data);
+    setEditingDietMeal(mealId);
     navigateApp({ tab: 'home', screen: 'diet-detail', coachRoom: null, coachOverlay: null });
   }
 
@@ -545,14 +611,148 @@ function App() {
     setAiGoals(next);
   }
 
+  /* ── 피드·친구 ── */
+  const refreshSocialMe = useCallback(async () => {
+    try {
+      const me = await socialCall('me');
+      setSocialMe(me);
+      return me;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const socialReady = Boolean(user?.uid && consentDone && onboardingDone && userDataReady);
+  useEffect(() => {
+    if (!socialReady) { setSocialMe(null); return undefined; }
+    refreshSocialMe();
+    refreshPushToken(user.uid);
+    const onVisible = () => { if (document.visibilityState === 'visible') refreshSocialMe(); };
+    document.addEventListener('visibilitychange', onVisible);
+    const timer = window.setInterval(refreshSocialMe, 120000);
+    return () => { document.removeEventListener('visibilitychange', onVisible); window.clearInterval(timer); };
+  }, [socialReady, user?.uid, refreshSocialMe]);
+
+  /* 초대 링크로 들어온 사람: 로그인·온보딩이 끝나면 초대 받기 시트 */
+  useEffect(() => {
+    if (!socialReady || !pendingInvite) return;
+    try { localStorage.removeItem(PENDING_INVITE_KEY); } catch { /* 무시 */ }
+    setInviteSheetCode(pendingInvite);
+    setPendingInvite(null);
+  }, [socialReady, pendingInvite]);
+
+  /* 공유 링크로 들어온 글 열기 */
+  useEffect(() => {
+    if (!socialReady || !pendingPost) return;
+    try { localStorage.removeItem(PENDING_POST_KEY); } catch { /* 무시 */ }
+    const key = pendingPost;
+    setPendingPost(null);
+    navigateApp({ tab: 'feed', screen: 'home', coachRoom: null, coachOverlay: null, social: [{ id: `shared-${Date.now()}`, type: key.startsWith('log:') ? 'post' : 'routine', props: { key } }] });
+  }, [socialReady, pendingPost]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* 첫 친구가 생긴 순간에만 폰 알림 권한을 묻는다 */
+  useEffect(() => {
+    const count = socialMe?.profile?.friendCount || 0;
+    if (!user?.uid || count < 1 || !pushSupported() || Notification.permission !== 'default') return;
+    if (getUserStorage(user.uid, 'push_asked')) return;
+    setUserStorage(user.uid, 'push_asked', '1');
+    setPushAsk({ name: null });
+  }, [socialMe?.profile?.friendCount, user?.uid]);
+
+  /* 폰 알림을 눌러 앱이 열리면 알림 목록으로 */
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return undefined;
+    const onMessage = (event) => { if (event.data?.type === 'push-open') socialNav.push('notifications', {}); };
+    navigator.serviceWorker.addEventListener('message', onMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage);
+  });
+
+  function pushSocial(type, props = {}) {
+    stackSeqRef.current += 1;
+    const entry = { id: `${type}-${Date.now()}-${stackSeqRef.current}`, type, props };
+    navigateApp({ ...currentView(), screen: 'home', social: [...socialStack, entry] });
+  }
+
+  function popSocial() {
+    if (!socialStack.length) return;
+    if (isAppHistoryState(window.history.state) && window.history.state.index > 0) window.history.back();
+    else replaceApp({ ...currentView(), social: socialStack.slice(0, -1) });
+  }
+
+  const socialNav = {
+    uid: user?.uid,
+    authName: user?.name,
+    me: socialMe,
+    toast: showAppToast,
+    push: pushSocial,
+    pop: popSocial,
+    refreshMe: refreshSocialMe,
+    goTab: (id) => navigateApp({ tab: id, screen: 'home', coachRoom: null, coachOverlay: null, social: [] }),
+    /* 아이디가 없으면 처음 설정을 먼저 하고, 끝나면 하려던 일을 이어서 한다 (IA 4-4) */
+    requireProfile: async (fn) => {
+      if (socialMe?.profile?.handle) return fn();
+      const latest = await refreshSocialMe();
+      if (latest?.profile?.handle) return fn();
+      setupCallbackRef.current = fn;
+      pushSocial('setup', {});
+      return undefined;
+    },
+    finishSetup: () => {
+      const fn = setupCallbackRef.current;
+      setupCallbackRef.current = null;
+      popSocial();
+      if (fn) window.setTimeout(() => Promise.resolve(fn()).catch(() => {}), 320);
+    },
+    cancelSetup: () => { setupCallbackRef.current = null; popSocial(); },
+    startImport: (req) => setImportReq(req),
+    openInviteShare: () => socialNav.requireProfile(() => setInviteShareOpen(true)),
+    openRecord: (type) => {
+      if (type === 'workout') {
+        setEditingLog(null);
+        navigateApp({ tab: 'home', screen: 'memo', coachRoom: null, coachOverlay: null, social: [] });
+      } else {
+        handleDietCardClick(null);
+      }
+    },
+    openMemo: (initialData) => {
+      setEditingLog(initialData);
+      navigateApp({ tab: 'home', screen: 'memo', coachRoom: null, coachOverlay: null, social: [] });
+    },
+    openDiet: (initialData, mealId) => handleDietCardClick(initialData, mealId),
+    renderSettings: () => (
+      <MyPageScreen
+        user={user}
+        profile={profile}
+        onProfileSave={handleProfileSave}
+        onNavChange={handleNavChange}
+        onBack={popSocial}
+        social={{
+          me: socialMe,
+          onOpen: (id) => {
+            if (id === 'friends' || id === 'visibility') socialNav.requireProfile(() => pushSocial(id, {}));
+            else pushSocial(id, {});
+          },
+        }}
+      />
+    ),
+    enablePush: async () => {
+      try { return await enablePush(user?.uid); } catch { return false; }
+    },
+  };
+
   /* ── 로그인 화면 ──
      로그인된 적이 없는 기기에서는 로그인 상태를 확인하는 동안에도 같은 로그인 화면(로고 모션)을 띄워
      확인이 끝난 뒤 화면이 바뀌지 않고 그대로 버튼이 나타나게 한다. */
   if (user === null || (user === undefined && !hadSessionRef.current)) {
     return (
-      <div className="min-h-dvh bg-[#f1f3f5] flex justify-center items-start sm:items-center">
-        <div className="w-full max-w-[430px] h-dvh relative overflow-hidden shadow-2xl">
+      <div className="app-stage min-h-dvh bg-[#f1f3f5] flex justify-center items-start sm:items-center">
+        <div className="app-frame w-full max-w-[430px] h-dvh relative overflow-hidden shadow-2xl">
           <LoginScreen onLogin={handleLogin} authReady={user === null} />
+          {pendingInvite && !invitePreviewDismissed && user === null && (
+            <div className="absolute inset-0 z-50">
+              <InvitePreviewPage code={pendingInvite} onStart={() => setInvitePreviewDismissed(true)} />
+            </div>
+          )}
         </div>
       </div>
     );
@@ -562,8 +762,8 @@ function App() {
      기록을 금방 불러와도 로고 모션이 완성될 때까지는 시작 화면을 유지한다. */
   if (user === undefined || (user && (!userDataReady || splashHold))) {
     return (
-      <div className="min-h-dvh bg-[#f1f3f5] flex justify-center items-start sm:items-center">
-        <div className="w-full max-w-[430px] h-dvh relative overflow-hidden shadow-2xl">
+      <div className="app-stage min-h-dvh bg-[#f1f3f5] flex justify-center items-start sm:items-center">
+        <div className="app-frame w-full max-w-[430px] h-dvh relative overflow-hidden shadow-2xl">
           <SplashScreen />
         </div>
       </div>
@@ -571,35 +771,42 @@ function App() {
   }
 
   /* 탭 순서: 홈(0) | 코치(1) | 마이(2) — 인덱스 기반으로 정확한 방향 결정 */
-  const TAB_ORDER = ['home', 'coach', 'analysis', 'my'];
+  const TAB_ORDER = ['home', 'feed', 'coach', 'analysis', 'my'];
   function tabStyle(panelId) {
     const pIdx = TAB_ORDER.indexOf(panelId);
     const aIdx = TAB_ORDER.indexOf(tab);
-    const x = pIdx < aIdx ? -100 : pIdx > aIdx ? 100 : 0;
-    return { transform: x === 0 ? 'none' : `translateX(${x}%)`, pointerEvents: panelId === tab ? 'auto' : 'none' };
+    const x = pIdx < aIdx ? -5 : pIdx > aIdx ? 5 : 0; // 화면 폭의 5%만 비켜 둔다 (index.css .tab-panel)
+    return { transform: x === 0 ? 'none' : `translateX(${x}%)`, opacity: x === 0 ? 1 : 0, pointerEvents: panelId === tab ? 'auto' : 'none' };
   }
   function tabClass(panelId) {
     return `tab-panel${(panelId === tab || panelId === prevTab) ? '' : ' no-transition'}`;
   }
 
   return (
-    <div className="min-h-dvh bg-[#f1f3f5] flex justify-center items-start sm:items-center">
-      <div className="w-full max-w-[430px] h-dvh bg-white relative overflow-hidden shadow-2xl">
+    <div className="app-stage min-h-dvh bg-[#f1f3f5] flex justify-center items-start sm:items-center">
+      <div className="app-frame w-full max-w-[430px] h-dvh bg-white relative overflow-hidden shadow-2xl">
 
         {/* ── Claude 커넥터 연결 동의 ── */}
         {user && mcpAuthorizeRequest && (
           <McpAuthorizeScreen user={user} request={mcpAuthorizeRequest} onClose={() => setMcpAuthorizeRequest(null)} />
         )}
 
+        {/* ── 약관·건강정보 동의 ── */}
+        {user && !consentDone && (
+          <div className="absolute inset-0 z-50">
+            <ConsentScreen onAgree={handleConsentAgree} />
+          </div>
+        )}
+
         {/* ── 온보딩 ── */}
-        {user && !onboardingDone && (
+        {user && consentDone && !onboardingDone && (
           <div className="absolute inset-0 z-40">
             <OnboardingScreen user={user} onComplete={handleOnboardingComplete} />
           </div>
         )}
 
         {/* ── 메인 콘텐츠 ── */}
-        {user && onboardingDone && (
+        {user && consentDone && onboardingDone && (
           <>
             {/* 홈 탭 */}
             <div className={tabClass('home')} style={tabStyle('home')} inert={tab !== 'home' ? '' : undefined} aria-hidden={tab !== 'home'}>
@@ -617,7 +824,13 @@ function App() {
                 onDietCardClick={handleDietCardClick}
                 onNavChange={handleNavChange}
                 onOpenCoachRoom={handleCoachRoomOpen}
+                bell={<BellButton unread={socialMe?.unreadCount || 0} onClick={() => pushSocial('notifications', {})} />}
               />
+            </div>
+
+            {/* 피드 탭 (코치 자리) */}
+            <div className={tabClass('feed')} style={tabStyle('feed')} inert={tab !== 'feed' ? '' : undefined} aria-hidden={tab !== 'feed'}>
+              <FeedScreen nav={socialNav} active={tab === 'feed' && !socialStack.length} />
             </div>
 
             {/* AI 코치 탭 */}
@@ -677,7 +890,8 @@ function App() {
 
             {/* 마이페이지 탭 */}
             <div className={tabClass('my')} style={tabStyle('my')} inert={tab !== 'my' ? '' : undefined} aria-hidden={tab !== 'my'}>
-              <MyPageScreen user={user} profile={profile} onProfileSave={handleProfileSave} onNavChange={handleNavChange} />
+              {/* 마이 탭 = 내 프로필. 설정(예전 마이)은 오른쪽 위 톱니바퀴로 연다 */}
+              <MyTab nav={socialNav} active={tab === 'my' && !socialStack.length} />
             </div>
 
             {/* 메모 상세 — 오른쪽에서 슬라이드 (홈 탭에서만) */}
@@ -729,6 +943,7 @@ function App() {
                   onBack={closeHomeDetailWithAnimation}
                   onSave={handleSaveDiet}
                   initialData={editingDietLog}
+                  initialMeal={editingDietMeal}
                   uid={user.uid}
                   profile={profile}
                   registerBackGuard={registerDetailBackGuard}
@@ -736,7 +951,21 @@ function App() {
               </div>
             )}
             {/* 바텀 네비 — 탭 패널 외부에 위치, detail 화면에선 숨김 */}
-            {screen === 'home' && !(tab === 'coach' && coachRoom !== null) && (
+            {/* 피드·친구 화면 층 */}
+            <SocialLayer
+              stack={socialStack}
+              nav={socialNav}
+              importReq={importReq}
+              onImportClose={() => setImportReq(null)}
+              inviteShareOpen={inviteShareOpen}
+              onInviteShareClose={() => setInviteShareOpen(false)}
+              inviteCode={inviteSheetCode}
+              onInviteClose={() => setInviteSheetCode(null)}
+              pushAsk={pushAsk}
+              onPushAskClose={() => setPushAsk(null)}
+            />
+
+            {screen === 'home' && !socialStack.length && !(tab === 'coach' && coachRoom !== null) && (
               <BottomNav
                 activeId={tab}
                 onChange={(id) => {
@@ -759,6 +988,8 @@ function App() {
           </>
         )}
 
+        {/* 시트·팝업을 하단 내비보다 위에 그리는 층 (components/social/ui.jsx overlay) */}
+        <div id="app-overlay" className="absolute inset-0 z-[70] pointer-events-none" />
         <Toast show={showToast} message={toastMessage} />
       </div>
     </div>

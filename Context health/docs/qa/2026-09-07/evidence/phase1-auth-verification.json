@@ -1,0 +1,54 @@
+{
+  "capturedAt": "2026-09-07",
+  "scope": "read-only production aggregates, deployed source inspection, isolated source probe",
+  "productionWrites": 0,
+  "applicationCodeChanges": 0,
+  "auth": {
+    "scope": "default tenant only",
+    "totalUsers": 6,
+    "providerAccountCounts": {
+      "google.com": 6
+    },
+    "customSocialUidCount": 0,
+    "anonymousOrProviderlessCandidateCount": 0,
+    "anonymousEnabled": false,
+    "googleEnabled": true,
+    "appleConfigured": false,
+    "tenantListQuery": {
+      "verified": false,
+      "result": "HTTP 400 INVALID_PROJECT_ID"
+    }
+  },
+  "deployedSocialAuth": {
+    "state": "ACTIVE",
+    "hasMigrateAnonymousData": true,
+    "migrateAnonymousDataExactTextMatchWithLocal": true,
+    "migrateAnonymousDataSha256": "b5bffb3f9d2ecb39f06afd67b71de6247cffa5bb8862caa5b613562dc47d941c",
+    "hasSignInAnonymously": false,
+    "hasDeleteAccount": false
+  },
+  "isolatedLinkErrorProbe": {
+    "auth/credential-already-in-use": {
+      "Google": "Google 로그인에 실패했습니다. 잠시 후 다시 시도해주세요.",
+      "Apple": "Apple 로그인에 실패했습니다. 잠시 후 다시 시도해주세요."
+    },
+    "auth/account-exists-with-different-credential": {
+      "Google": "Google 로그인에 실패했습니다. 잠시 후 다시 시도해주세요.",
+      "Apple": "Apple 로그인에 실패했습니다. 잠시 후 다시 시도해주세요."
+    },
+    "auth/provider-already-linked": {
+      "Google": "Google 로그인에 실패했습니다. 잠시 후 다시 시도해주세요.",
+      "Apple": "Apple 로그인에 실패했습니다. 잠시 후 다시 시도해주세요."
+    },
+    "explicitCollisionHandlingInGoogleHandler": false,
+    "explicitCollisionHandlingInAppleHandler": false,
+    "actualProviderE2EExecuted": false
+  },
+  "sourceHashesMatchedOriginalQASnapshot": {
+    "src/App.jsx": true,
+    "src/components/screens/LoginScreen.jsx": true,
+    "src/components/screens/MyPageScreen.jsx": true,
+    "functions/index.js": true,
+    "firestore.rules": true
+  }
+}

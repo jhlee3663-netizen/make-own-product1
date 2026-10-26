@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>QA-02 browser fixture</title>
+    <style>
+      body { font: 16px/1.5 system-ui, sans-serif; padding: 24px; }
+      .pass { color: #087f23; }
+      .fail { color: #c92a2a; }
+      pre { white-space: pre-wrap; }
+    </style>
+  </head>
+  <body>
+    <h1>QA-02 browser fixture</h1>
+    <p id="result">검사 중</p>
+    <pre id="details"></pre>
+    <script type="module">
+      import {
+        clearLegacyPersonalStorage,
+        getUserStorage,
+        prepareUserStorage,
+        setUserStorage,
+      } from '/src/lib/userStorage.js';
+
+      const result = document.querySelector('#result');
+      const details = document.querySelector('#details');
+      const assertions = [];
+      const check = (label, actual, expected) => {
+        const pass = actual === expected;
+        assertions.push({ label, pass, actual, expected });
+      };
+      const mode = new URLSearchParams(location.search).get('mode') || 'setup';
+
+      if (mode === 'setup') {
+        const fixtureKeys = [];
+        for (let i = 0; i < localStorage.length; i += 1) {
+          const key = localStorage.key(i);
+          if (key?.startsWith('context_health_user:') || key === 'auth_user') fixtureKeys.push(key);
+        }
+        fixtureKeys.forEach(key => localStorage.removeItem(key));
+        clearLegacyPersonalStorage();
+
+        // 기존 A가 사용하던 전역 캐시는 확인된 A에게만 1회 이전한다.
+        localStorage.setItem('auth_user', JSON.stringify({ uid: 'browser-A' }));
+        localStorage.setItem('diet_custom_foods', 'A-legacy-food');
+        localStorage.setItem('coaching_insight_workout', 'A-legacy-insight');
+        prepareUserStorage('browser-A', 'browser-A');
+
+        // 같은 브라우저의 B 저장소는 별도 namespace를 사용한다.
+        setUserStorage('browser-B', 'diet_custom_foods', 'B-own-food');
+
+        // 소유자가 다른 상태로 발견된 전역 캐시는 B에게 귀속하지 않는다.
+        localStorage.setItem('diet_recent_foods', 'unknown-owner-food');
+        prepareUserStorage('browser-B', 'browser-A');
+      }
+
+      check('A 레거시 음식 보존', getUserStorage('browser-A', 'diet_custom_foods'), 'A-legacy-food');
+      check('B가 A 음식 대신 자기 음식 조회', getUserStorage('browser-B', 'diet_custom_foods'), 'B-own-food');
+      check('B가 A 코칭 insight를 조회하지 않음', getUserStorage('browser-B', 'coaching_insight_workout'), null);
+      check('소유자 불명 캐시 제거', localStorage.getItem('diet_recent_foods'), null);
+      check('소유자 불명 캐시를 B에게 이전하지 않음', getUserStorage('browser-B', 'diet_recent_foods'), null);
+      check('A namespace 유지', getUserStorage('browser-A', 'diet_custom_foods'), 'A-legacy-food');
+
+      const passed = assertions.every(item => item.pass);
+      result.textContent = `${mode.toUpperCase()} ${passed ? 'PASS' : 'FAIL'}`;
+      result.className = passed ? 'pass' : 'fail';
+      details.textContent = JSON.stringify(assertions, null, 2);
+      document.documentElement.dataset.qaResult = passed ? 'pass' : 'fail';
+    </script>
+  </body>
+</html>

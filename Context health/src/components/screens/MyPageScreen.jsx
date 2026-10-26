@@ -7,6 +7,7 @@ import Pressable from '../common/Pressable';
 import ConfirmModal from '../common/ConfirmModal';
 import WeightHistorySection from '../dashboard/WeightHistorySection';
 import { disconnectMcp, getMcpStatus } from '../../lib/mcpConnection';
+import { apiUrl, isNativeApp } from '../../lib/native';
 
 const GOALS = ['체중 감량', '근육 증량', '체형 유지', '건강 증진'];
 const ACTIVITY_LEVELS = [
@@ -54,51 +55,79 @@ function daysLeft(deletedAt) {
 }
 
 export const TERMS_CONTENT = `제1조 (목적)
-본 약관은 Context Health(이하 "서비스")를 이용함에 있어 이용자의 권리, 의무 및 책임 사항을 규정함을 목적으로 합니다.
+본 약관은 Context Health(이하 "서비스")를 이용함에 있어 이용자와 운영자의 권리, 의무 및 책임 사항을 규정함을 목적으로 합니다.
 
-제2조 (서비스 이용)
-서비스는 운동 기록 및 식단 관리 기능을 제공합니다. 이용자는 본인의 건강 목표를 위해 서비스를 이용할 수 있습니다.
+제2조 (서비스 내용)
+서비스는 운동·식단·체중 기록, AI를 이용한 기록 정리와 영양 추정, 통계, 친구와 기록을 나누는 소셜 기능을 무료로 제공합니다.
 
-제3조 (이용자 의무)
-① 이용자는 타인의 계정을 사용하거나 서비스를 부당하게 이용해서는 안 됩니다.
-② 이용자는 서비스 내에 허위 정보를 입력해서는 안 됩니다.
+제3조 (가입과 계정)
+① 만 14세 이상이면 Apple, Google, 카카오, 네이버 계정으로 가입할 수 있습니다.
+② 이용자는 언제든지 마이페이지에서 탈퇴할 수 있으며, 탈퇴 시 계정과 기록은 즉시 삭제됩니다.
 
-제4조 (서비스 제공의 중단)
-천재지변, 시스템 점검 등 불가피한 사유로 서비스가 일시 중단될 수 있습니다.
+제4조 (이용자 의무)
+① 타인의 계정을 사용하거나 서비스를 부당하게 이용해서는 안 됩니다.
+② 소셜 기능에 타인을 비방하거나, 음란·폭력적이거나, 타인의 권리를 침해하는 게시물을 올려서는 안 됩니다.
+③ 운영자는 위반 게시물을 숨기거나 삭제할 수 있고, 반복 위반 시 이용을 제한할 수 있습니다. 이용자는 게시물·댓글의 더보기에서 '신고하기'를 누르거나, 차단 기능을 쓰거나, jhlee3663@gmail.com으로 부적절한 게시물·이용자를 신고할 수 있으며, 운영자는 24시간 안에 확인합니다. 신고한 게시물은 신고한 이용자에게 즉시 보이지 않습니다.
 
-제5조 (면책 조항)
-본 서비스는 의료 서비스가 아닙니다. AI가 제공하는 정보는 참고용이며, 의학적 판단의 대체재가 될 수 없습니다. 건강 이상 시 반드시 전문 의료인과 상담하시기 바랍니다.
+제5조 (게시물)
+이용자가 올린 게시물의 권리는 이용자에게 있습니다. 운영자는 서비스 안에서 보여주기 위한 범위에서만 이를 이용합니다.
 
-제6조 (준거법)
+제6조 (서비스의 변경·중단)
+천재지변, 시스템 점검 등 불가피한 사유로 서비스가 일시 중단될 수 있으며, 서비스를 종료할 경우 30일 전에 앱 안에서 알립니다.
+
+제7조 (면책)
+① 본 서비스는 의료 서비스가 아닙니다. AI가 계산한 칼로리·영양 수치는 추정값이며 실제와 다를 수 있습니다.
+② 서비스의 정보는 참고용이며 의학적 진단·치료를 대신하지 않습니다. 건강 이상 시 반드시 전문 의료인과 상담하시기 바랍니다.
+
+제8조 (약관 변경)
+약관을 바꿀 때는 시행 7일 전(이용자에게 불리한 변경은 30일 전)에 앱 안에서 알립니다.
+
+제9조 (준거법)
 본 약관은 대한민국 법률에 따라 해석됩니다.
 
 부칙
-본 약관은 2025년 1월 1일부터 적용됩니다.`;
+본 약관은 2026년 11월 1일부터 적용됩니다.
+문의: jhlee3663@gmail.com`;
 
-export const PRIVACY_CONTENT = `Context Health(이하 "서비스")는 이용자의 개인정보 보호를 중요하게 생각하며, 「개인정보 보호법」을 준수합니다.
+export const PRIVACY_CONTENT = `Context Health(이하 "서비스")는 이용자의 개인정보를 중요하게 생각하며, 「개인정보 보호법」을 준수합니다. 전체 내용은 context-health-3eb84.web.app/privacy-policy.html 에서도 볼 수 있습니다.
 
 1. 수집하는 개인정보 항목
-- 계정 정보: 이름, 이메일 주소
-- 건강 정보: 신체 정보(키, 체중, 나이), 운동 기록, 식단 기록
-- 서비스 이용 기록
+- 로그인(Apple/Google/카카오/네이버): 이메일, 이름(닉네임), 프로필 사진, 고유 식별자
+- 건강 정보: 나이, 성별, 키, 체중, 목표, 운동 기록, 식단 기록, 아침 체중, 체성분 기록
+- AI 코치 대화 내용
+- 소셜 기능: 닉네임, 프로필 사진, 소개, 공개 게시물, 팔로우 관계
+- 자동 수집: 기기 정보, 앱 버전, 접속 로그, 오류 정보, IP 주소
 
-2. 개인정보 수집 및 이용 목적
-- 서비스 제공 및 개인화된 AI 코칭
-- 운동·식단 기록 관리
-- 서비스 개선 및 통계 분석
+2. 수집·이용 목적
+- 회원 식별과 로그인 유지
+- 운동·식단 기록의 저장, 조회, 통계 제공
+- AI(Google Gemini)를 통한 기록 정리, 영양 추정, 코칭
+- 오류 분석과 안정성 개선
 
-3. 개인정보 보유 및 이용 기간
-회원 탈퇴 시 또는 수집·이용 목적 달성 후 즉시 파기합니다. 단, 관련 법령에 따라 일정 기간 보존이 필요한 경우 해당 기간 동안 보관합니다.
+3. 민감정보(건강정보)
+위 건강 정보는 민감정보에 해당할 수 있어 일반 개인정보와 별도로 동의를 받습니다. 동의를 거부할 수 있으나, 핵심 기능이므로 거부 시 서비스를 이용할 수 없습니다. 직접 공개로 올린 게시물 외에는 다른 이용자에게 공개되지 않습니다.
 
-4. 제3자 제공
-이용자의 개인정보는 원칙적으로 제3자에게 제공하지 않습니다. 다만, AI 분석을 위해 Google Gemini API로 데이터가 전송될 수 있으며, 이 과정에서 Google의 개인정보 처리방침이 적용됩니다.
+4. 보유 기간
+탈퇴 시까지 보유하며 탈퇴 시 지체 없이 파기합니다. 삭제한 기록은 휴지통에서 30일간 보관된 뒤 영구 삭제됩니다.
 
-5. 이용자 권리
-이용자는 언제든지 자신의 개인정보를 조회, 수정, 삭제할 수 있습니다. 문의: jhlee3663@gmail.com
+5. 처리위탁 및 국외 이전
+개인정보를 판매하거나 제3자에게 제공하지 않습니다. 운영을 위해 아래 업체에 처리를 맡기며, 서버가 미국에 있어 서비스 이용 시 네트워크로 전송됩니다. 보유 기간은 탈퇴 또는 위탁 종료 시까지입니다.
+- Google Firebase(미국): 인증, 데이터베이스, 호스팅
+- Google Gemini API(미국): 입력한 운동·식단 텍스트와 코치 대화의 AI 분석
+- Sentry(미국): 오류 모니터링(UID, 이메일, 이름, 오류 시점 화면 정보 — 텍스트·이미지 가림)
+- Apple/카카오/네이버: 소셜 로그인 인증
 
-6. 개인정보 보호책임자
-담당: Context Health 운영팀
-연락처: jhlee3663@gmail.com`;
+6. 이용자 권리
+마이페이지에서 언제든 정보를 조회·수정하고, 회원 탈퇴로 계정과 모든 기록을 삭제할 수 있습니다. 동의 철회 등 문의: jhlee3663@gmail.com
+
+7. 만 14세 미만
+만 14세 미만 아동의 가입을 받지 않습니다.
+
+8. 개인정보 보호책임자
+담당: Context Health 운영자
+연락처: jhlee3663@gmail.com
+
+시행일: 2026년 11월 1일`;
 
 export function LegalModal({ title, content, onClose }) {
   return (
@@ -118,7 +147,7 @@ export function LegalModal({ title, content, onClose }) {
   );
 }
 
-export default function MyPageScreen({ user, profile, onProfileSave, onNavChange }) {
+export default function MyPageScreen({ user, profile, onProfileSave, onNavChange, social = null, onBack = null }) {
   const [editing, setEditing]   = useState(false);
   const [activeModal, setActiveModal] = useState(null);
   const [form, setForm]         = useState({
@@ -165,7 +194,8 @@ export default function MyPageScreen({ user, profile, onProfileSave, onNavChange
   const [mcpGuideOpen, setMcpGuideOpen] = useState(false);
   const [mcpConfirmOpen, setMcpConfirmOpen] = useState(false);
   useEffect(() => {
-    if (!user?.uid) return undefined;
+    // 스토어 앱에서는 Claude 연결 항목을 숨긴다(연결은 Claude 웹에서 시작하고, MCP 서버는 앱 출처를 허용하지 않음).
+    if (!user?.uid || isNativeApp) return undefined;
     let cancelled = false;
     getMcpStatus()
       .then(({ connected, allowed }) => {
@@ -233,7 +263,7 @@ export default function MyPageScreen({ user, profile, onProfileSave, onNavChange
     setDeleting(true);
     try {
       const token = await auth.currentUser.getIdToken(true);
-      const res = await fetch('/api/delete-account', {
+      const res = await fetch(apiUrl('/api/delete-account'), {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -270,7 +300,7 @@ export default function MyPageScreen({ user, profile, onProfileSave, onNavChange
       {mcpGuideOpen && (
         <div className="fixed inset-0 z-[100] flex flex-col justify-end">
           <div onClick={() => setMcpGuideOpen(false)} className="absolute inset-0 bg-[#171719]/50" />
-          <div className="relative w-full max-w-[430px] mx-auto bg-white rounded-t-[24px] px-5 pt-3 pb-[calc(32px+env(safe-area-inset-bottom))] shadow-lg">
+          <div className="relative w-full md:max-w-[430px] mx-auto bg-white rounded-t-[24px] px-5 pt-3 pb-[calc(32px+env(safe-area-inset-bottom))] shadow-lg">
             <div className="w-10 h-1 mx-auto mb-4 rounded-full bg-ui-3" />
             <h2 className="font-pretendard font-bold text-body-l text-typo-strong tracking-[-0.45px]">Claude 다시 연결하기</h2>
             <p className="mt-1 font-pretendard text-body-s text-typo-secondary tracking-[-0.35px]">연결은 Claude 쪽에서 시작해야 해요. 아래 순서대로 하면 돼요.</p>
@@ -320,8 +350,17 @@ export default function MyPageScreen({ user, profile, onProfileSave, onNavChange
         onConfirm={handleMcpDisconnect}
         onCancel={() => setMcpConfirmOpen(false)}
       />
+      {/* 마이 탭의 톱니바퀴로 열면 '설정' 화면이 된다 (뒤로 가기) */}
+      {onBack && (
+        <div className="flex-none h-14 flex items-center gap-2.5 px-4 bg-white" style={{ marginTop: 'env(safe-area-inset-top)' }}>
+          <Pressable pressScale={0.88} onClick={onBack} aria-label="뒤로" className="w-7 h-7 -ml-1 flex items-center justify-center">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M15 18L9 12l6-6" stroke="#171719" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          </Pressable>
+          <h1 className="font-pretendard font-bold text-[18px] leading-7 tracking-[-0.45px] text-typo-strong">설정</h1>
+        </div>
+      )}
       {/* 헤더 프로필 카드 */}
-      <div className="bg-white px-5 pt-14 pb-6">
+      <div className={`bg-white px-5 ${onBack ? 'pt-2' : 'pt-14'} pb-6`}>
         <div className="flex items-center gap-4">
           <div className="w-[60px] h-[60px] rounded-full bg-gradient-to-br from-[#228bed] to-brand flex items-center justify-center overflow-hidden flex-shrink-0">
             {user?.photo
@@ -331,7 +370,9 @@ export default function MyPageScreen({ user, profile, onProfileSave, onNavChange
           </div>
           <div className="flex-1 min-w-0">
             <p className="font-pretendard font-bold text-body-l text-typo-strong tracking-[-0.45px] truncate">{user?.name || '사용자'}</p>
-            <p className="font-pretendard text-caption-l text-typo-alternative tracking-[-0.325px] truncate">{user?.email || ''}</p>
+            <p className="font-pretendard text-caption-l text-typo-alternative tracking-[-0.325px] truncate">
+              {social?.me?.profile ? `@${social.me.profile.handle} · 친구 ${social.me.profile.friendCount}` : (user?.email || '')}
+            </p>
           </div>
           <Pressable
             pressScale={0.93}
@@ -346,7 +387,30 @@ export default function MyPageScreen({ user, profile, onProfileSave, onNavChange
       </div>
 
       {/* 스크롤 콘텐츠 */}
-      <div className="flex-1 overflow-y-auto pb-[88px]">
+      <div className={`flex-1 overflow-y-auto ${onBack ? 'pb-10' : 'pb-[88px]'}`}>
+        {/* 친구 섹션 (피드·친구, Figma 43) */}
+        {social && (
+          <div className="bg-white mt-3 px-5">
+            <p className="font-pretendard font-semibold text-caption-m text-typo-alternative tracking-[-0.3px] pt-5 pb-2">친구</p>
+            {[
+              { id: 'friends', label: '친구 관리', sub: social.me?.profile ? `친구 ${social.me.profile.friendCount}${social.me.requestCount ? ` · 받은 요청 ${social.me.requestCount}` : ''}` : '', badge: social.me?.requestCount > 0 },
+              { id: 'visibility', label: '공개 범위', sub: social.me?.profile ? `${['workout', 'best', 'diet', 'weight'].filter(k => social.me.profile.visibility?.[k]).map(k => ({ workout: '운동', best: '최고 기록', diet: '식단', weight: '체중' })[k]).join('·') || '아무것도'} 공개 중` : '' },
+              { id: 'saved', label: '저장한 루틴·식단', sub: '' },
+              { id: 'notifSettings', label: '알림 설정', sub: '친구 운동·댓글·요청 폰 알림' },
+            ].map((row) => (
+              <Pressable key={row.id} pressScale={0.98} onClick={() => social.onOpen(row.id)} className="w-full flex items-center gap-3 py-3.5 border-b border-ui-2 last:border-b-0 text-left">
+                <span className="flex-1 min-w-0 flex flex-col">
+                  <span className="flex items-center gap-1.5 font-pretendard font-medium text-body-s text-typo-strong tracking-[-0.35px]">
+                    {row.label}
+                    {row.badge && <span className="w-1.5 h-1.5 rounded-full bg-[#FF4D5E]" />}
+                  </span>
+                  {row.sub && <span className="font-pretendard text-caption-m text-typo-alternative truncate">{row.sub}</span>}
+                </span>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 4l4 4-4 4" stroke="#ADB5BD" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              </Pressable>
+            ))}
+          </div>
+        )}
         {/* 목표 설정 섹션 */}
         <div className="bg-white mt-3 px-5">
           <p className="font-pretendard font-semibold text-caption-m text-typo-alternative tracking-[-0.3px] pt-5 pb-2">목표 설정</p>
@@ -487,7 +551,7 @@ export default function MyPageScreen({ user, profile, onProfileSave, onNavChange
               disabled={mcpDisconnecting}
               className="flex items-center justify-between w-full py-3.5 border-b border-ui-2 disabled:opacity-40"
             >
-              <span className="font-pretendard font-medium text-body-s text-typo-normal tracking-[-0.35px]">Claude 연결됨 (기록 조회)</span>
+              <span className="font-pretendard font-medium text-body-s text-typo-normal tracking-[-0.35px]">Claude 연결됨 (기록 조회·입력)</span>
               <span className="font-pretendard font-semibold text-caption-l text-[#e03e52] tracking-[-0.3px]">{mcpDisconnecting ? '해제 중...' : '연결 해제'}</span>
             </button>
           )}
@@ -497,7 +561,7 @@ export default function MyPageScreen({ user, profile, onProfileSave, onNavChange
               onClick={() => setMcpGuideOpen(true)}
               className="flex items-center justify-between w-full py-3.5 border-b border-ui-2"
             >
-              <span className="font-pretendard font-medium text-body-s text-typo-normal tracking-[-0.35px]">Claude 연결하기 (기록 조회)</span>
+              <span className="font-pretendard font-medium text-body-s text-typo-normal tracking-[-0.35px]">Claude 연결하기 (기록 조회·입력)</span>
               <span className="font-pretendard font-semibold text-caption-l text-brand tracking-[-0.3px]">방법 보기</span>
             </button>
           )}
@@ -514,6 +578,7 @@ export default function MyPageScreen({ user, profile, onProfileSave, onNavChange
             <span className="font-pretendard font-medium text-body-s text-typo-alternative tracking-[-0.35px]">회원 탈퇴</span>
           </button>
         </div>
+
 
         <WeightHistorySection uid={user?.uid} />
 

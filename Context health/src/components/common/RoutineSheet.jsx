@@ -86,7 +86,7 @@ export default function RoutineSheet({ uid, onClose, workoutLogs, dietLogs, onNa
           {/* 오늘의 할 일 */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <h2 className="font-pretendard font-bold text-[17px] text-typo-normal tracking-[-0.4px]">오늘의 할 일</h2>
+              <h2 className="font-pretendard font-bold text-[18px] text-typo-normal tracking-[-0.4px]">오늘의 할 일</h2>
               <span className="font-pretendard text-[13px] text-typo-alternative tracking-[-0.3px]">{todayLabel}</span>
             </div>
 
@@ -132,7 +132,7 @@ export default function RoutineSheet({ uid, onClose, workoutLogs, dietLogs, onNa
 
           {/* 이번 주 루틴 */}
           <div>
-            <h2 className="font-pretendard font-bold text-[17px] text-typo-normal tracking-[-0.4px] mb-3">이번 주 루틴</h2>
+            <h2 className="font-pretendard font-bold text-[18px] text-typo-normal tracking-[-0.4px] mb-3">이번 주 루틴</h2>
             <div className="flex flex-col gap-1.5">
               {DAY_LABELS.map((day, idx) => {
                 const key = String(idx);

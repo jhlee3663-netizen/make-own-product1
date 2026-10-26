@@ -8,7 +8,7 @@ import { shareText, buildWorkoutShareText } from '../../utils/share';
 
 const enteredCards = new Set();
 
-const WorkoutCard = ({ data, perfGrade = 'success', highlight = false, onCardClick, onDelete, onChangeDate, isDeleting, onRetryAI }) => {
+const WorkoutCard = ({ data, perfGrade = 'success', progressLine = '', highlight = false, onCardClick, onDelete, onChangeDate, isDeleting, onRetryAI }) => {
   if (!data) return null;
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -59,12 +59,14 @@ const WorkoutCard = ({ data, perfGrade = 'success', highlight = false, onCardCli
   const cardioComment = totalVolume === 0 && cardioMinutes > 0
     ? `오늘 유산소 ${formatCardioDuration(cardioMinutes)} 기록!`
     : '';
-  const displayComment = aiComment || overloadMsg || (totalVolume > 0 ? `오늘 볼륨 ${Number(totalVolume).toLocaleString()}kg 기록 완료!` : cardioComment);
+  // 무게 기록이 있으면 탑세트 추정 1RM 요약을 그 자리에서 계산해 보여준다 (예전 기록의 볼륨 문구도 이걸로 바뀐다)
+  const displayComment = progressLine || aiComment || overloadMsg || (totalVolume > 0 ? `오늘 볼륨 ${Number(totalVolume).toLocaleString()}kg 기록 완료!` : cardioComment);
   const isError = isStaleProcessing || (aiStatus === 'error' && !displayComment);
 
   const dt = data.timestamp ? new Date(data.timestamp.seconds * 1000) : new Date();
   // 올해 기록은 월·일만, 지난 해 기록은 연도까지 보여준다
   const ds = `${dt.getFullYear() === new Date().getFullYear() ? '' : `${String(dt.getFullYear()).slice(2)}. `}${dt.getMonth() + 1}. ${dt.getDate()}`;
+  const isTodayLog = dt.toDateString() === new Date().toDateString();
 
 
   return (
@@ -132,9 +134,19 @@ const WorkoutCard = ({ data, perfGrade = 'success', highlight = false, onCardCli
               <p className="font-pretendard font-bold text-[18px] leading-[22px] text-[#171a1d] tracking-[-0.45px] m-0 min-w-0 truncate">
                 {title}
               </p>
-              <p className="flex-none pl-3 font-pretendard text-[13px] text-[#868e96] tracking-[-0.325px] text-right m-0">
-                {ds}
-              </p>
+              {isTodayLog ? (
+                // 오늘 기록은 날짜 대신 그라데이션 "오늘" (Figma 1163:11968)
+                <p
+                  className="flex-none pl-3 font-pretendard font-bold text-[13px] tracking-[-0.325px] text-right m-0 bg-clip-text text-transparent"
+                  style={{ backgroundImage: 'linear-gradient(-34.5deg, #f79fff 0%, #3aa0ff 103%)' }}
+                >
+                  오늘
+                </p>
+              ) : (
+                <p className="flex-none pl-3 font-pretendard text-[13px] text-[#868e96] tracking-[-0.325px] text-right m-0">
+                  {ds}
+                </p>
+              )}
             </div>
           </div>
 
@@ -154,12 +166,14 @@ const WorkoutCard = ({ data, perfGrade = 'success', highlight = false, onCardCli
 
         {/* AI Comment Section */}
         {isProcessing ? (
-          <div className="border-t border-[#f1f3f5] pt-3 flex gap-2 items-center">
+          <div className="relative pt-3 flex gap-2 items-center">
+            <span aria-hidden="true" className="fade-line absolute top-0 inset-x-0" />
             <div className="w-3 h-3 flex-none border-2 border-brand/20 border-t-brand rounded-full animate-spin" />
             <p className="font-pretendard text-[13px] text-ui-4 tracking-[-0.3px] m-0">AI가 기록을 정리하고 있어요...</p>
           </div>
         ) : isError ? (
-          <div className="border-t border-[#f1f3f5] pt-3 flex gap-2 items-center justify-between">
+          <div className="relative pt-3 flex gap-2 items-center justify-between">
+            <span aria-hidden="true" className="fade-line absolute top-0 inset-x-0" />
             <p className="font-pretendard text-[13px] text-[#e03e52] tracking-[-0.3px] m-0 flex-1 truncate">
               {isStaleProcessing ? 'AI 정리가 중단됐어요' : `AI 정리 실패 ${aiError ? `(${aiError})` : ''}`}
             </p>
@@ -174,7 +188,8 @@ const WorkoutCard = ({ data, perfGrade = 'success', highlight = false, onCardCli
             )}
           </div>
         ) : displayComment ? (
-          <div className="border-t border-[#f1f3f5] pt-3">
+          <div className="relative pt-3">
+            <span aria-hidden="true" className="fade-line absolute top-0 inset-x-0" />
             <p className="font-pretendard font-semibold text-[13px] leading-4 text-[#7171FF] tracking-[-0.325px] m-0 truncate">
               {displayComment}
             </p>

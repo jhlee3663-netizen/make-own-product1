@@ -1,0 +1,43 @@
+{
+  "observedDate": "2026-09-08",
+  "environment": "Firebase Hosting production / Chrome",
+  "severity": "P1",
+  "originalFailure": {
+    "desktopViewportWidth": 1920,
+    "domValuesCorrect": true,
+    "visibleResult": "Korean labels and numeric values overlapped or rendered as broken glyphs",
+    "cardCountOnDietTab": 48,
+    "cardAnimation": "0.3s ease-out forwards cardUp",
+    "cardTransform": "matrix(1, 0, 0, 1, 0, 0)",
+    "tabPanelWillChange": "transform"
+  },
+  "v1Correction": {
+    "status": "insufficient and superseded",
+    "remainingFailure": "bold Korean and SVG chart labels still rendered incorrectly",
+    "introducedRegression": "logo.png omitted from the isolated Hosting snapshot",
+    "logoResponse": "SPA index HTML",
+    "cause": "deployment snapshot copied the Workbox precache list instead of every public asset"
+  },
+  "v2DeploymentIsolation": {
+    "javascriptSha256BeforeAndAfter": "f7480d83f12b1e5271ea7ca20c49ee3547043f077cb1f6469b322ee2ed8b8c30",
+    "baseCssSha256BeforeAndAfter": "b41fa5fc4308afb91b62a302202eb201a317db143c4c2c0833d321708584cd19",
+    "logoPngSha256": "ae2bdae19a7fb2ec3fcc3a77609071170dd7d45c4c2736b8cfe5c2e45b4beb42",
+    "stylesheet": "/assets/index-PC_RENDER_HOTFIX_V2.css",
+    "firebasePreviewChannel": "pc-render-hotfix-v2",
+    "promotedTo": "context-health-3eb84:live"
+  },
+  "v2ProductionVerification": {
+    "desktopViewportWidth": 1920,
+    "logoNaturalSize": [160, 160],
+    "brokenImageCount": 0,
+    "desktopFontFamily": "-apple-system, system-ui, Segoe UI, Apple SD Gothic Neo, Noto Sans KR, sans-serif",
+    "desktopCardAnimation": "none",
+    "desktopTabPanelWillChange": "auto",
+    "screensChecked": ["workout", "diet", "ai-coach", "my-page"],
+    "dietCardDomCount": 48,
+    "fixtureCardCount": 50,
+    "mobileFixtureWidth": 390,
+    "visibleResult": "normal"
+  },
+  "dataWritesDuringVerification": 0
+}

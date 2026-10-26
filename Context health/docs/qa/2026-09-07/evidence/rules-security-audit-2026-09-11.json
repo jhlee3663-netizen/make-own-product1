@@ -1,0 +1,18 @@
+{
+  "score": 4,
+  "summary": "운영 규칙은 로그 소유권, 핵심 필드 형식과 범위, 서버 전용 컬렉션 차단을 강제한다. 교차 사용자 노출 경로는 테스트에서 발견되지 않았다. 본인 profile/coachRooms와 중첩 배열의 세부 스키마 제한은 후속 강화 대상이다.",
+  "findings": [
+    {
+      "check": "Storage Abuse",
+      "severity": "minor",
+      "issue": "users 문서와 coachRooms 문서는 소유권만 확인하고 필드 수, 문자열 길이, 메시지 수를 제한하지 않는다.",
+      "recommendation": "현재 실제 문서 형태를 샘플링한 뒤 허용 키와 크기 상한을 레거시 호환 방식으로 추가한다."
+    },
+    {
+      "check": "Type Safety",
+      "severity": "minor",
+      "issue": "logs의 sections와 exercises는 list 여부와 항목 수만 검사하며 배열 원소의 구조와 문자열 크기는 검사하지 않는다.",
+      "recommendation": "클라이언트가 쓰는 실제 원소 구조를 고정하고 필수 키, 숫자 범위, 텍스트 길이를 검증한다."
+    }
+  ]
+}

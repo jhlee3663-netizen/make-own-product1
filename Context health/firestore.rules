@@ -78,12 +78,43 @@ service cloud.firestore {
         && hasValidRequiredLogFields(request.resource.data)
         && hasValidOptionalLogFields(request.resource.data);
     }
+    // 공용 음식 사전. 쓰기는 서버(foodContribute, 커넥터)만 한다.
+    match /foods/{key} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
     match /users/{uid} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
     }
     match /users/{uid}/coachRooms/{roomId} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
     }
+    // 피드·친구: 저장한 글, 본 스토리, 팔로우한 채널, 폰 알림 토큰은 본인만 쓴다.
+    match /users/{uid}/saved/{id} {
+      allow read, delete: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.keys().size() <= 12;
+    }
+    match /users/{uid}/storySeen/{id} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+    match /users/{uid}/channelFollows/{id} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+    match /users/{uid}/pushTokens/{id} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+    match /users/{uid}/youtubeImports/{id} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+    }
+    // 알림은 서버가 쓰고, 본인은 읽고 '읽음' 표시만 바꾼다.
+    match /users/{uid}/notifications/{id} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+    }
+    // 친구·요청·차단·프로필·댓글·박수 등은 서버(/api/social)만 다룬다. (아래에 규칙이 없으면 막힌다)
+
     // 체중·체성분 기록. 인바디(kind: inbody)는 서버 시드 스크립트로만 넣고 앱에서는 읽기만 한다.
     match /users/{uid}/bodyLogs/{logId} {
       allow read: if request.auth != null && request.auth.uid == uid;

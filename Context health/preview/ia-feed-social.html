@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>피드·친구 IA</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Pretendard, sans-serif; background: #fff; color: #171a1d; padding: 40px 48px 80px; letter-spacing: -0.02em; }
+  h1 { font-size: 26px; font-weight: 800; } h1 small { font-size: 14px; font-weight: 500; color: #868e96; margin-left: 10px; }
+  .legend { display: flex; gap: 18px; margin: 14px 0 6px; font-size: 13px; color: #495057; flex-wrap: wrap; }
+  .legend span { display: flex; align-items: center; gap: 6px; }
+  .legend i { width: 22px; height: 14px; border-radius: 3px; display: inline-block; }
+  section { margin-top: 44px; }
+  h2 { font-size: 19px; font-weight: 800; border-left: 4px solid #7171ff; padding-left: 10px; }
+  h2 small { font-size: 13px; font-weight: 500; color: #868e96; margin-left: 8px; }
+  .mermaid { margin-top: 18px; }
+  .mermaid svg { max-width: none !important; }
+</style>
+</head>
+<body>
+<h1>피드·친구 IA <small>코치 탭 → 피드 탭 · 2026-10-15 · 글 버전: docs/ia_feed_social.md</small></h1>
+<div class="legend">
+  <span><i style="background:#171a1d"></i>화면</span>
+  <span><i style="background:#dee2e6"></i>분류·영역</span>
+  <span><i style="background:#4aa3f0"></i>버튼·행동</span>
+  <span><i style="background:#fff;border:2px solid #7171ff"></i>판단 (예/아니요)</span>
+  <span><i style="background:#ffe8e0;border:1px solid #ff7043"></i>막힘·오류 안내</span>
+  <span><i style="background:#e6f7ef;border:1px solid #20c997"></i>끝 (목표 도달)</span>
+</div>
+
+<section>
+<h2>1. 전체 구조 <small>하단 탭 + 어디서든 열리는 공통 화면</small></h2>
+<pre class="mermaid">
+flowchart TB
+  APP["앱"]:::scr
+  APP --> HOME["홈"]:::scr
+  APP --> FEED["피드 (코치 자리)"]:::scr
+  APP --> REC["+ 기록"]:::scr
+  APP --> ANA["분석"]:::scr
+  APP --> MY["마이"]:::scr
+
+  HOME --> H1["날짜·주간"]:::cat
+  HOME --> H2["운동 / 식단 탭"]:::cat
+  HOME --> H3["종"]:::btn
+  H3 --> NOTI["알림"]:::scr
+
+  FEED --> F1["위쪽"]:::cat
+  F1 --> F1a["검색"]:::btn
+  F1 --> F1b["+ 초대"]:::btn
+  FEED --> F2["스토리 줄"]:::cat
+  FEED --> F3["유튜브 가져오기 줄"]:::cat
+  FEED --> F4["카드 목록"]:::cat
+
+  REC --> R1["운동 메모"]:::scr
+  REC --> R2["식단"]:::scr
+
+  ANA --> A1["기존 그대로"]:::cat
+
+  MY --> M1["내 프로필"]:::scr
+  M1 --> M1a["편집"]:::btn
+  MY --> M2["친구 관리"]:::scr
+  M2 --> M2a["친구 목록"]:::cat
+  M2 --> M2b["받은 요청"]:::cat
+  M2 --> M2c["차단 목록"]:::cat
+  M2 --> M2d["초대 링크"]:::btn
+  MY --> M3["공개 범위"]:::scr
+  MY --> M4["알림 설정"]:::scr
+  MY --> M5["기존: 목표·계정·AI 연결·휴지통·탈퇴"]:::cat
+
+  APP -.-> C["공통 화면"]:::cat
+  C --> C1["검색"]:::scr
+  C --> C2["프로필"]:::scr
+  C --> C3["스토리 보기"]:::scr
+  C --> C4["기록 상세"]:::scr
+  C --> C5["루틴 상세"]:::scr
+  C --> C6["식단 상세"]:::scr
+  C --> C7["유튜브 가져오기"]:::scr
+  C --> C8["채널 페이지"]:::scr
+  C --> C9["가져오기 확인"]:::scr
+  C --> C10["초대 받기"]:::scr
+
+  classDef scr fill:#171a1d,color:#fff,stroke:#171a1d
+  classDef cat fill:#dee2e6,color:#343a40,stroke:#dee2e6
+  classDef btn fill:#4aa3f0,color:#fff,stroke:#4aa3f0
+</pre>
+</section>
+
+<section>
+<h2>2. 피드 탭 <small>무엇을 누르면 어디로</small></h2>
+<pre class="mermaid">
+flowchart LR
+  FEED["피드"]:::scr
+  FEED --> S["검색"]:::btn --> SEARCH["검색"]:::scr
+  FEED --> I["+ 초대"]:::btn --> SHARE["공유 시트<br/>카카오톡 · 링크 복사 · 기타"]:::scr
+
+  FEED --> ST["스토리 줄"]:::cat
+  ST --> STme["내 기록"]:::btn --> Dme{"오늘 운동<br/>기록 있음?"}:::dec
+  Dme -->|예| MYSTORY["내 스토리"]:::scr
+  Dme -->|아니요| MEMO["운동 메모"]:::scr
+  ST --> STf["친구 동그라미"]:::btn --> STORY["스토리 보기"]:::scr
+  ST --> Dz{"친구 0명?"}:::dec
+  Dz -->|예| Z1["'친구를 불러보세요' 한 줄"]:::btn --> SHARE
+  Dz -->|아니요| Dt{"오늘 한 친구<br/>있음?"}:::dec
+  Dt -->|예| Z2["안 본 것 먼저 · 본 것 흐리게"]:::cat
+  Dt -->|아니요| Z3["'오늘은 아직 아무도' + 내 기록만"]:::cat
+
+  FEED --> YT["유튜브 줄"]:::btn --> YTS["유튜브 가져오기"]:::scr
+
+  FEED --> CARD["카드"]:::cat
+  CARD --> K1["큐레이션 루틴"]:::cat
+  CARD --> K2["큐레이션 식단"]:::cat
+  CARD --> K3["유튜브 루틴"]:::cat
+  CARD --> K4["친구 루틴"]:::cat
+  CARD --> K5["친구 기록"]:::cat
+  CARD --> Kbody["카드 본문"]:::btn --> DET["루틴 / 식단 / 기록 상세"]:::scr
+  CARD --> Kget["가져오기"]:::btn --> GET["가져오기 확인"]:::scr
+  CARD --> Kname["사람 이름·사진"]:::btn --> PROF["프로필"]:::scr
+  CARD --> Kch["채널명"]:::btn --> CH["채널 페이지"]:::scr
+  CARD --> Klike["♡ 저장"]:::btn --> SAVED["내 저장 루틴"]:::cat
+
+  FEED --> Dend{"카드 끝까지 봄?"}:::dec
+  Dend -->|예| E1["'다 봤어요 · 유튜브에서 가져오기'"]:::btn --> YTS
+  FEED --> Dload{"불러오기 성공?"}:::dec
+  Dload -->|아니요, 오프라인| E2["마지막 피드 + '연결이 끊겼어요'"]:::err
+  Dload -->|아니요, 서버 오류| E3["'불러오지 못했어요 · 다시 시도'"]:::err
+
+  classDef scr fill:#171a1d,color:#fff,stroke:#171a1d
+  classDef cat fill:#dee2e6,color:#343a40,stroke:#dee2e6
+  classDef btn fill:#4aa3f0,color:#fff,stroke:#4aa3f0
+  classDef dec fill:#fff,color:#171a1d,stroke:#7171ff,stroke-width:2px
+  classDef err fill:#ffe8e0,color:#c2410c,stroke:#ff7043
+</pre>
+</section>
+
+<section>
+<h2>3. 프로필 열기 <small>관계에 따라 보이는 것이 갈린다</small></h2>
+<pre class="mermaid">
+flowchart LR
+  IN["이름·사진 누름<br/>(카드·스토리·댓글·알림·검색·친구 목록)"]:::btn --> D0{"상대가 탈퇴?"}:::dec
+  D0 -->|예| X0["'탈퇴한 사용자예요'"]:::err
+  D0 -->|아니요| D1{"상대가 나를 차단?"}:::dec
+  D1 -->|예| X1["'찾을 수 없는 사용자예요'<br/>(차단 사실은 안 알림)"]:::err
+  D1 -->|아니요| D2{"내가 상대를 차단?"}:::dec
+  D2 -->|예| P1["이름만 + 차단 해제"]:::scr
+  D2 -->|아니요| D3{"나 자신?"}:::dec
+  D3 -->|예| PME["내 프로필<br/>편집 · 공개 범위 · 루틴 초안"]:::scr
+  D3 -->|아니요| D4{"친구?"}:::dec
+  D4 -->|예| PF["친구 프로필<br/>기록 · 루틴 · 최고 기록 (공개 범위만큼)"]:::scr
+  PF --> PFb1["친구 ✓"]:::btn --> PFm["끊기 / 차단"]:::cat
+  PF --> PFb2["콕 찌르기"]:::btn --> Dpoke{"오늘 이미 찔렀음?"}:::dec
+  Dpoke -->|예| Xp["'내일 다시 찌를 수 있어요'"]:::err
+  Dpoke -->|아니요| OKp["보냄"]:::ok
+  D4 -->|아니요| D5{"요청 상태?"}:::dec
+  D5 -->|내가 보냄| PS["요청 보냄 (누르면 취소)<br/>기록 🔒 · 공개 루틴만"]:::scr
+  D5 -->|상대가 보냄| PR["수락 · 거절<br/>기록 🔒 · 공개 루틴만"]:::scr
+  D5 -->|없음| PN["친구 요청<br/>기록 🔒 · 공개 루틴만"]:::scr
+
+  classDef scr fill:#171a1d,color:#fff,stroke:#171a1d
+  classDef cat fill:#dee2e6,color:#343a40,stroke:#dee2e6
+  classDef btn fill:#4aa3f0,color:#fff,stroke:#4aa3f0
+  classDef dec fill:#fff,color:#171a1d,stroke:#7171ff,stroke-width:2px
+  classDef err fill:#ffe8e0,color:#c2410c,stroke:#ff7043
+  classDef ok fill:#e6f7ef,color:#087f5b,stroke:#20c997
+</pre>
+</section>
+
+<section>
+<h2>4. 친구 요청 <small>보내기 · 받기 · 끊기 · 차단</small></h2>
+<pre class="mermaid">
+flowchart LR
+  A["친구 요청 누름"]:::btn --> D0{"내 프로필(아이디)<br/>있음?"}:::dec
+  D0 -->|아니요| SETUP["처음 설정 (8번)"]:::scr --> D1
+  D0 -->|예| D1{"내 친구 100명 꽉 참?"}:::dec
+  D1 -->|예| X1["'친구가 가득 찼어요 · 정리하기'"]:::err
+  D1 -->|아니요| D2{"7일 안에 거절당함?"}:::dec
+  D2 -->|예| X2["'잠시 후 다시 보낼 수 있어요'"]:::err
+  D2 -->|아니요| D3{"상대도 나에게<br/>요청 보낸 상태?"}:::dec
+  D3 -->|예| OK1["바로 친구"]:::ok
+  D3 -->|아니요| SENT["요청 보냄"]:::cat --> D4{"상대 응답"}:::dec
+  D4 -->|수락| OK2["친구 + 나에게 알림"]:::ok
+  D4 -->|거절| R1["조용히 '친구 요청'으로 돌아감<br/>(상대에게 안 알림)"]:::cat
+  D4 -->|응답 없음| R2["계속 '요청 보냄'"]:::cat
+  SENT --> CANCEL["내가 취소"]:::btn --> R3["요청 사라짐"]:::cat
+
+  F["친구 ✓ 누름"]:::btn --> FM{"고름"}:::dec
+  FM -->|끊기| U1["확인 → 서로 기록·스토리 바로 안 보임<br/>상대에게 안 알림 · 가져온 루틴은 남음"]:::ok
+  FM -->|차단| B1["확인 → 끊김 + 서로 검색·피드·알림·댓글에서 사라짐"]:::ok
+
+  classDef scr fill:#171a1d,color:#fff,stroke:#171a1d
+  classDef cat fill:#dee2e6,color:#343a40,stroke:#dee2e6
+  classDef btn fill:#4aa3f0,color:#fff,stroke:#4aa3f0
+  classDef dec fill:#fff,color:#171a1d,stroke:#7171ff,stroke-width:2px
+  classDef err fill:#ffe8e0,color:#c2410c,stroke:#ff7043
+  classDef ok fill:#e6f7ef,color:#087f5b,stroke:#20c997
+</pre>
+</section>
+
+<section>
+<h2>5. 초대 링크를 받은 사람 <small>카톡으로 링크를 눌렀을 때</small></h2>
+<pre class="mermaid">
+flowchart LR
+  L["초대 링크 누름"]:::btn --> D0{"초대한 사람<br/>탈퇴 / 나를 차단?"}:::dec
+  D0 -->|예| X0["'찾을 수 없는 초대예요'"]:::err
+  D0 -->|아니요| D1{"링크 7일 지남?"}:::dec
+  D1 -->|예| X1["'기간이 지난 초대예요'<br/>+ 아이디로 친구 요청"]:::err
+  D1 -->|아니요| D2{"앱 설치됨?"}:::dec
+  D2 -->|아니요| W["웹 미리보기<br/>초대한 사람 + 시작하기"]:::scr --> J["가입 · 온보딩"]:::scr --> D4
+  D2 -->|예| D3{"로그인됨?"}:::dec
+  D3 -->|아니요| LOGIN["로그인 (링크 기억)"]:::scr --> D4
+  D3 -->|예| D4{"내 링크?"}:::dec
+  D4 -->|예| X2["'내 초대 링크예요 · 공유하기'"]:::err
+  D4 -->|아니요| D5{"이미 친구?"}:::dec
+  D5 -->|예| X3["'이미 친구예요' → 그 사람 프로필"]:::ok
+  D5 -->|아니요| SHEET["초대 받기 시트<br/>누가 · 보이는 것(운동)"]:::scr
+  SHEET --> Y["수락"]:::btn --> D6{"친구 한도 꽉 참?"}:::dec
+  D6 -->|예| X4["'친구가 가득 찼어요 · 정리하기'"]:::err
+  D6 -->|아니요| D7{"내 프로필(아이디) 있음?"}:::dec
+  D7 -->|아니요| SETUP["처음 설정 (8번)"]:::scr --> OK
+  D7 -->|예| OK["친구 → 그 사람 프로필<br/>초대한 사람에게 알림"]:::ok
+  SHEET --> N["다음에"]:::btn --> LATER["알림 목록에 남음 → 나중에 수락"]:::cat
+
+  classDef scr fill:#171a1d,color:#fff,stroke:#171a1d
+  classDef cat fill:#dee2e6,color:#343a40,stroke:#dee2e6
+  classDef btn fill:#4aa3f0,color:#fff,stroke:#4aa3f0
+  classDef dec fill:#fff,color:#171a1d,stroke:#7171ff,stroke-width:2px
+  classDef err fill:#ffe8e0,color:#c2410c,stroke:#ff7043
+  classDef ok fill:#e6f7ef,color:#087f5b,stroke:#20c997
+</pre>
+</section>
+
+<section>
+<h2>6. 유튜브 가져오기</h2>
+<pre class="mermaid">
+flowchart LR
+  IN["유튜브 줄 누름"]:::btn --> D0{"클립보드에<br/>유튜브 링크?"}:::dec
+  D0 -->|예| PRE["링크 미리 채움"]:::cat --> GO
+  D0 -->|아니요| PASTE["붙여넣기 칸"]:::scr --> GO["가져오기"]:::btn
+  GO --> D1{"유튜브 링크?"}:::dec
+  D1 -->|아니요| X1["'유튜브 링크만 가져올 수 있어요'"]:::err
+  D1 -->|예| D2{"볼 수 있는 영상?<br/>(공개·안 지워짐·연령 제한 없음)"}:::dec
+  D2 -->|아니요| X2["'볼 수 없는 영상이에요'"]:::err
+  D2 -->|예| D3{"60분 이하?"}:::dec
+  D3 -->|아니요| X3["'60분 이하만 가져올 수 있어요'"]:::err
+  D3 -->|예| D4{"누가 이미<br/>가져온 영상?"}:::dec
+  D4 -->|예| CACHE["저장된 정리 결과 바로 보여줌<br/>(AI 다시 안 씀)"]:::cat --> RES
+  D4 -->|아니요| D5{"AI 사용량 남음?"}:::dec
+  D5 -->|아니요| X5["'약 N분 뒤에 다시'"]:::err
+  D5 -->|예| RUN["정리 중<br/>썸네일·제목 먼저 · 나가도 됨"]:::scr --> D6{"종목을 찾음?"}:::dec
+  D6 -->|아니요| X6["'루틴을 찾지 못했어요'<br/>+ 직접 메모 쓰기"]:::err
+  D6 -->|예| D7{"화면을 떠났음?"}:::dec
+  D7 -->|예| PUSH["'정리 끝' 알림 → 결과"]:::cat --> RES
+  D7 -->|아니요| RES["결과<br/>종목·영상 시간·내 무게·팁"]:::scr
+  RES --> E1["종목 고치기 / 빼기 / 순서"]:::btn
+  RES --> E2["오늘 메모로 가져오기"]:::btn --> GET["가져오기 (7번)"]:::scr
+  RES --> E3["나중에 쓰기"]:::btn --> SV["내 저장 루틴"]:::ok
+  RES --> E4["피드에도 올리기 (기본 꺼짐)"]:::btn --> D8{"내 프로필 있음?"}:::dec
+  D8 -->|아니요| SETUP["처음 설정 (8번)"]:::scr --> PUB
+  D8 -->|예| PUB["피드에 올라감 · 채널 페이지 없으면 자동 생성"]:::ok
+
+  classDef scr fill:#171a1d,color:#fff,stroke:#171a1d
+  classDef cat fill:#dee2e6,color:#343a40,stroke:#dee2e6
+  classDef btn fill:#4aa3f0,color:#fff,stroke:#4aa3f0
+  classDef dec fill:#fff,color:#171a1d,stroke:#7171ff,stroke-width:2px
+  classDef err fill:#ffe8e0,color:#c2410c,stroke:#ff7043
+  classDef ok fill:#e6f7ef,color:#087f5b,stroke:#20c997
+</pre>
+</section>
+
+<section>
+<h2>7. 가져오기 (공통) <small>큐레이션 · 유튜브 · 친구 루틴 · 친구 기록 · 스토리 · 저장 루틴</small></h2>
+<pre class="mermaid">
+flowchart LR
+  G["가져오기 누름"]:::btn --> T{"운동? 식단?"}:::dec
+
+  T -->|운동| W["무게 맞추기 시트"]:::scr
+  W --> M{"고른 방식"}:::dec
+  M -->|원래 무게 그대로| KEEP["출처 무게"]:::cat
+  M -->|무게 비우기| EMPTY["무게 칸 비움"]:::cat
+  M -->|내 기록 기준 · 기본| EX{"종목마다:<br/>내가 한 적 있음?"}:::dec
+  EX -->|예| MINE["내 지난번 무게"]:::cat
+  EX -->|아니요| COM{"출처와 나의<br/>공통 종목 있음?"}:::dec
+  COM -->|예| EST["비율로 추정 · '추정' 표시"]:::cat
+  COM -->|아니요| MAN["'직접 입력'"]:::cat
+  KEEP & EMPTY & MINE & EST & MAN --> OPEN["오늘 메모로 가져오기"]:::btn
+  OPEN --> D1{"메모 쓰던 중?<br/>(저장 안 함)"}:::dec
+  D1 -->|예| APPEND1["쓰던 메모 뒤에 붙임"]:::ok
+  D1 -->|아니요| D2{"오늘 저장한<br/>운동 메모 있음?"}:::dec
+  D2 -->|예| ASK["'뒤에 붙일까요 / 새 메모로'"]:::scr
+  ASK --> APPEND2["뒤에 붙임"]:::ok
+  ASK --> NEW["새 메모"]:::ok
+  D2 -->|아니요| NEW
+
+  T -->|식단| MEAL["끼니 고르기 시트<br/>아침·점심·저녁 체크"]:::scr --> D3{"그 끼니에<br/>이미 음식 있음?"}:::dec
+  D3 -->|예| ADD["뒤에 추가"]:::ok
+  D3 -->|아니요| FILL["그 끼니에 넣음"]:::ok
+
+  NEW & APPEND1 & APPEND2 & ADD & FILL --> AFTER["저장은 평소처럼 사용자가<br/>출처 '가져간 수' +1"]:::cat --> D4{"출처가 친구?"}:::dec
+  D4 -->|예| NT["친구에게 '루틴 가져감' 알림"]:::cat
+
+  classDef scr fill:#171a1d,color:#fff,stroke:#171a1d
+  classDef cat fill:#dee2e6,color:#343a40,stroke:#dee2e6
+  classDef btn fill:#4aa3f0,color:#fff,stroke:#4aa3f0
+  classDef dec fill:#fff,color:#171a1d,stroke:#7171ff,stroke-width:2px
+  classDef ok fill:#e6f7ef,color:#087f5b,stroke:#20c997
+</pre>
+</section>
+
+<section>
+<h2>8. 처음 설정 <small>초대·친구 요청·피드에 올리기를 처음 할 때 한 번만 (보기만 하면 안 물음)</small></h2>
+<pre class="mermaid">
+flowchart LR
+  T["처음으로 초대 / 친구 요청 / 피드에 올리기"]:::btn --> S1["아이디 · 사진<br/>(이름은 가입 이름으로 채움)"]:::scr
+  S1 --> D1{"아이디 규칙 맞음?<br/>영문 소문자·숫자·_·. · 3–20자"}:::dec
+  D1 -->|아니요| X1["칸 아래 바로 안내"]:::err
+  D1 -->|예| D2{"이미 있는 아이디?"}:::dec
+  D2 -->|예| X2["'이미 있어요' + 비슷한 추천"]:::err
+  D2 -->|아니요| S2["공개 범위 확인<br/>기본: 운동만 친구에게"]:::scr
+  S2 --> D3{"중간에 나감?"}:::dec
+  D3 -->|예| X3["하려던 일 취소 · 다음에 다시 물음"]:::err
+  D3 -->|아니요| D4{"첫 친구가 생기는 순간?"}:::dec
+  D4 -->|예| P["폰 알림 권한 묻기"]:::scr --> D5{"허용?"}:::dec
+  D5 -->|예| OK1["폰 알림 + 목록"]:::ok
+  D5 -->|아니요| OK2["목록 알림만 · 마이에서 다시 켤 수 있음"]:::ok
+  D4 -->|아니요| BACK["하려던 일로 돌아감"]:::ok
+
+  classDef scr fill:#171a1d,color:#fff,stroke:#171a1d
+  classDef btn fill:#4aa3f0,color:#fff,stroke:#4aa3f0
+  classDef dec fill:#fff,color:#171a1d,stroke:#7171ff,stroke-width:2px
+  classDef err fill:#ffe8e0,color:#c2410c,stroke:#ff7043
+  classDef ok fill:#e6f7ef,color:#087f5b,stroke:#20c997
+</pre>
+</section>
+
+<section>
+<h2>9. 검색</h2>
+<pre class="mermaid">
+flowchart LR
+  S["검색 열기"]:::btn --> D0{"입력했음?"}:::dec
+  D0 -->|아니요| E["최근 검색어 · 내 친구 전체"]:::scr
+  D0 -->|예| TAB["결과 탭"]:::scr
+  TAB --> P["사람"]:::cat
+  P --> P1["① 내 친구: 이름·아이디로"]:::cat
+  P --> P2["② 친구 아님: 아이디로만"]:::cat
+  P --> PX["차단 관계 · 탈퇴 → 안 나옴"]:::cat
+  TAB --> R["루틴: 큐레이션 · 공개 유튜브 · 친구 루틴"]:::cat
+  TAB --> C["채널: 채널명"]:::cat
+  TAB --> D1{"결과 있음?"}:::dec
+  D1 -->|아니요, 사람 탭| X1["'찾지 못했어요' + 초대 링크 보내기"]:::err
+  D1 -->|아니요, 다른 탭| X2["'찾지 못했어요' + 유튜브에서 가져오기"]:::err
+  D1 -->|예| GO["누르면 프로필(3번) / 루틴 상세 / 채널"]:::ok
+
+  classDef scr fill:#171a1d,color:#fff,stroke:#171a1d
+  classDef cat fill:#dee2e6,color:#343a40,stroke:#dee2e6
+  classDef btn fill:#4aa3f0,color:#fff,stroke:#4aa3f0
+  classDef dec fill:#fff,color:#171a1d,stroke:#7171ff,stroke-width:2px
+  classDef err fill:#ffe8e0,color:#c2410c,stroke:#ff7043
+  classDef ok fill:#e6f7ef,color:#087f5b,stroke:#20c997
+</pre>
+</section>
+
+<section>
+<h2>10. 스토리 · 알림</h2>
+<pre class="mermaid">
+flowchart LR
+  SAVE["친구가 운동 기록 저장"]:::btn --> D0{"AI 정리 끝?"}:::dec
+  D0 -->|아니요| WAIT["끝날 때까지 스토리 안 생김"]:::cat
+  D0 -->|예| D1{"그 기록 '친구에게 숨기기'?<br/>또는 운동 공개 꺼짐?"}:::dec
+  D1 -->|예| HIDE["스토리·카드·알림 없음"]:::cat
+  D1 -->|아니요| STORY["스토리 생김 (다음 날 0시까지)"]:::ok
+  STORY --> D2{"내 '친구 운동' 폰 알림 켜짐?"}:::dec
+  D2 -->|예| PUSH["폰 알림 + 목록"]:::cat
+  D2 -->|아니요| LIST["목록에만"]:::cat
+  STORY --> D3{"기록을 고침 / 지움?"}:::dec
+  D3 -->|고침| UPD["스토리도 바뀜"]:::cat
+  D3 -->|지움| DEL["스토리 사라짐"]:::cat
+
+  V["스토리 보기"]:::scr --> V1["탭: 다음 장 · 왼쪽 탭: 이전"]:::btn
+  V --> V2["옆으로: 다음 사람 · 아래로: 닫기"]:::btn
+  V --> V3["사진·이름 → 프로필"]:::btn
+  V --> V4["👏 · 한마디(댓글) · 가져오기"]:::btn
+
+  N["알림 하나 누름"]:::btn --> D4{"대상이 아직 있음?<br/>(기록·친구 관계)"}:::dec
+  D4 -->|아니요| NX["'볼 수 없는 내용이에요'"]:::err
+  D4 -->|예| D5{"알림 종류"}:::dec
+  D5 -->|친구 운동| T1["스토리"]:::scr
+  D5 -->|박수 · 댓글 · @언급| T2["기록 상세 (그 댓글로)"]:::scr
+  D5 -->|루틴 가져감| T3["내 루틴"]:::scr
+  D5 -->|콕 찌르기 · 친구 됨| T4["그 사람 프로필"]:::scr
+  D5 -->|친구 요청| T5["목록에서 바로 수락·거절"]:::btn
+  D5 -->|초대| T6["초대 받기 시트"]:::scr
+  D5 -->|유튜브 정리 끝| T7["유튜브 결과"]:::scr
+
+  classDef scr fill:#171a1d,color:#fff,stroke:#171a1d
+  classDef cat fill:#dee2e6,color:#343a40,stroke:#dee2e6
+  classDef btn fill:#4aa3f0,color:#fff,stroke:#4aa3f0
+  classDef dec fill:#fff,color:#171a1d,stroke:#7171ff,stroke-width:2px
+  classDef err fill:#ffe8e0,color:#c2410c,stroke:#ff7043
+  classDef ok fill:#e6f7ef,color:#087f5b,stroke:#20c997
+</pre>
+</section>
+
+<section>
+<h2>11. 기록 상세 · 댓글</h2>
+<pre class="mermaid">
+flowchart LR
+  O["친구 기록 카드 / 스토리 한마디 / 알림"]:::btn --> D0{"아직 볼 수 있음?<br/>(친구 · 숨김 아님 · 안 지움)"}:::dec
+  D0 -->|아니요| X0["'볼 수 없는 내용이에요'"]:::err
+  D0 -->|예| DET["기록 상세"]:::scr
+  DET --> A1["👏 (한 번 더 누르면 취소)"]:::btn
+  DET --> A2["이 운동 가져오기"]:::btn --> G["가져오기 (7번)"]:::scr
+  DET --> A3["댓글 쓰기"]:::btn --> D1{"빈 글 / 300자 넘음?"}:::dec
+  D1 -->|예| X1["보내기 버튼 꺼짐"]:::err
+  D1 -->|아니요| C1["올라감 · 기록 주인에게 알림 · @부른 사람에게 알림"]:::ok
+  DET --> A4["내 댓글 길게 누르기"]:::btn --> C2["수정 · 삭제"]:::cat
+  DET --> A5["내 기록이면: 남의 댓글 길게 누르기"]:::btn --> C3["삭제 · 그 사람 차단"]:::cat
+
+  classDef scr fill:#171a1d,color:#fff,stroke:#171a1d
+  classDef cat fill:#dee2e6,color:#343a40,stroke:#dee2e6
+  classDef btn fill:#4aa3f0,color:#fff,stroke:#4aa3f0
+  classDef dec fill:#fff,color:#171a1d,stroke:#7171ff,stroke-width:2px
+  classDef err fill:#ffe8e0,color:#c2410c,stroke:#ff7043
+  classDef ok fill:#e6f7ef,color:#087f5b,stroke:#20c997
+</pre>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script>
+  mermaid.initialize({ startOnLoad: true, theme: 'base', securityLevel: 'loose',
+    themeVariables: { fontFamily: 'Pretendard, sans-serif', fontSize: '14px', lineColor: '#adb5bd', edgeLabelBackground: '#ffffff' },
+    flowchart: { curve: 'basis', nodeSpacing: 22, rankSpacing: 46, padding: 10 } });
+</script>
+</body>
+</html>

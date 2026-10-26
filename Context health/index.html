@@ -4,6 +4,22 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover" />
     <title>Context Health</title>
+    <script>
+      /* 카카오톡·인스타그램 등 앱 안 브라우저에서는 구글 로그인이 막히고 저장소도 따로라
+         초대·공유 링크가 끊긴다. 열리자마자 기본 브라우저로 같은 주소를 다시 연다. */
+      (function () {
+        var ua = navigator.userAgent || '';
+        var url = location.href;
+        if (/KAKAOTALK/i.test(ua)) {
+          location.replace('kakaotalk://web/openExternal?url=' + encodeURIComponent(url));
+          return;
+        }
+        var inApp = /Instagram|FBAN|FBAV|NAVER\(inapp|Line\/|everytimeApp|DaumApps/i.test(ua);
+        if (inApp && /Android/i.test(ua)) {
+          location.replace('intent://' + url.replace(/^https?:\/\//, '') + '#Intent;scheme=https;package=com.android.chrome;end');
+        }
+      })();
+    </script>
     <meta name="color-scheme" content="light" />
     <meta name="theme-color" content="#3aa0ff" />
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#3aa0ff" />

@@ -88,6 +88,20 @@
     ],
     "rewrites": [
       {
+        "source": "/api/social/**",
+        "function": {
+          "functionId": "social",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/api/food-contribute",
+        "function": {
+          "functionId": "foodContribute",
+          "region": "us-central1"
+        }
+      },
+      {
         "source": "/api/ai-generate",
         "function": {
           "functionId": "aiGenerate",

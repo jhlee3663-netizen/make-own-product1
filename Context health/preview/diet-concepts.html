@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>식단 입력 시안</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Pretendard, 'Apple SD Gothic Neo', sans-serif; background: #e9ecef; padding: 28px 32px; letter-spacing: -0.025em; color: #171a1d; }
+  h1 { font-size: 20px; font-weight: 700; } h1 small { font-size: 14px; font-weight: 500; color: #868e96; margin-left: 8px; }
+  .wrap { display: flex; gap: 20px; align-items: flex-start; margin-top: 16px; }
+  .col { display: flex; flex-direction: column; gap: 10px; }
+  .cap { font-size: 14px; font-weight: 700; color: #495057; height: 38px; }
+  .cap small { display: block; font-weight: 500; font-size: 12px; color: #868e96; margin-top: 2px; }
+  .arrow { align-self: center; font-size: 22px; color: #adb5bd; margin-top: 40px; }
+  .phone { width: 340px; height: 700px; background: #7171ff; border-radius: 26px; overflow: hidden; position: relative; box-shadow: 0 8px 28px rgba(0,0,0,.12); display: flex; flex-direction: column; }
+  .head { display: flex; justify-content: space-between; align-items: center; padding: 22px 16px 12px; color: #fff; }
+  .head b { font-size: 18px; font-weight: 700; } .head span { font-size: 13px; font-weight: 600; opacity: .8; }
+  .tabs { display: flex; padding: 0 20px; }
+  .tabs div { flex: 1; text-align: center; padding: 8px 0; font-size: 15px; font-weight: 500; color: #fff; border-radius: 20px 20px 0 0; }
+  .tabs .on { background: #fff; color: #7171ff; font-weight: 700; }
+  .sheet { flex: 1; background: #f8f9fa; border-radius: 22px 22px 0 0; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; position: relative; overflow: hidden; }
+  .card { background: #fff; border-radius: 18px; padding: 14px 16px; box-shadow: 0 2px 12px rgba(3,27,38,.05); }
+  .t { font-size: 12px; font-weight: 600; color: #868e96; }
+  .kcal { display: flex; align-items: baseline; gap: 5px; margin-top: 4px; } .kcal b { font-size: 24px; font-weight: 700; } .kcal span { font-size: 13px; color: #868e96; }
+  .bar { height: 8px; border-radius: 4px; background: #f1f3f5; margin-top: 12px; position: relative; }
+  .bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: linear-gradient(90deg, rgba(113,113,255,.3), #7171ff); }
+  .bar em { position: absolute; top: -3px; bottom: -3px; left: 62%; width: 18%; border-radius: 4px; background: rgba(113,113,255,.2); }
+  .bar i.add { background: #ff9137; border-radius: 0 4px 4px 0; }
+  .macros { display: flex; gap: 12px; margin-top: 10px; font-size: 12px; color: #868e96; } .macros b { color: #7171ff; margin-left: 3px; }
+  .meal { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid #f1f3f5; } .meal:first-child { border: 0; padding-top: 0; } .meal:last-child { padding-bottom: 0; }
+  .k { width: 42px; height: 42px; border-radius: 50%; background: #f1f3f5; flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; line-height: 1.1; }
+  .k small { font-size: 8px; font-weight: 500; color: #868e96; } .k.none { color: #ced4da; }
+  .meal .tx { flex: 1; min-width: 0; } .meal .tx b { font-size: 14px; display: block; } .meal .tx span { font-size: 12px; color: #868e96; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .meal .tx span.none { color: #ced4da; }
+  .plus { width: 26px; height: 26px; border-radius: 50%; background: rgba(113,113,255,.1); color: #7171ff; font-size: 16px; display: flex; align-items: center; justify-content: center; flex: none; }
+  .plus.hot { background: #7171ff; color: #fff; box-shadow: 0 0 0 5px rgba(113,113,255,.2); }
+  .meal.new { background: rgba(113,113,255,.06); margin: 0 -16px; padding-left: 16px; padding-right: 16px; }
+  /* 입력 줄 */
+  .composer { position: absolute; left: 0; right: 0; bottom: 0; background: #fff; border-radius: 20px 20px 0 0; box-shadow: 0 -4px 16px rgba(0,0,0,.06); padding: 12px 14px 16px; }
+  .input { display: flex; align-items: center; gap: 8px; background: #f1f3f5; border-radius: 16px; padding: 11px 12px 11px 14px; font-size: 14px; color: #adb5bd; }
+  .input.filled { color: #171a1d; background: #fff; border: 1.5px solid #7171ff; }
+  .send { margin-left: auto; width: 30px; height: 30px; border-radius: 50%; background: #dee2e6; flex: none; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 15px; font-weight: 700; }
+  .send.on { background: #7171ff; }
+  .chips { display: flex; gap: 6px; overflow: hidden; white-space: nowrap; margin-bottom: 10px; }
+  .chip { font-size: 12px; font-weight: 600; color: #495057; background: #f1f3f5; padding: 7px 11px; border-radius: 99px; flex: none; }
+  .chip.p { background: rgba(113,113,255,.1); color: #7171ff; }
+  .ai { font-size: 12px; font-weight: 700; background: linear-gradient(90deg, #3aa0ff, #f152ff); -webkit-background-clip: text; color: transparent; }
+  .item { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-top: 1px solid #f1f3f5; font-size: 14px; }
+  .item:first-of-type { border: 0; }
+  .item b { font-weight: 600; flex: 1; } .item span { font-size: 13px; color: #868e96; }
+  .step { display: flex; align-items: center; gap: 8px; background: #f1f3f5; border-radius: 99px; padding: 4px 6px; font-size: 12px; font-weight: 600; color: #495057; }
+  .step i { width: 20px; height: 20px; border-radius: 50%; background: #fff; display: flex; align-items: center; justify-content: center; font-style: normal; color: #7171ff; font-weight: 700; }
+  .cta { margin-top: 12px; height: 46px; border-radius: 14px; background: #7171ff; color: #fff; font-size: 15px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .dim { position: absolute; inset: 0; background: rgba(0,0,0,.45); }
+  .bs { position: absolute; left: 0; right: 0; bottom: 0; background: #fff; border-radius: 22px 22px 0 0; padding: 10px 16px 18px; }
+  .grab { width: 36px; height: 4px; border-radius: 2px; background: #dee2e6; margin: 0 auto 12px; }
+  .bs h3 { font-size: 17px; font-weight: 700; display: flex; justify-content: space-between; align-items: baseline; } .bs h3 span { font-size: 13px; font-weight: 600; color: #7171ff; }
+  .lab { font-size: 11px; font-weight: 600; color: #868e96; margin: 12px 0 6px; }
+  /* 대화 */
+  .me { align-self: flex-end; max-width: 78%; background: #7171ff; color: #fff; font-size: 14px; padding: 10px 14px; border-radius: 18px 18px 4px 18px; }
+  .bot { align-self: flex-start; max-width: 88%; background: #fff; font-size: 14px; padding: 12px 14px; border-radius: 18px 18px 18px 4px; box-shadow: 0 2px 12px rgba(3,27,38,.05); }
+  .bot p { margin-top: 8px; color: #495057; }
+  .qr { display: flex; gap: 6px; margin-top: 10px; }
+  .sum { display: flex; justify-content: space-between; font-size: 13px; font-weight: 700; margin-top: 8px; padding-top: 8px; border-top: 1px solid #f1f3f5; }
+  .mealsel { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  .title { display: inline-flex; align-items: center; gap: 4px; } .title i { font-style: normal; font-size: 11px; color: #868e96; }
+  .title.hot { background: rgba(113,113,255,.1); color: #7171ff; padding: 2px 10px; border-radius: 99px; margin-left: -10px; }
+  .guess { font-size: 11px; font-weight: 600; color: #868e96; margin-top: 2px; }
+  .links { display: flex; gap: 14px; margin-top: 10px; font-size: 12px; font-weight: 600; color: #868e96; } .links span { text-decoration: underline; text-underline-offset: 3px; }
+  .detail { background: #f8f9fa; border-radius: 14px; padding: 12px; margin: 4px 0 8px; }
+  .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .grid4 div { background: #fff; border-radius: 10px; padding: 8px 6px; text-align: center; font-size: 13px; font-weight: 700; } .grid4 small { display: block; font-size: 10px; font-weight: 500; color: #868e96; margin-bottom: 2px; }
+  .toast { position: absolute; left: 14px; right: 14px; bottom: 86px; background: #fff; border-radius: 16px; padding: 12px 14px; box-shadow: 0 6px 24px rgba(3,27,38,.14); font-size: 13px; color: #495057; line-height: 1.5; }
+  .nav { position: absolute; left: 0; right: 0; bottom: 0; height: 60px; background: #fff; border-radius: 16px 16px 0 0; box-shadow: 0 -4px 16px rgba(0,0,0,.05); display: flex; align-items: center; justify-content: space-around; font-size: 11px; color: #ced4da; font-weight: 600; }
+  .nav .on { color: #7171ff; } .fab { width: 50px; height: 50px; border-radius: 50%; background: #7171ff; margin-top: -24px; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+  .fab.hot { box-shadow: 0 0 0 6px rgba(113,113,255,.25); }
+  .tag { position: absolute; font-size: 11px; font-weight: 700; color: #fff; background: #171a1d; padding: 4px 8px; border-radius: 8px; }
+  .meal.tap { background: rgba(113,113,255,.08); margin: 0 -16px; padding-left: 16px; padding-right: 16px; }
+  .mhead { display: flex; align-items: center; justify-content: space-between; padding: 22px 16px 14px; color: #fff; }
+  .mhead b { font-size: 18px; font-weight: 700; } .mhead .r { display: flex; gap: 14px; align-items: center; font-size: 14px; font-weight: 700; }
+  .mhead .r i { font-style: normal; opacity: .8; letter-spacing: 1px; }
+  .thin { display: flex; align-items: center; gap: 10px; font-size: 12px; color: #868e96; padding: 2px 2px 0; } .thin b { color: #171a1d; }
+  .thin .bar { flex: 1; margin: 0; height: 6px; }
+  .empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: #adb5bd; font-size: 13px; padding-bottom: 150px; } .empty b { font-size: 15px; color: #868e96; }
+  .dock { position: absolute; left: 0; right: 0; bottom: 0; background: #fff; border-radius: 20px 20px 0 0; box-shadow: 0 -4px 16px rgba(0,0,0,.06); padding: 12px 14px 16px; }
+  .dock.kb { bottom: 216px; border-radius: 20px 20px 0 0; padding-bottom: 10px; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .more { width: 40px; height: 44px; border-radius: 14px; background: #f1f3f5; flex: none; display: flex; align-items: center; justify-content: center; font-size: 20px; color: #495057; }
+  .more.on { background: #7171ff; color: #fff; }
+  .row .input { flex: 1; }
+  .kbd { position: absolute; left: 0; right: 0; bottom: 0; height: 216px; background: #d5d8dd; display: grid; grid-template-rows: repeat(4, 1fr); gap: 7px; padding: 9px 5px 26px; }
+  .kbd div { display: flex; gap: 5px; justify-content: center; } .kbd span { flex: 1; max-width: 30px; background: #fff; border-radius: 5px; box-shadow: 0 1px 0 rgba(0,0,0,.25); }
+  .kbd .sp span:nth-child(2) { max-width: 170px; flex: 5; }
+  .list { background: #fff; border-radius: 18px; padding: 4px 16px; box-shadow: 0 2px 12px rgba(3,27,38,.05); }
+  .tot { display: flex; justify-content: space-between; align-items: baseline; padding: 4px 4px 0; font-size: 13px; color: #868e96; } .tot b { font-size: 18px; color: #171a1d; }
+  .pop { position: absolute; left: 14px; bottom: 72px; width: 230px; background: #fff; border-radius: 16px; box-shadow: 0 8px 28px rgba(3,27,38,.18); padding: 6px; }
+  .pop div { padding: 11px 12px; font-size: 14px; font-weight: 600; border-radius: 10px; } .pop div small { display: block; font-size: 11px; font-weight: 500; color: #868e96; margin-top: 2px; }
+  .pop.right { left: auto; right: 12px; bottom: auto; top: 58px; width: 190px; }
+  .lv { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; background: #171a1d; color: #fff; font-size: 11px; font-weight: 700; position: absolute; }
+  table { border-collapse: collapse; margin-top: 14px; font-size: 13px; background: #fff; border-radius: 12px; overflow: hidden; }
+  td, th { padding: 9px 14px; text-align: left; border-bottom: 1px solid #f1f3f5; } th { font-size: 12px; color: #868e96; font-weight: 600; background: #f8f9fa; }
+  .it { padding: 12px 0; border-top: 1px solid #f1f3f5; } .it:first-child { border: 0; }
+  .it .l1 { display: flex; justify-content: space-between; gap: 10px; font-size: 15px; font-weight: 600; } .it .l1 span { flex: none; color: #171a1d; font-weight: 700; }
+  .it .l1 b { font-weight: 600; min-width: 0; }
+  .it .l2 { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; font-size: 13px; color: #868e96; }
+  .big-step { display: flex; align-items: center; gap: 4px; } .big-step i { width: 30px; height: 30px; border-radius: 50%; background: #f1f3f5; display: flex; align-items: center; justify-content: center; font-style: normal; color: #7171ff; font-weight: 700; font-size: 16px; }
+  .done { margin-top: 10px; height: 48px; border-radius: 14px; background: #7171ff; color: #fff; font-size: 15px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 6px; } .done small { font-size: 13px; font-weight: 600; opacity: .8; }
+  .seg { display: inline-flex; background: #f1f3f5; border-radius: 10px; padding: 3px; font-size: 12px; font-weight: 600; color: #868e96; } .seg span { padding: 5px 12px; border-radius: 8px; } .seg .on { background: #fff; color: #171a1d; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .rowline { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; font-size: 14px; color: #868e96; font-weight: 500; }
+  .food { display: flex; justify-content: space-between; align-items: center; padding: 13px 0; border-top: 1px solid #f1f3f5; font-size: 15px; font-weight: 600; } .food:first-child { border: 0; } .food small { display: block; font-size: 12px; font-weight: 500; color: #868e96; margin-top: 2px; } .food span { font-size: 13px; color: #868e96; font-weight: 600; }
+  .search { background: #f1f3f5; border-radius: 14px; padding: 11px 14px; font-size: 14px; color: #adb5bd; }
+  .newfood { text-align: center; font-size: 13px; font-weight: 600; color: #868e96; padding: 14px 0 4px; } .newfood u { text-underline-offset: 3px; }
+  .h3 { display: grid; grid-template-columns: 40px 1fr 40px; align-items: center; padding: 22px 12px 14px; color: #fff; }
+  .h3 .bk { font-size: 24px; font-weight: 500; text-align: center; line-height: 1; } .h3 b { text-align: center; font-size: 17px; font-weight: 700; } .h3 b i { font-style: normal; font-size: 11px; opacity: .8; margin-left: 3px; }
+  .h3 .mr { text-align: center; letter-spacing: 1px; opacity: .85; font-weight: 700; }
+  .h3 .hot { background: rgba(255,255,255,.22); border-radius: 99px; padding: 3px 0; }
+  .qc { background: #fff; border-radius: 18px; padding: 14px 16px; box-shadow: 0 2px 12px rgba(3,27,38,.05); display: flex; align-items: center; gap: 12px; }
+  .qc .tx { flex: 1; min-width: 0; } .qc .tx small { font-size: 11px; font-weight: 600; color: #868e96; } .qc .tx b { display: block; font-size: 15px; margin-top: 2px; }
+  .qc .tx span { display: block; font-size: 12px; color: #868e96; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .qc .go { flex: none; font-size: 13px; font-weight: 700; color: #7171ff; background: rgba(113,113,255,.1); padding: 8px 14px; border-radius: 99px; }
+  .qc .chev { flex: none; color: #adb5bd; font-size: 18px; }
+  .hint { text-align: center; font-size: 12px; color: #adb5bd; margin-top: 6px; }
+  .dock.slim { padding-top: 12px; }
+  .cells { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 6px; }
+  .cells div { background: #f8f9fa; border: 1.5px solid transparent; border-radius: 12px; padding: 9px 6px; text-align: center; font-size: 15px; font-weight: 700; } .cells small { display: block; font-size: 10px; font-weight: 500; color: #868e96; margin-bottom: 3px; }
+  .cells .ed { background: #fff; border-color: #7171ff; }
+  .sub { font-size: 11px; color: #868e96; margin-top: 8px; }
+  .trash { width: 30px; height: 30px; border-radius: 50%; background: #f1f3f5; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; color: #868e96; }
+  .sumcard { background: #fff; border-radius: 16px; padding: 12px 14px; box-shadow: 0 2px 12px rgba(3,27,38,.05); }
+  .sumcard .top { display: flex; align-items: center; gap: 10px; font-size: 12px; color: #868e96; } .sumcard .top b { color: #171a1d; font-size: 14px; } .sumcard .top .bar { flex: 1; margin: 0; height: 6px; }
+  .mac { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px; }
+  .mac div { font-size: 11px; color: #868e96; } .mac b { color: #171a1d; font-weight: 700; margin-left: 2px; } .mac em { font-style: normal; color: #ff9137; font-weight: 700; }
+  .mac .bar { height: 4px; margin-top: 5px; } .mac .bar em { display: none; }
+  .stack { display: flex; height: 8px; border-radius: 4px; overflow: hidden; margin: 6px 4px 0; } .stack i { display: block; }
+  .stackl { display: flex; gap: 12px; font-size: 11px; color: #868e96; padding: 6px 4px 0; } .stackl b { color: #171a1d; margin-left: 2px; } .stackl i { display: inline-block; width: 7px; height: 7px; border-radius: 2px; margin-right: 4px; }
+  .sug { display: flex; gap: 6px; overflow: hidden; white-space: nowrap; margin-bottom: 10px; }
+  .sug span { flex: none; font-size: 13px; font-weight: 600; color: #171a1d; background: #f1f3f5; padding: 8px 12px; border-radius: 12px; } .sug span small { font-size: 11px; font-weight: 500; color: #868e96; margin-left: 5px; } .sug mark { background: none; color: #7171ff; }
+  .food .ck { width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid #dee2e6; flex: none; margin-left: 12px; display: flex; align-items: center; justify-content: center; font-size: 13px; color: #fff; }
+  .food .ck.on { background: #7171ff; border-color: #7171ff; }
+  .food .r { display: flex; align-items: center; }
+  .stick { position: absolute; left: 0; right: 0; bottom: 0; background: #fff; border-radius: 20px 20px 0 0; box-shadow: 0 -4px 16px rgba(0,0,0,.06); padding: 12px 14px 16px; }
+  .search.on { background: #fff; border: 1.5px solid #7171ff; color: #171a1d; }
+  .src { font-size: 10px; font-weight: 600; color: #868e96; background: #f1f3f5; padding: 2px 6px; border-radius: 6px; margin-left: 6px; }
+  .field { margin-top: 12px; } .field label { font-size: 12px; font-weight: 600; color: #868e96; display: block; margin-bottom: 6px; } .field label em { font-style: normal; color: #7171ff; }
+  .box { background: #fff; border: 1.5px solid #e9ecef; border-radius: 12px; padding: 11px 12px; font-size: 14px; color: #adb5bd; display: flex; justify-content: space-between; } .box.v { color: #171a1d; font-weight: 600; } .box span { color: #868e96; font-weight: 500; }
+  .two2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; } .three3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .paste { margin-top: 14px; border: 1.5px dashed #ced4da; border-radius: 12px; padding: 11px 12px; font-size: 13px; color: #868e96; text-align: center; } .paste b { color: #7171ff; }
+  .note { margin-top: 14px; font-size: 13px; color: #495057; line-height: 1.6; max-width: 1100px; } .note b { color: #171a1d; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const c = new URLSearchParams(location.search).get('c') || 'a';
+const top2 = `<div class="head"><b>10월 8일 목 ▾</b><span>할 일</span></div><div class="tabs"><div>운동</div><div class="on">식단</div></div>`;
+const intake = (kcal, pct, add = 0) => `<div class="card"><span class="t">섭취 칼로리</span><div class="kcal"><b>${kcal}</b><span>/ 2,100kcal</span></div>
+  <div class="bar"><em></em><i style="width:${pct}%"></i>${add ? `<i class="add" style="left:${pct}%;width:${add}%"></i>` : ''}</div>
+  <div class="macros"><span>탄수<b>${add ? 178 : 96}g</b></span><span>단백질<b>${add ? 71 : 48}g</b></span><span>지방<b>${add ? 44 : 22}g</b></span></div></div>`;
+const meal = (k, n, t, opt = {}) => `<div class="meal ${opt.new ? 'new' : ''}"><div class="k ${k ? '' : 'none'}">${k || 0}<small>kcal</small></div><div class="tx"><b>${n}</b><span class="${k ? '' : 'none'}">${t}</span></div>${opt.noPlus ? '' : `<div class="plus ${opt.hot ? 'hot' : ''}">+</div>`}</div>`;
+const meals = (lunch, opt = {}) => `<div class="card">${meal(320, '아침', '그릭요거트, 바나나', { noPlus: opt.noPlus })}${lunch}${meal(0, '저녁', '아직 기록이 없어요', { noPlus: opt.noPlus })}</div>`;
+const phone = inner => `<div class="phone">${inner}</div>`;
+const col = (cap, sub, inner) => `<div class="col"><div class="cap">${cap}<small>${sub}</small></div>${phone(inner)}</div>`;
+const arrow = `<div class="arrow">→</div>`;
+const quick = `<div class="chips"><span class="chip p">어제 점심 그대로</span><span class="chip">닭가슴살 샐러드</span><span class="chip">프로틴 1스쿱</span><span class="chip">김밥</span></div>`;
+const parsed = `<div class="item"><b>제육덮밥</b><div class="step"><i>−</i>1인분<i>+</i></div><span>650</span></div>
+  <div class="item"><b>콜라</b><div class="step"><i>−</i>1캔<i>+</i></div><span>110</span></div>`;
+
+const concepts = {
+  a: {
+    title: 'A. 한 줄 입력창', sub: '식단 탭 맨 아래에 입력창 하나. 끼니를 고르지 않고 그냥 적으면 AI가 나눠 넣는다',
+    frames: [
+      col('① 식단 탭 그대로', '아래에 입력창이 늘 떠 있다', top2 + `<div class="sheet">${intake('320', 15)}${meals(meal(0, '점심', '아직 기록이 없어요', { noPlus: true }), { noPlus: true })}
+        <div class="composer">${quick}<div class="input">먹은 것을 편하게 적어주세요<div class="send">↑</div></div></div></div>`),
+      col('② 적으면 바로 풀어준다', '끼니는 시간과 문장으로 알아서 정한다', top2 + `<div class="sheet">${intake('320', 15, 36)}${meals(meal(0, '점심', '아직 기록이 없어요', { noPlus: true }), { noPlus: true })}
+        <div class="composer"><div class="ai">✦ 점심으로 넣을게요 · 760kcal</div>${parsed}
+          <div class="input filled" style="margin-top:10px">점심에 제육덮밥이랑 콜라<div class="send on">↑</div></div></div></div>`),
+      col('③ 보내면 끼니에 들어간다', '위 막대가 늘어나고 점심 줄이 채워진다', top2 + `<div class="sheet">${intake('1,080', 51)}${meals(meal(760, '점심', '제육덮밥, 콜라', { new: true, noPlus: true }), { noPlus: true })}
+        <div class="composer">${quick}<div class="input">먹은 것을 편하게 적어주세요<div class="send">↑</div></div></div></div>`),
+    ],
+    note: '<b>좋은 점</b> 화면 이동이 0번. 끼니를 고르는 단계가 없어서 가장 빠르고, "말하듯 적는다"는 차별점이 화면에 그대로 보인다. <b>걸리는 점</b> 입력창이 하단 메뉴 자리를 차지해서, 식단 탭에서만 하단 메뉴를 가리거나 입력창을 그 위에 얹어야 한다. AI가 끼니를 틀리게 넣으면 옮기는 방법이 필요하다.',
+  },
+  b: {
+    title: 'B. 끼니 시트', sub: '끼니의 +를 누르면 아래에서 작은 시트가 올라온다. 그 끼니만 적고 닫는다',
+    frames: [
+      col('① 점심의 +를 누른다', '지금 홈 화면에서 바로 시작', top2 + `<div class="sheet">${intake('320', 15)}${meals(meal(0, '점심', '아직 기록이 없어요', { hot: true }))}</div>`),
+      col('② 시트: 한 줄 + 자주 먹는 것', '어제 것, 자주 먹는 것은 한 번에', top2 + `<div class="sheet">${intake('320', 15)}${meals(meal(0, '점심', '아직 기록이 없어요'))}</div><div class="dim"></div>
+        <div class="bs"><div class="grab"></div><h3>점심</h3><div class="lab">빠르게 넣기</div>${quick.replace('margin-bottom', 'x')}
+          <div class="input" style="margin-top:4px">예: 제육덮밥이랑 콜라<div class="send">↑</div></div></div>`),
+      col('③ 풀린 결과를 고치고 기록', '양만 − + 로 맞추면 끝', top2 + `<div class="sheet">${intake('320', 15, 36)}${meals(meal(0, '점심', '아직 기록이 없어요'))}</div><div class="dim"></div>
+        <div class="bs"><div class="grab"></div><h3>점심<span>760kcal</span></h3><div style="margin-top:8px">${parsed}</div>
+          <div class="input" style="margin-top:8px">더 먹은 게 있으면 적어주세요<div class="send">↑</div></div><div class="cta">점심 기록하기</div></div>`),
+    ],
+    note: '<b>좋은 점</b> 지금 만든 홈 화면과 가장 잘 맞는다(끼니 목록의 +가 이미 있다). 스크롤이 없고, 끼니를 내가 골랐으니 AI가 틀릴 일이 없다. 자주 먹는 것은 글자 입력 없이 한 번에 넣는다. <b>걸리는 점</b> A보다 한 번 더 누른다. 하루치를 한꺼번에 몰아 적을 때는 끼니마다 시트를 열어야 한다.',
+  },
+  c: {
+    title: 'C. 코치와 대화', sub: '식단을 코치에게 말하듯 보낸다. 모호한 건 코치가 되묻고, 기록과 한마디가 같이 온다',
+    frames: [
+      col('① 말하듯 보낸다', '기록 버튼 → 식단을 누르면 대화가 열린다', `<div class="head"><b>‹ 식단 기록</b><span>10월 8일</span></div><div class="sheet" style="border-radius:22px 22px 0 0;justify-content:flex-end;padding-bottom:84px">
+        <div class="me">점심에 제육덮밥이랑 콜라 먹었어</div>
+        <div class="composer"><div class="input">먹은 것을 편하게 적어주세요<div class="send">↑</div></div></div></div>`),
+      col('② 코치가 풀고, 되묻는다', '양이 모호하면 버튼으로 고르게 한다', `<div class="head"><b>‹ 식단 기록</b><span>10월 8일</span></div><div class="sheet" style="border-radius:22px 22px 0 0;justify-content:flex-end;padding-bottom:84px">
+        <div class="me">점심에 제육덮밥이랑 콜라 먹었어</div>
+        <div class="bot"><div class="ai">✦ 점심 · 760kcal</div>${parsed}<p>밥은 한 공기 다 드셨어요?</p><div class="qr"><span class="chip p">다 먹었어</span><span class="chip">반만</span><span class="chip">곱빼기</span></div></div>
+        <div class="composer"><div class="input">먹은 것을 편하게 적어주세요<div class="send">↑</div></div></div></div>`),
+      col('③ 기록 + 한마디', '오늘 남은 양까지 알려준다', `<div class="head"><b>‹ 식단 기록</b><span>10월 8일</span></div><div class="sheet" style="border-radius:22px 22px 0 0;justify-content:flex-end;padding-bottom:84px">
+        <div class="me">다 먹었어</div>
+        <div class="bot"><div class="ai">✦ 점심에 기록했어요</div><div class="sum"><span>오늘 1,080 / 2,100kcal</span><span style="color:#7171ff">1,020 남음</span></div><p>단백질이 71g이라 저녁에 40g쯤 더 채우면 좋아요. 닭가슴살 150g이면 딱이에요.</p></div>
+        <div class="composer"><div class="input">먹은 것을 편하게 적어주세요<div class="send">↑</div></div></div></div>`),
+    ],
+    note: '<b>좋은 점</b> 차별점이 가장 크다. 기록하는 순간 조언까지 받고, 코치 탭과 식단이 하나로 이어진다. <b>걸리는 점</b> 가장 느리다. 매 끼니 대화를 주고받아야 하고, AI 호출이 늘어 비용과 대기 시간이 생긴다. 급할 때는 답답하다.',
+  },
+};
+
+const nav = hot => `<div class="nav"><span class="on">홈</span><span>코치</span><div class="fab ${hot ? 'hot' : ''}">✎</div><span>분석</span><span>마이</span></div>`;
+const mealsNoPlus = (lunch) => `<div class="card">${meal(320, '아침', '그릭요거트, 바나나', { noPlus: true })}${lunch}${meal(0, '저녁', '아직 기록이 없어요', { noPlus: true })}</div>`;
+const emptyLunch = cls => meal(0, '점심', '아직 기록이 없어요', { noPlus: true }).replace('class="meal ', `class="meal ${cls} `);
+const bg = (pct = 15, add = 0) => top2 + `<div class="sheet">${intake('320', pct, add)}${mealsNoPlus(emptyLunch(''))}</div>`;
+concepts.d = {
+  title: '끼니 시트 · 흐름 1', sub: '입구는 둘, 시트는 하나. 적고 → 확인하고 → 기록',
+  frames: [
+    col('① 입구 두 개', '끼니 줄을 누르거나, 가운데 기록 버튼 → 식단', top2 + `<div class="sheet">${intake('320', 15)}${mealsNoPlus(emptyLunch('tap'))}
+      <span class="tag" style="right:22px;top:232px">A. 줄을 누르면 그 끼니로</span><span class="tag" style="left:50%;transform:translateX(-50%);bottom:84px">B. 누르면 끼니를 추정해서</span>${nav(true)}</div>`),
+    col('② 시트가 올라온다', '한 줄로 적거나, 자주 먹는 것을 누른다', bg() + `<div class="dim"></div>
+      <div class="bs"><div class="grab"></div><h3><span class="title" style="color:#171a1d;font-size:17px">점심 <i>▾</i></span></h3><div class="guess">지금 시간으로 추정했어요 · 눌러서 바꾸기</div>
+        <div class="lab">빠르게 넣기</div>${quick.replace('margin-bottom', 'x')}
+        <div class="input" style="margin-top:4px">예: 제육덮밥이랑 콜라<div class="send">↑</div></div>
+        <div class="links"><span>영양정보 직접 입력</span><span>내 음식에서 고르기</span></div></div>`),
+    col('③ 풀린 결과를 확인하고 기록', '양만 맞추면 끝. 위 막대에 미리 반영된다', bg(15, 36) + `<div class="dim" style="top:150px"></div>
+      <div class="bs"><div class="grab"></div><h3><span class="title" style="color:#171a1d;font-size:17px">점심 <i>▾</i></span><span>+760kcal</span></h3><div style="margin-top:8px">${parsed}</div>
+        <div class="input" style="margin-top:8px">더 먹은 게 있으면 적어주세요<div class="send">↑</div></div><div class="cta">점심 기록하기</div></div>`),
+  ],
+  note: '<b>+ 버튼은 그리지 않았다.</b> 끼니 줄 전체가 버튼이다. A로 들어오면 끼니가 정해져 있고, B로 들어오면 추정한 끼니가 제목에 뜬다. <b>③에서 시트 위쪽은 어둡게 덮지 않는다</b> — 칼로리 막대의 주황색(이번에 넣을 양)이 보여야 하기 때문이다.',
+};
+concepts.e = {
+  title: '끼니 시트 · 흐름 2', sub: '끼니 바꾸기, 음식 하나 고치기, 기록한 뒤',
+  frames: [
+    col('④ 끼니가 틀렸을 때', '제목을 누르면 끼니가 펼쳐진다', bg(15, 36) + `<div class="dim" style="top:150px"></div>
+      <div class="bs"><div class="grab"></div><h3><span class="title hot" style="font-size:17px">점심 <i style="color:#7171ff">▴</i></span><span>+760kcal</span></h3>
+        <div class="mealsel"><span class="chip">아침</span><span class="chip">오전 간식</span><span class="chip p">점심</span><span class="chip">오후 간식</span><span class="chip">저녁</span><span class="chip">야식</span></div>
+        <div style="margin-top:10px">${parsed}</div><div class="cta">점심 기록하기</div></div>`),
+    col('⑤ 음식 하나를 누르면', '그 자리에서 펼쳐져 영양정보를 고친다', bg(15, 36) + `<div class="dim" style="top:150px"></div>
+      <div class="bs"><div class="grab"></div><h3><span class="title" style="color:#171a1d;font-size:17px">점심 <i>▾</i></span><span>+760kcal</span></h3>
+        <div class="item" style="margin-top:8px"><b>제육덮밥</b><div class="step"><i>−</i>1인분<i>+</i></div><span>650</span></div>
+        <div class="detail"><div class="grid4"><div><small>kcal</small>650</div><div><small>탄수</small>82g</div><div><small>단백질</small>23g</div><div><small>지방</small>22g</div></div>
+          <div class="links" style="justify-content:space-between"><span>내 음식으로 저장</span><span style="color:#e03e52">빼기</span></div></div>
+        <div class="item"><b>콜라</b><div class="step"><i>−</i>1캔<i>+</i></div><span>110</span></div><div class="cta">점심 기록하기</div></div>`),
+    col('⑥ 기록한 뒤', '줄이 채워지고, 코치 한마디가 잠깐 뜬다', top2 + `<div class="sheet">${intake('1,080', 51)}${mealsNoPlus(meal(760, '점심', '제육덮밥, 콜라', { new: true, noPlus: true }))}
+      <div class="toast"><div class="ai">✦ 점심에 기록했어요</div>단백질이 71g이라 저녁에 40g쯤 더 채우면 좋아요.</div>${nav(false)}</div>`),
+  ],
+  note: '<b>고칠 때도 같은 시트다.</b> 채워진 끼니 줄을 누르면 ③ 상태로 다시 열린다. <b>지난 날짜</b>를 고른 채로 열면 제목이 "10월 6일 · 점심"이 되고 그 날짜로 저장된다. <b>목표 칼로리 수정</b>은 시트가 아니라 위 섭취 칼로리 카드를 눌러서 한다.',
+};
+
+const mhead = (extra = '') => `<div class="mhead"><b>‹&nbsp; 점심 ▾</b><div class="r"><i>•••</i><span>완료</span></div></div>${extra}`;
+const thin = (now, pct, add = 0) => `<div class="thin"><span>오늘 <b>${now}</b> / 2,100</span><div class="bar"><em></em><i style="width:${pct}%"></i>${add ? `<i class="add" style="left:${pct}%;width:${add}%"></i>` : ''}</div></div>`;
+const chipsRow = `<div class="chips"><span class="chip p">어제 점심 그대로</span><span class="chip">닭가슴살 샐러드</span><span class="chip">프로틴 1스쿱</span><span class="chip">전체</span></div>`;
+const dock = (text, filled, cls = '', plusOn = false) => `<div class="dock ${cls}">${chipsRow}<div class="row"><div class="more ${plusOn ? 'on' : ''}">＋</div><div class="input ${filled ? 'filled' : ''}">${text}<div class="send ${filled ? 'on' : ''}">↑</div></div></div></div>`;
+const kbd = `<div class="kbd">${[10, 9, 7].map(n => `<div>${'<span></span>'.repeat(n)}</div>`).join('')}<div class="sp"><span></span><span></span><span></span></div></div>`;
+const listed = `<div class="tot"><span>점심</span><b>760kcal</b></div><div class="list">${parsed}</div>`;
+const body = inner => `<div class="sheet" style="border-radius:22px 22px 0 0">${inner}</div>`;
+concepts.f = {
+  title: '끼니 화면 · 기본 흐름', sub: '한 화면에 한 끼니. 입력창은 맨 아래 고정, 적으면 위에 쌓인다',
+  frames: [
+    col('① 끼니 화면이 열린다', '맨 위는 오늘 섭취량 한 줄, 가운데는 비어 있다', mhead() + body(`${thin('320', 15)}<div class="empty"><b>점심에 뭐 드셨어요?</b>아래에 편하게 적어주세요</div>${dock('예: 제육덮밥이랑 콜라', false)}`)),
+    col('② 적는다', '키보드가 올라와도 입력창과 칩이 그 위에 붙는다', mhead() + body(`${thin('320', 15)}<div class="empty" style="padding-bottom:330px"></div>${dock('제육덮밥이랑 콜라', true, 'kb')}${kbd}`)),
+    col('③ 위에 쌓인다', '양만 − + 로 맞춘다. 바로 저장되고, 완료를 누르면 닫힌다', mhead() + body(`${thin('1,080', 15, 36)}${listed}${dock('더 먹은 게 있으면 적어주세요', false)}`)),
+  ],
+  note: `<b>기록하기 버튼이 없다.</b> 보내는 순간 저장되고, "완료"나 ‹ 를 누르면 홈으로 돌아간다. 잘못 넣은 건 음식을 눌러 빼면 된다.
+  <table><tr><th>얼마나 자주 쓰나</th><th>기능</th><th>어디에 있나</th></tr>
+  <tr><td>매번</td><td>한 줄로 적기 (AI가 풀어줌)</td><td>맨 아래 입력창 — 항상 보임</td></tr>
+  <tr><td>자주</td><td>어제 그대로 · 내 음식 · 최근 먹은 것</td><td>입력창 위 칩 한 줄 — 누르면 바로 들어감</td></tr>
+  <tr><td>넣은 뒤</td><td>양 조절</td><td>음식 줄의 − +</td></tr>
+  <tr><td>가끔</td><td>영양정보 고치기 · 내 음식으로 저장 · 빼기</td><td>음식을 누르면 뜨는 작은 시트</td></tr>
+  <tr><td>가끔</td><td>식품 검색 · 영양정보 직접 입력 · 내 음식 전체</td><td>입력창 왼쪽 ＋ 안</td></tr>
+  <tr><td>드물게</td><td>끼니 옮기기 · 기록 복사 · 이 끼니 비우기</td><td>오른쪽 위 ••• 안 (끼니 옮기기는 제목을 눌러도 됨)</td></tr></table>`,
+};
+concepts.g = {
+  title: '끼니 화면 · 가끔 쓰는 것들', sub: '평소엔 안 보이고, 필요할 때만 한 단계 안에서 나온다',
+  frames: [
+    col('④ ＋를 누르면', '적어서는 안 되는 경우의 세 가지 방법', mhead() + body(`${thin('1,080', 15, 36)}${listed}${dock('더 먹은 게 있으면 적어주세요', false, '', true)}
+      <div class="pop"><div>식품 검색<small>식약처 자료에서 정확한 값 찾기</small></div><div>영양정보 직접 입력<small>포장지에 적힌 숫자 그대로</small></div><div>내 음식 전체 보기<small>저장해 둔 음식 고르기 · 새로 등록</small></div></div>`)),
+    col('⑤ 음식을 누르면', '그 음식 하나만 고치는 작은 시트', mhead() + body(`${thin('1,080', 15, 36)}${listed}`) + `<div class="dim"></div>
+      <div class="bs"><div class="grab"></div><h3>제육덮밥<span>650kcal</span></h3>
+        <div class="item" style="margin-top:6px"><b style="font-weight:500;color:#868e96">먹은 양</b><div class="step"><i>−</i>1인분<i>+</i></div></div>
+        <div class="detail" style="margin-top:4px"><div class="grid4"><div><small>kcal</small>650</div><div><small>탄수</small>82g</div><div><small>단백질</small>23g</div><div><small>지방</small>22g</div></div></div>
+        <div class="links" style="justify-content:space-between;margin-top:14px"><span>내 음식으로 저장</span><span style="color:#e03e52">이 음식 빼기</span></div></div>`),
+    col('⑥ ••• 를 누르면', '끼니 전체에 대한 일', mhead() + body(`${thin('1,080', 15, 36)}${listed}${dock('더 먹은 게 있으면 적어주세요', false)}`) +
+      `<div class="pop right"><div>다른 끼니로 옮기기</div><div>기록 복사</div><div style="color:#e03e52">이 끼니 비우기</div></div>`),
+  ],
+  note: '<b>한 화면에서 누를 수 있는 건 네 가지뿐이다</b>: 입력창, 칩, 음식 줄, 그리고 ＋ / ••• 두 버튼. 나머지는 전부 그 안에 들어 있다. <b>목표 칼로리 수정</b>은 끼니가 아니라 하루에 대한 것이라 홈의 섭취 칼로리 카드로 옮긴다. 지금 화면의 "전체 초기화"는 끼니별 "비우기"로 바뀐다.',
+};
+
+const mhead2 = (title = '‹&nbsp; 점심 ▾', right = '<i>•••</i>') => `<div class="mhead"><b>${title}</b><div class="r">${right}</div></div>`;
+const it = (name, kcal, amount) => `<div class="it"><div class="l1"><b>${name}</b><span>${kcal}kcal</span></div><div class="l2"><span>${amount}</span><div class="big-step"><i>−</i><i>+</i></div></div></div>`;
+const listed2 = `<div class="tot"><span>점심</span><b>760kcal</b></div><div class="list">${it('제육덮밥', 650, '1인분')}${it('콜라', 110, '1캔 · 250ml')}</div>`;
+const dock2 = (text, filled, opt = {}) => `<div class="dock ${opt.kb ? 'kb' : ''}">${chipsRow}<div class="row"><div class="more ${opt.plus ? 'on' : ''}">＋</div><div class="input ${filled ? 'filled' : ''}">${text}<div class="send ${filled ? 'on' : ''}">↑</div></div></div>${opt.done ? '<div class="done">점심 기록 완료<small>· 760kcal</small></div>' : ''}</div>`;
+concepts.h = {
+  title: '끼니 화면 v2 · 기본 흐름', sub: '오른쪽 위 완료를 없애고, 맨 아래 큰 버튼을 눌러야 기록된다',
+  frames: [
+    col('① 열린다', '오른쪽 위에는 ••• 하나만', mhead2() + body(`${thin('320', 15)}<div class="empty"><b>점심에 뭐 드셨어요?</b>아래에 편하게 적어주세요</div>${dock2('예: 제육덮밥이랑 콜라', false)}`)),
+    col('② 적는 중', '입력창과 칩만. 완료 버튼은 아직 없다', mhead2() + body(`${thin('320', 15)}<div class="empty" style="padding-bottom:330px"></div>${dock2('제육덮밥이랑 콜라', true, { kb: true })}${kbd}`)),
+    col('③ 쌓였다', '음식은 두 줄: 이름·칼로리 / 양·조절. 맨 아래 완료 버튼', mhead2() + body(`${thin('320', 15, 36)}${listed2}${dock2('더 먹은 게 있으면 적어주세요', false, { done: true })}`)),
+    col('④ 완료를 누르면', '홈으로 돌아와 줄이 채워지고 막대가 늘어난다', top2 + `<div class="sheet">${intake('1,080', 51)}${mealsNoPlus(meal(760, '점심', '제육덮밥, 콜라', { new: true, noPlus: true }))}
+      <div class="toast"><div class="ai">✦ 점심에 기록했어요</div>단백질이 71g이라 저녁에 40g쯤 더 채우면 좋아요.</div>${nav(false)}</div>`),
+  ],
+  note: '<b>③의 주황색</b>은 "완료를 누르면 여기까지 온다"는 미리보기다. 숫자(320)는 아직 안 바뀌고, 완료한 뒤(④)에 1,080이 된다. <b>완료를 안 누르고 나가면</b> 적어 둔 내용은 임시로 남아, 다시 들어오면 그대로 있다.',
+};
+concepts.i = {
+  title: '끼니 화면 v2 · 가끔 쓰는 것들', sub: '단위 바꾸기는 음식 시트에, 등록은 고르기와 떨어뜨려서',
+  frames: [
+    col('⑤ 음식을 누르면', '먹은 양: 개수 ↔ g 전환이 여기 있다', mhead2() + body(`${thin('320', 15, 36)}${listed2}`) + `<div class="dim"></div>
+      <div class="bs"><div class="grab"></div><h3>제육덮밥<span>650kcal</span></h3>
+        <div class="rowline" style="margin-top:8px"><span>단위</span><div class="seg"><span class="on">개수</span><span>g</span></div></div>
+        <div class="rowline" style="padding-top:0"><span>먹은 양</span><div class="big-step" style="gap:10px"><i>−</i><b style="color:#171a1d;font-size:15px">1인분</b><i>+</i></div></div>
+        <div class="detail" style="margin-top:4px"><div class="grid4"><div><small>kcal</small>650</div><div><small>탄수</small>82g</div><div><small>단백질</small>23g</div><div><small>지방</small>22g</div></div></div>
+        <div class="links" style="justify-content:space-between;margin-top:14px"><span>내 음식으로 저장</span><span style="color:#e03e52">이 음식 빼기</span></div></div>`),
+    col('⑥ ＋를 누르면', '전부 "넣는" 방법 셋. 등록은 여기 없다', mhead2() + body(`${thin('320', 15, 36)}${listed2}${dock2('더 먹은 게 있으면 적어주세요', false, { plus: true, done: true })}
+      <div class="pop" style="bottom:128px"><div>내 음식<small>저장해 둔 음식에서 고르기</small></div><div>식품 검색<small>식약처 자료에서 정확한 값 찾기</small></div><div>영양정보 직접 입력<small>포장지에 적힌 숫자 그대로</small></div></div>`)),
+    col('⑦ 내 음식', '누르면 바로 점심에 들어간다. 새로 만들기는 맨 아래 작게', mhead2('‹&nbsp; 내 음식', '') + body(`<div class="search">음식 이름으로 찾기</div>
+      <div class="list"><div class="food"><div>닭가슴살 샐러드<small>1접시 · 단백질 38g</small></div><span>420kcal</span></div><div class="food"><div>프로틴 1스쿱<small>30g · 단백질 24g</small></div><span>120kcal</span></div>
+      <div class="food"><div>미트리 닭가슴살 스테이크<small>1팩 · 단백질 21g</small></div><span>135kcal</span></div><div class="food"><div>그릭요거트<small>150g · 단백질 15g</small></div><span>140kcal</span></div></div>
+      <div class="newfood"><u>새 음식 직접 만들기</u></div>`)),
+  ],
+  note: '<b>등록하는 길은 둘이다.</b> 평소에는 방금 넣은 음식의 시트에서 "내 음식으로 저장"(⑤). 아무것도 없이 새로 만들 때만 내 음식 화면 맨 아래(⑦). <b>＋ 안의 순서</b>는 자주 쓰는 순서다: 내 음식 → 식품 검색 → 직접 입력.',
+};
+
+const h3 = (hot = '') => `<div class="h3"><span class="bk">‹</span><b><span class="${hot === 'title' ? 'hot' : ''}" style="display:inline-block;padding:3px 12px">점심<i>▾</i></span></b><span class="mr ${hot === 'more' ? 'hot' : ''}">•••</span></div>`;
+const dock3 = (text, filled, opt = {}) => `<div class="dock slim ${opt.kb ? 'kb' : ''}"><div class="row"><div class="more ${opt.plus ? 'on' : ''}">＋</div><div class="input ${filled ? 'filled' : ''}">${text}<div class="send ${filled ? 'on' : ''}">↑</div></div></div>${opt.done ? '<div class="done">점심 기록 완료<small>· 760kcal</small></div>' : ''}</div>`;
+const quickCards = `<div class="qc"><div class="tx"><small>어제 점심 그대로</small><b>540kcal</b><span>닭가슴살 샐러드, 아메리카노</span></div><span class="go">넣기</span></div>
+  <div class="qc"><div class="tx"><small>내 음식에서 고르기</small><span style="font-size:13px;color:#495057;margin-top:4px">프로틴 1스쿱 · 그릭요거트 · 닭가슴살 스테이크 …</span></div><span class="chev">›</span></div>
+  <div class="hint">또는 아래에 편하게 적어주세요</div>`;
+concepts.j = {
+  title: '끼니 화면 v3 · 기본 흐름', sub: '빈 화면에는 카드 두 개, 아래에는 입력창 하나',
+  frames: [
+    col('① 열린다', '왼쪽 ‹ 뒤로 · 가운데 제목 · 오른쪽 •••', h3() + body(`${thin('320', 15)}${quickCards}${dock3('예: 제육덮밥이랑 콜라', false)}`)),
+    col('② 적는 중', '키보드 위에는 입력창만', h3() + body(`${thin('320', 15)}${quickCards}${dock3('제육덮밥이랑 콜라', true, { kb: true })}${kbd}`)),
+    col('③ 쌓였다', '카드는 사라지고 음식 목록. 아래에 완료 버튼', h3() + body(`${thin('320', 15, 36)}${listed2}${dock3('더 먹은 게 있으면 적어주세요', false, { done: true })}`)),
+    col('④ 완료를 누르면', '홈으로 돌아와 줄이 채워지고 코치 한마디', top2 + `<div class="sheet">${intake('1,080', 51)}${mealsNoPlus(meal(760, '점심', '제육덮밥, 콜라', { new: true, noPlus: true }))}
+      <div class="toast"><div class="ai">✦ 점심에 기록했어요</div>단백질이 71g이라 저녁에 40g쯤 더 채우면 좋아요.</div>${nav(false)}</div>`),
+  ],
+  note: '<b>칩 줄을 없앴다.</b> 빠르게 넣는 방법은 빈 화면의 카드 두 개가 맡고, 음식이 들어간 뒤에는 ＋ → 내 음식으로 간다. <b>"어제 점심 그대로"</b>는 어제 그 끼니 기록이 있을 때만 나온다. 없으면 내 음식 카드 하나만 보인다.',
+};
+concepts.k = {
+  title: '끼니 화면 v3 · 가끔 쓰는 것들', sub: '음식 시트의 주인공은 영양성분 수정',
+  frames: [
+    col('⑤ 음식을 누르면', '숫자를 눌러 바로 고친다. 빼기는 휴지통 하나', h3() + body(`${thin('320', 15, 36)}${listed2}`) + `<div class="dim"></div>
+      <div class="bs"><div class="grab"></div><h3>제육덮밥<span class="trash">🗑</span></h3>
+        <div class="rowline" style="margin-top:6px"><span>먹은 양</span><div style="display:flex;align-items:center;gap:10px"><div class="seg"><span class="on">개수</span><span>g</span></div><div class="big-step" style="gap:8px"><i>−</i><b style="color:#171a1d;font-size:15px">1인분</b><i>+</i></div></div></div>
+        <div class="lab" style="margin-top:6px">영양성분 · 눌러서 고치기</div>
+        <div class="cells"><div class="ed"><small>kcal</small>650</div><div><small>탄수</small>82g</div><div><small>단백질</small>23g</div><div><small>지방</small>22g</div></div>
+        <div class="sub">고친 값은 다음부터 이 음식에 그대로 써요.</div>
+        <div class="cta" style="margin-top:14px">수정 완료</div></div>`),
+    col('⑥ ＋를 누르면', '넣는 방법 셋, 자주 쓰는 순서', h3() + body(`${thin('320', 15, 36)}${listed2}${dock3('더 먹은 게 있으면 적어주세요', false, { plus: true, done: true })}
+      <div class="pop" style="bottom:128px"><div>내 음식<small>저장된 음식에서 고르기</small></div><div>식품 검색<small>식약처 자료에서 정확한 값 찾기</small></div><div>영양정보 직접 입력<small>포장지에 적힌 숫자 그대로</small></div></div>`)),
+    col('⑦ 제목을 누르면', '끼니를 바꾼다', h3('title') + body(`${thin('320', 15, 36)}${listed2}${dock3('더 먹은 게 있으면 적어주세요', false, { done: true })}`) +
+      `<div class="pop" style="left:50%;transform:translateX(-50%);bottom:auto;top:58px;width:170px"><div>아침</div><div>오전 간식</div><div style="color:#7171ff">점심 ✓</div><div>오후 간식</div><div>저녁</div><div>야식</div></div>`),
+    col('⑧ ••• 를 누르면', '이 끼니 기록을 관리한다', h3('more') + body(`${thin('320', 15, 36)}${listed2}${dock3('더 먹은 게 있으면 적어주세요', false, { done: true })}`) +
+      `<div class="pop right" style="width:170px"><div>기록 복사</div><div style="color:#e03e52">이 끼니 비우기</div></div>`),
+  ],
+  note: '<b>⑤에서 뺀 것</b>: "내 음식으로 저장"(고치면 자동으로 저장된다), "이 음식 빼기" 글자 버튼(−를 끝까지 누르면 빠진다. g 단위일 때를 위해 휴지통만 남겼다). <b>•••</b>는 홈 카드의 •••와 같은 성격이다 — 기록을 복사하거나 지우는 메뉴.',
+};
+
+const macro = (label, now, add, goal) => `<div>${label}<b>${now}</b>${add ? `<em> +${add}</em>` : ''} / ${goal}g<div class="bar"><i style="width:${Math.round(now / goal * 100)}%"></i>${add ? `<i class="add" style="left:${Math.round(now / goal * 100)}%;width:${Math.round(add / goal * 100)}%"></i>` : ''}</div></div>`;
+const sum = (add) => `<div class="sumcard"><div class="top"><span>오늘 <b>320</b>${add ? '<em style="font-style:normal;color:#ff9137;font-weight:700"> +760</em>' : ''} / 2,100kcal</span><div class="bar"><em></em><i style="width:15%"></i>${add ? '<i class="add" style="left:15%;width:36%"></i>' : ''}</div></div>
+  <div class="mac">${macro('탄', 96, add ? 82 : 0, 260)}${macro('단', 48, add ? 23 : 0, 130)}${macro('지', 22, add ? 22 : 0, 60)}</div></div>`;
+const listed3 = `<div class="tot"><span>점심</span><b>760kcal</b></div>
+  <div class="stack"><i style="width:44%;background:#7171ff"></i><i style="width:12%;background:#3aa0ff"></i><i style="width:44%;background:#ffb057"></i></div>
+  <div class="stackl"><span><i style="background:#7171ff"></i>탄<b>82g</b></span><span><i style="background:#3aa0ff"></i>단<b>23g</b></span><span><i style="background:#ffb057"></i>지<b>22g</b></span></div>
+  <div class="list" style="margin-top:4px">${it('제육덮밥', 650, '1인분')}${it('콜라', 110, '1캔 · 250ml')}</div>`;
+const dock4 = (text, filled, opt = {}) => `<div class="dock slim ${opt.kb ? 'kb' : ''}">${opt.sug || ''}<div class="row"><div class="more ${opt.plus ? 'on' : ''}">＋</div><div class="input ${filled ? 'filled' : ''}">${text}<div class="send ${filled ? 'on' : ''}">↑</div></div></div>${opt.done ? '<div class="done">기록 완료</div>' : ''}</div>`;
+const sug = `<div class="sug"><span><mark>닭</mark>가슴살 샐러드<small>420</small></span><span><mark>닭</mark>가슴살 스테이크<small>135</small></span><span>훈제 <mark>닭</mark>다리<small>210</small></span></div>`;
+const sub = (title) => `<div class="h3"><span class="bk">‹</span><b>${title}</b><span></span></div>`;
+concepts.l = {
+  title: '끼니 화면 v4 · 기본 흐름', sub: '탄단지가 위에 늘 보이고, 칩은 적는 글자에 맞춰서만 나온다',
+  frames: [
+    col('① 열린다', '위: 오늘 칼로리와 탄단지. 가운데: 카드 두 개', h3() + body(`${sum(false)}${quickCards}${dock4('예: 제육덮밥이랑 콜라', false)}`)),
+    col('② 적는 중', '"닭"을 치면 내 음식·최근 먹은 것 중 맞는 것만 칩으로', h3() + body(`${sum(false)}${quickCards}${dock4('제육덮밥이랑 닭', true, { kb: true, sug })}${kbd}`)),
+    col('③ 쌓였다', '이 끼니의 탄단지 비율이 막대로. 버튼은 "기록 완료"', h3() + body(`${sum(true)}${listed3}${dock4('더 먹은 게 있으면 적어주세요', false, { done: true })}`)),
+    col('④ 음식을 누르면', '영양성분을 눌러 고친다', h3() + body(`${sum(true)}${listed3}`) + `<div class="dim"></div>
+      <div class="bs"><div class="grab"></div><h3>제육덮밥<span class="trash">🗑</span></h3>
+        <div class="rowline" style="margin-top:6px"><span>먹은 양</span><div style="display:flex;align-items:center;gap:10px"><div class="seg"><span class="on">개수</span><span>g</span></div><div class="big-step" style="gap:8px"><i>−</i><b style="color:#171a1d;font-size:15px">1인분</b><i>+</i></div></div></div>
+        <div class="lab" style="margin-top:6px">영양성분 · 눌러서 고치기</div>
+        <div class="cells"><div class="ed"><small>kcal</small>650</div><div><small>탄수</small>82g</div><div><small>단백질</small>23g</div><div><small>지방</small>22g</div></div>
+        <div class="sub">고친 값은 다음부터 이 음식에 그대로 써요.</div><div class="cta" style="margin-top:14px">수정 완료</div></div>`),
+  ],
+  note: '<b>위 카드</b>: 주황색 숫자와 막대는 "이 끼니를 기록하면 더해지는 양"이다. 칼로리뿐 아니라 탄·단·지 각각이 목표 대비 어디까지 차는지 보인다. <b>칩(②)</b>은 아무것도 안 쳤을 땐 없고, 글자를 치면 그 글자가 들어간 내 음식·최근 먹은 것만 나온다. 누르면 그 음식이 바로 들어간다.',
+};
+const foodRow = (n, sub2, k, on, src = '') => `<div class="food"><div>${n}${src}<small>${sub2}</small></div><div class="r"><span>${k}kcal</span><span class="ck ${on ? 'on' : ''}">${on ? '✓' : ''}</span></div></div>`;
+concepts.m = {
+  title: '끼니 화면 v4 · ＋ 안의 세 화면', sub: '내 음식 · 식품 검색 · 영양정보 직접 입력',
+  frames: [
+    col('⑤ ＋를 누르면', '넣는 방법 셋', h3() + body(`${sum(true)}${listed3}${dock4('더 먹은 게 있으면 적어주세요', false, { plus: true, done: true })}
+      <div class="pop" style="bottom:128px"><div>내 음식<small>저장된 음식에서 고르기</small></div><div>식품 검색<small>식약처 자료에서 정확한 값 찾기</small></div><div>영양정보 직접 입력<small>포장지에 적힌 숫자 그대로</small></div></div>`)),
+    col('⑥ 내 음식', '여러 개를 고르고 한 번에 넣는다', sub('내 음식') + body(`<div class="search">음식 이름으로 찾기</div>
+      <div class="list">${foodRow('닭가슴살 샐러드', '1접시 · 탄 18 단 38 지 12', 420, true)}${foodRow('프로틴 1스쿱', '30g · 탄 3 단 24 지 1', 120, true)}${foodRow('미트리 닭가슴살 스테이크', '1팩 · 탄 4 단 21 지 3', 135, false)}${foodRow('그릭요거트', '150g · 탄 6 단 15 지 5', 140, false)}</div>
+      <div class="newfood"><u>새 음식 직접 만들기</u></div><div class="stick"><div class="done" style="margin-top:0">2개 넣기</div></div>`)),
+    col('⑦ 식품 검색', '이름을 치면 식약처 자료에서 찾는다', sub('식품 검색') + body(`<div class="search on">닭가슴살</div>
+      <div class="lab" style="margin:4px 4px 0">검색 결과</div>
+      <div class="list">${foodRow('닭가슴살 (삶은 것)', '100g · 탄 0 단 23 지 1', 109, true, '<span class="src">식약처</span>')}${foodRow('닭가슴살 (구운 것)', '100g · 탄 0 단 31 지 4', 165, false, '<span class="src">식약처</span>')}${foodRow('닭가슴살 소시지', '100g · 탄 5 단 16 지 6', 138, false, '<span class="src">식약처</span>')}</div>
+      <div class="hint" style="margin-top:2px">넣은 뒤 음식을 눌러 양을 맞춰요</div><div class="stick"><div class="done" style="margin-top:0">1개 넣기</div></div>`)),
+    col('⑧ 영양정보 직접 입력', '포장지 숫자를 그대로. 붙여넣기도 된다', sub('영양정보 직접 입력') + body(`
+      <div class="field" style="margin-top:0"><label>음식 이름 <em>•</em></label><div class="box v">편의점 불고기 도시락</div></div>
+      <div class="field"><label>열량 <em>•</em></label><div class="box v">715<span>kcal</span></div></div>
+      <div class="field"><label>탄수화물 · 단백질 · 지방</label><div class="three3"><div class="box v">98<span>g</span></div><div class="box v">27<span>g</span></div><div class="box">지방<span>g</span></div></div></div>
+      <div class="paste"><b>성분표 글자 붙여넣기</b><br>"715kcal, 탄수 98g, 단백질 27g…" 처럼 붙이면 칸이 채워져요</div>
+      <div class="stick"><div class="done" style="margin-top:0">넣기</div></div>`)),
+  ],
+  note: '<b>세 화면 모두 구조가 같다</b>: 위에 찾기·입력, 가운데 목록, 아래 "넣기" 버튼. 넣으면 끼니 화면으로 돌아와 목록에 쌓인다. <b>⑥⑦</b>은 필라이즈의 "여러 개 고르고 3개 기록하기"를 가져왔다. <b>⑧</b>에 넣은 음식은 내 음식에 자동으로 저장된다.',
+};
+const k = concepts[c];
+document.getElementById('root').innerHTML = `<h1>${k.title}<small>${k.sub}</small></h1><div class="wrap">${k.frames.join(arrow)}</div><p class="note">${k.note}</p>`;
+</script>
+</body>
+</html>

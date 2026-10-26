@@ -1,10 +1,11 @@
 import { EXERCISES } from '../utils/exerciseData';
 import { getUserStorage, setUserStorage } from './userStorage';
 
-/* 사용자가 직접 적은 운동 종목 이름 (예: "케이블 푸쉬다운 (로프)").
-   기본 목록에 없는 이름만 기억해 두었다가 다음 입력 때 추천 칩으로 보여준다. */
+/* 사용자가 직접 적은 운동 종목 이름 (예: "시티드 로우- 네로우", "케이블 푸쉬다운 (로프)").
+   기본 목록에 없는 이름은 적은 그대로 전부 기억해 두었다가 다음 입력 때 추천 칩으로 보여준다.
+   예전에는 80개에서 잘려, 이미 80개가 찬 뒤에 적은 이름은 기억되지 않았다. */
 const KEY = 'workout_custom_exercises';
-const MAX = 80;
+const MAX = 600;
 
 const normalize = name => String(name || '').toLowerCase().replace(/\s/g, '');
 const BUILT_IN = new Set(EXERCISES.map(normalize));

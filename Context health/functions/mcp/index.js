@@ -5,13 +5,18 @@ const { getAuth } = require('firebase-admin/auth');
 const { getFirestore } = require('firebase-admin/firestore');
 const { ToolInputError } = require('./parse');
 const { TOOLS, callTool } = require('./tools');
+const { WRITE_TOOLS, isWriteTool, callWriteTool } = require('./write');
 const oauth = require('./oauth');
 const { readOnlyDb } = require('./readonly');
 
-const SERVER_INFO = { name: 'context-health', title: 'Context Health 기록 조회', version: '1.0.0' };
+const SERVER_INFO = { name: 'context-health', title: 'Context Health 기록', version: '1.1.0' };
+/* 조회 도구는 읽기 전용 창구로만, 쓰기 도구(./write)는 실제 DB로 실행한다. */
+const ALL_TOOLS = [...TOOLS, ...WRITE_TOOLS];
 const PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
 const INSTRUCTIONS = [
-  '사용자 본인의 운동·식단·체중·인바디 기록을 조회하는 읽기 전용 서버다. 기록을 수정하거나 추가하는 도구는 없다.',
+  '사용자 본인의 운동·식단·체중·인바디 기록을 조회하고, 운동·식단·아침 체중·프로필을 기록하거나 고칠 수 있는 서버다. 인바디는 조회만 된다.',
+  '기록을 쓰기 전에: 사용자가 기록해 달라고 한 것만 쓴다. 음식 영양 수치는 먹은 양 전체 기준으로 넣고, 성분표를 찾지 못해 추정한 값이면 추정이라고 알려라. 쓴 뒤에는 무엇을 넣었는지 한 줄로 알려라.',
+  '기존 기록을 바꾸거나 지울 때(replace_*, delete_log)는 먼저 조회해서 지금 내용을 확인하고, 지우는 것은 사용자가 분명히 요청했을 때만 한다. 지운 기록은 앱 휴지통에서 30일 안에 되살릴 수 있다.',
   '날짜는 모두 한국 시간(KST) 기준 YYYY-MM-DD다. 응답이 길어지지 않게 필요한 기간과 종목만 조회하라.',
   '운동 종목명은 사용자가 적은 그대로이며 표기가 일관되지 않다. 특정 종목을 볼 때는 list_exercises로 실제 표기를 확인한 뒤 get_workouts의 exercise 필터를 써라.',
   '세트 기록은 원문(raw)과 서버 파싱값(parsed)이 함께 온다. 둘이 어긋나 보이면 원문을 믿어라.',
@@ -162,12 +167,14 @@ async function handleRpc(message, uid) {
     };
   }
   if (method === 'ping') return { jsonrpc: '2.0', id, result: {} };
-  if (method === 'tools/list') return { jsonrpc: '2.0', id, result: { tools: TOOLS } };
+  if (method === 'tools/list') return { jsonrpc: '2.0', id, result: { tools: ALL_TOOLS } };
   if (method === 'tools/call') {
     const name = params?.name;
     try {
-      const data = await callTool(readOnlyDb(getFirestore()), uid, name, params?.arguments);
-      console.log('MCP tool call', { uid, tool: name });
+      const data = isWriteTool(name)
+        ? await callWriteTool(getFirestore(), uid, name, params?.arguments)
+        : await callTool(readOnlyDb(getFirestore()), uid, name, params?.arguments);
+      console.log('MCP tool call', { uid, tool: name, write: isWriteTool(name) });
       return { jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: JSON.stringify(data) }] } };
     } catch (error) {
       const expected = error instanceof ToolInputError;

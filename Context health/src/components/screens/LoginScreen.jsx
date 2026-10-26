@@ -2,12 +2,20 @@ import React, { useState, useEffect, useRef } from 'react';
 import { auth, authPersistenceReady, googleProvider, appleProvider } from '../../lib/firebase';
 import {
   getRedirectResult,
+  GoogleAuthProvider,
+  linkWithCredential,
   linkWithPopup,
   linkWithRedirect,
+  OAuthProvider,
+  signInWithCredential,
   signInWithCustomToken,
   signInWithPopup,
   signInWithRedirect,
 } from 'firebase/auth';
+import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
+import { Browser } from '@capacitor/browser';
+import { App as CapApp } from '@capacitor/app';
+import { isNativeApp, NATIVE_URL_SCHEME, WEB_ORIGIN } from '../../lib/native';
 import Pressable from '../common/Pressable';
 import LogoMotion from '../common/LogoMotion';
 import { APP_EPOCH, LOGO_INTRO_MS } from '../../lib/appEpoch';
@@ -67,10 +75,13 @@ const SOCIAL_OAUTH_MAX_AGE_MS = 10 * 60 * 1000;
 const SOCIAL_LABEL = { kakao: '카카오', naver: '네이버' };
 const SOCIAL_CALLBACK_RE = /^\/oauth\/(kakao|naver)\/?$/;
 
-const socialRedirectUri = (provider) => `${window.location.origin}/oauth/${provider}`;
+/* 앱에서도 카카오/네이버에 등록된 웹 주소로 돌아오게 한다. 웹 페이지가 state의 'n'을 보고 앱으로 넘겨준다(main.jsx). */
+const socialRedirectUri = (provider) => `${isNativeApp ? WEB_ORIGIN : window.location.origin}/oauth/${provider}`;
+const NATIVE_CALLBACK_RE = new RegExp(`^${NATIVE_URL_SCHEME}://oauth/(kakao|naver)/?\\?`);
 
 function randomState() {
-  return Array.from(crypto.getRandomValues(new Uint8Array(24)), b => b.toString(16).padStart(2, '0')).join('');
+  const hex = Array.from(crypto.getRandomValues(new Uint8Array(24)), b => b.toString(16).padStart(2, '0')).join('');
+  return isNativeApp ? `n${hex}` : hex;
 }
 const REDIRECT_PENDING_KEY = 'context_health_oauth_redirect_pending';
 
@@ -154,16 +165,14 @@ export default function LoginScreen({ onLogin, authReady = true }) {
   }, []); // mount 시 1회만 — onLogin ref로 최신 참조 사용
 
   /* ── 카카오/네이버 콜백 처리 (/oauth/{provider}?code=...&state=...) ── */
-  useEffect(() => {
-    const match = window.location.pathname.match(SOCIAL_CALLBACK_RE);
-    if (!match) return;
-    const provider = match[1];
+  const cancelledRef = useRef(false);
+  useEffect(() => () => { cancelledRef.current = true; }, []);
+
+  function finishSocialLogin(provider, params) {
     const label = SOCIAL_LABEL[provider];
-    const params = new URLSearchParams(window.location.search);
     const code = params.get('code');
     const returnedState = params.get('state');
     const oauthError = params.get('error');
-    window.history.replaceState(window.history.state, document.title, '/');
 
     let pending = null;
     try { pending = JSON.parse(localStorage.getItem(SOCIAL_OAUTH_KEY) || 'null'); } catch {}
@@ -172,24 +181,26 @@ export default function LoginScreen({ onLogin, authReady = true }) {
     if (oauthError) {
       const cancelledByUser = oauthError === 'access_denied' || params.get('error_code') === 'KOE403';
       if (!cancelledByUser) console.error(`[${label} Auth]`, oauthError, params.get('error_description'));
+      setLoading(null);
+      setSocialCallbackPending(false);
       setError(cancelledByUser ? '' : `${label} 로그인에 실패했습니다. 다시 시도해주세요.`);
       return;
     }
     if (!code || !pending || pending.provider !== provider || pending.state !== returnedState
       || Date.now() - pending.createdAt > SOCIAL_OAUTH_MAX_AGE_MS) {
+      setLoading(null);
       setSocialCallbackPending(false);
       setError(`${label} 로그인 요청이 만료되었습니다. 다시 시도해주세요.`);
       return;
     }
 
-    let cancelled = false;
     setLoading(provider);
     authPersistenceReady
       .then(() => exchangeSocialCode(provider, code, returnedState))
       .then(customToken => signInWithCustomToken(auth, customToken))
       .catch(e => {
         console.error(`[${label} Auth]`, e.code, e.message);
-        if (!cancelled) {
+        if (!cancelledRef.current) {
           setSocialCallbackPending(false);
           setError(e.code === 'server-error'
             ? `${label} 로그인 서버에 문제가 있습니다. 잠시 후 다시 시도해주세요.`
@@ -197,14 +208,52 @@ export default function LoginScreen({ onLogin, authReady = true }) {
         }
       })
       .finally(() => {
-        if (!cancelled) setLoading(null);
+        if (!cancelledRef.current) setLoading(null);
       });
-    return () => { cancelled = true; };
+  }
+
+  useEffect(() => {
+    const match = window.location.pathname.match(SOCIAL_CALLBACK_RE);
+    if (!match) return;
+    const params = new URLSearchParams(window.location.search);
+    window.history.replaceState(window.history.state, document.title, '/');
+    finishSocialLogin(match[1], params);
   }, []); // mount 시 1회만
+
+  /* ── 앱: 카카오/네이버 창에서 com.contexthealth.app://oauth/{provider}?code=... 로 돌아온다 ── */
+  const finishSocialLoginRef = useRef(finishSocialLogin);
+  finishSocialLoginRef.current = finishSocialLogin;
+  useEffect(() => {
+    if (!isNativeApp) return undefined;
+    const handled = new Set();
+    const handleUrl = (url) => {
+      const match = url?.match(NATIVE_CALLBACK_RE);
+      if (!match || handled.has(url)) return;
+      handled.add(url);
+      Browser.close().catch(() => {});
+      finishSocialLoginRef.current(match[1], new URLSearchParams(url.slice(url.indexOf('?'))));
+    };
+    // 로그인 창에 있는 동안 앱이 종료됐다가 이 주소로 다시 켜진 경우
+    CapApp.getLaunchUrl().then(r => handleUrl(r?.url)).catch(() => {});
+    const listener = CapApp.addListener('appUrlOpen', ({ url }) => handleUrl(url));
+    // 사용자가 로그인 창을 그냥 닫으면 버튼 로딩을 푼다.
+    const closed = Browser.addListener('browserFinished', () => {
+      setTimeout(() => {
+        if (cancelledRef.current || !localStorage.getItem(SOCIAL_OAUTH_KEY)) return; // 이미 돌아와 처리 중
+        localStorage.removeItem(SOCIAL_OAUTH_KEY);
+        setLoading(null);
+      }, 800);
+    });
+    return () => {
+      listener.then(h => h.remove());
+      closed.then(h => h.remove());
+    };
+  }, []);
 
   /* ── Google/Apple 로그인 ──
      팝업은 클릭 직후 동기적으로 열어야 Safari/iOS가 차단하지 않는다. 그 전에 await 금지. */
   async function signInWithOAuth(providerKey, provider, label) {
+    if (isNativeApp) return signInNative(providerKey, label);
     setLoading(providerKey);
     setError('');
     const startRedirect = () => {
@@ -248,6 +297,41 @@ export default function LoginScreen({ onLogin, authReady = true }) {
     }
   }
 
+  /* 앱: Google은 웹뷰 안 로그인을 막으므로 기기 기본 로그인 창을 띄우고, 받은 토큰으로 Firebase에 로그인한다. */
+  async function signInNative(providerKey, label) {
+    setLoading(providerKey);
+    setError('');
+    try {
+      let credential;
+      if (providerKey === 'apple') {
+        const r = await FirebaseAuthentication.signInWithApple({ skipNativeAuth: true });
+        credential = new OAuthProvider('apple.com').credential({ idToken: r.credential?.idToken, rawNonce: r.credential?.nonce });
+      } else {
+        const r = await FirebaseAuthentication.signInWithGoogle({ skipNativeAuth: true });
+        credential = GoogleAuthProvider.credential(r.credential?.idToken);
+      }
+      const result = await (auth.currentUser?.isAnonymous
+        ? linkWithCredential(auth.currentUser, credential)
+        : signInWithCredential(auth, credential));
+      onLoginRef.current({
+        uid:    result.user.uid,
+        name:   result.user.displayName,
+        email:  result.user.email,
+        photo:  result.user.photoURL,
+        provider: providerKey,
+      });
+    } catch (e) {
+      // 사용자가 창을 닫은 경우는 알리지 않는다(플러그인은 기기마다 다른 문구로 준다).
+      const cancelled = /cancel|canceled|cancelled|12501|1001/i.test(`${e?.code || ''} ${e?.message || ''}`);
+      if (!cancelled) {
+        console.error(`[${label} Auth native]`, e?.code, e?.message);
+        setError(authErrorMessage(label, e));
+      }
+    } finally {
+      setLoading(null);
+    }
+  }
+
   const handleGoogle = () => signInWithOAuth('google', googleProvider, 'Google');
   const handleApple = () => signInWithOAuth('apple', appleProvider, 'Apple');
 
@@ -274,6 +358,14 @@ export default function LoginScreen({ onLogin, authReady = true }) {
     const base = provider === 'kakao'
       ? 'https://kauth.kakao.com/oauth/authorize'
       : 'https://nid.naver.com/oauth2.0/authorize';
+    if (isNativeApp) {
+      Browser.open({ url: `${base}?${params}` }).catch(e => {
+        console.error(`[${SOCIAL_LABEL[provider]} Auth]`, e?.message);
+        setLoading(null);
+        setError(`${SOCIAL_LABEL[provider]} 로그인 창을 열지 못했습니다.`);
+      });
+      return;
+    }
     window.location.assign(`${base}?${params}`);
   }
 

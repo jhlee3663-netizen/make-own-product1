@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>홈 날짜 띠 시안</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Pretendard, 'Apple SD Gothic Neo', sans-serif; background: #e9ecef; padding: 32px; letter-spacing: -0.025em; color: #171a1d; }
+  .row { display: flex; gap: 32px; align-items: flex-start; }
+  .col { display: flex; flex-direction: column; gap: 12px; }
+  .cap { font-size: 15px; font-weight: 700; color: #495057; }
+  .cap small { display: block; font-weight: 500; font-size: 13px; color: #868e96; margin-top: 2px; }
+  .phone { width: 390px; height: 820px; background: #f8f9fa; border-radius: 28px; overflow: hidden; position: relative; box-shadow: 0 8px 32px rgba(0,0,0,.12); }
+  .top { background: #fff; padding: 52px 0 0; }
+  .head { display: flex; align-items: center; justify-content: space-between; padding: 0 20px 14px; }
+  .date { font-size: 20px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+  .date i { width: 0; height: 0; border: 5px solid transparent; border-top: 6px solid #171a1d; margin-top: 6px; }
+  .today { font-size: 12px; font-weight: 600; color: #7171ff; background: rgba(113,113,255,.1); padding: 4px 10px; border-radius: 99px; }
+  .week { display: flex; padding: 0 8px 10px; }
+  .day { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .day span { font-size: 12px; color: #adb5bd; font-weight: 500; }
+  .day b { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 600; color: #495057; }
+  .day.on b { background: #7171ff; color: #fff; }
+  .day.future b { color: #ced4da; }
+  .day em { width: 5px; height: 5px; border-radius: 50%; background: transparent; }
+  .day.did em { background: #7171ff; }
+  .tabs { display: flex; border-top: 1px solid #f1f3f5; }
+  .tabs div { flex: 1; text-align: center; padding: 10px 0; font-size: 16px; font-weight: 500; color: #868e96; border-bottom: 2px solid transparent; }
+  .tabs .on { color: #7171ff; font-weight: 700; border-color: #7171ff; }
+  .body { padding: 14px 16px 0; display: flex; flex-direction: column; gap: 12px; }
+  .card { background: #fff; border-radius: 20px; padding: 18px 20px; box-shadow: 0 2px 12px rgba(3,27,38,.05); }
+  .slim { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; }
+  .slim p { font-size: 14px; color: #495057; font-weight: 500; }
+  .slim b { font-size: 15px; font-weight: 700; }
+  .link { font-size: 13px; font-weight: 700; color: #7171ff; }
+  .label { font-size: 12px; font-weight: 600; color: #868e96; padding: 6px 4px 0; display: flex; align-items: center; gap: 8px; }
+  .label::after { content: ''; flex: 1; height: 1px; background: #e9ecef; }
+  .badge { display: inline-block; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 10px; background: rgba(113,113,255,.1); color: #7171ff; }
+  .badge.grey { background: #f1f3f5; color: #868e96; }
+  .title { display: flex; justify-content: space-between; align-items: baseline; margin-top: 10px; }
+  .title b { font-size: 18px; font-weight: 700; }
+  .title span { font-size: 13px; color: #868e96; }
+  .chips { display: flex; gap: 6px; margin-top: 12px; overflow: hidden; white-space: nowrap; }
+  .chips span { font-size: 13px; font-weight: 500; color: #495057; background: #f1f3f5; padding: 6px 12px; border-radius: 99px; }
+  .msg { margin-top: 14px; padding-top: 12px; border-top: 1px solid #f1f3f5; font-size: 13px; font-weight: 600; color: #7171ff; }
+  .kcal { display: flex; align-items: baseline; gap: 6px; }
+  .kcal b { font-size: 26px; font-weight: 700; }
+  .kcal span { font-size: 14px; color: #868e96; }
+  .bar { height: 8px; border-radius: 4px; background: #f1f3f5; margin-top: 12px; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 88%; background: linear-gradient(90deg, rgba(113,113,255,.3), #7171ff); border-radius: 4px; }
+  .macros { display: flex; gap: 16px; margin-top: 12px; font-size: 13px; color: #868e96; }
+  .macros b { color: #171a1d; font-weight: 700; margin-left: 4px; }
+  .meal { display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid #f1f3f5; }
+  .meal:last-child { border: 0; padding-bottom: 0; } .meal:first-child { padding-top: 0; }
+  .meal p { font-size: 12px; color: #868e96; font-weight: 600; }
+  .meal b { display: block; font-size: 15px; font-weight: 600; margin-top: 2px; }
+  .meal span { font-size: 14px; font-weight: 600; color: #495057; }
+  .meal.empty b { color: #ced4da; font-weight: 500; }
+  .nav { position: absolute; left: 0; right: 0; bottom: 0; height: 72px; background: #fff; border-radius: 20px 20px 0 0; box-shadow: 0 -4px 16px rgba(0,0,0,.05); display: flex; align-items: center; justify-content: space-around; font-size: 11px; color: #ced4da; font-weight: 600; }
+  .nav .on { color: #7171ff; }
+  .back { font-size: 12px; font-weight: 600; color: #495057; background: #f1f3f5; padding: 4px 10px; border-radius: 99px; }
+  .slim .right { display: flex; align-items: center; gap: 10px; }
+  .big { display: flex; justify-content: space-between; align-items: flex-end; }
+  .big p { font-size: 13px; color: #868e96; font-weight: 600; margin-bottom: 6px; }
+  .mini { display: flex; align-items: flex-end; gap: 5px; height: 40px; }
+  .mini div { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 9px; color: #adb5bd; }
+  .mini i { width: 7px; border-radius: 4px; background: rgba(113,113,255,.2); display: block; }
+  .mini .on i { background: #7171ff; } .mini .on { color: #7171ff; font-weight: 700; }
+  .range { position: relative; height: 8px; border-radius: 4px; background: #f1f3f5; margin-top: 16px; }
+  .range .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 60%; border-radius: 4px; background: linear-gradient(90deg, rgba(113,113,255,.3), #7171ff); }
+  .range .zone { position: absolute; left: 62%; width: 18%; top: -3px; bottom: -3px; border-radius: 4px; background: repeating-linear-gradient(135deg, rgba(113,113,255,.28) 0 3px, rgba(113,113,255,.08) 3px 6px); }
+  .scale { display: flex; justify-content: space-between; font-size: 11px; color: #adb5bd; margin-top: 8px; }
+  .scale b { color: #7171ff; font-weight: 600; }
+  .meal2 { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #f1f3f5; }
+  .meal2:last-child { border: 0; padding-bottom: 0; } .meal2:first-child { padding-top: 0; }
+  .meal2 .k { width: 46px; height: 46px; border-radius: 50%; background: #f1f3f5; flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; line-height: 1.1; }
+  .meal2 .k small { font-size: 9px; font-weight: 500; color: #868e96; }
+  .meal2 .t { flex: 1; min-width: 0; }
+  .meal2 .t b { font-size: 15px; font-weight: 700; display: block; }
+  .meal2 .t span { font-size: 13px; color: #868e96; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .meal2 .plus { width: 28px; height: 28px; border-radius: 50%; background: rgba(113,113,255,.1); color: #7171ff; font-size: 18px; font-weight: 500; display: flex; align-items: center; justify-content: center; flex: none; }
+  .meal2.none .k { color: #ced4da; } .meal2.none .t span { color: #ced4da; }
+  .spark { width: 56px; height: 20px; }
+  .fab { width: 52px; height: 52px; border-radius: 50%; background: #7171ff; margin-top: -28px; }
+</style>
+</head>
+<body>
+<div class="row" id="root"></div>
+<script>
+const DAYS = ['월', '화', '수', '목', '금', '토', '일'];
+const NUMS = [5, 6, 7, 8, 9, 10, 11];
+const DID = [5, 6];           // 운동한 날
+const TODAY = 7;
+
+function header(selected, tab) {
+  const label = `10월 ${selected}일 ${DAYS[NUMS.indexOf(selected)]}`;
+  return `<div class="top">
+    <div class="head"><div class="date">${label}<i></i></div>${selected === TODAY ? '<span class="today">오늘</span>' : '<span class="back">오늘로 ›</span>'}</div>
+    <div class="week">${NUMS.map((n, i) => `<div class="day ${n === selected ? 'on' : ''} ${n > TODAY ? 'future' : ''} ${DID.includes(n) ? 'did' : ''}"><span>${DAYS[i]}</span><b>${n}</b><em></em></div>`).join('')}</div>
+    <div class="tabs"><div class="${tab === 'w' ? 'on' : ''}">운동</div><div class="${tab === 'd' ? 'on' : ''}">식단</div></div>
+  </div>`;
+}
+const nav = `<div class="nav"><span class="on">홈</span><span>코치</span><div class="fab"></div><span>분석</span><span>마이</span></div>`;
+const workout = (badge, grey, title, date, chips, msg) => `<div class="card">
+  <span class="badge ${grey ? 'grey' : ''}">${badge}</span>
+  <div class="title"><b>${title}</b><span>${date}</span></div>
+  <div class="chips">${chips.map(c => `<span>${c}</span>`).join('')}</div>
+  <div class="msg">${msg}</div></div>`;
+const recent = `<div class="label">최근 기록</div>`
+  + workout('성공 🔥', false, '유산소', '10. 5', ['걷기', '천국의 계단'], '오늘 유산소 30분 기록!')
+  + workout('성공 🔥', false, '하체', '10. 4', ['스쿼트', '레그 익스텐션', '레그 컬'], '볼륨 7,963kg, 4.2% 과부하 성공!');
+
+const frames = [
+  { cap: '① 운동 탭 · 운동한 날을 고름', sub: '그날 기록이 맨 위, 아래로 최근 기록', html: header(6, 'w') + `<div class="body">
+      <div class="card slim"><p>아침 공복 체중</p><div class="right"><svg class="spark" viewBox="0 0 56 20"><path d="M1 6 C10 5 14 9 22 10 S34 8 40 13 S50 15 54 14" fill="none" stroke="#7171ff" stroke-width="1.6" stroke-linecap="round"/><circle cx="54" cy="14" r="2.5" fill="#7171ff"/></svg><b>72.1kg</b></div></div>
+      ${workout('아쉬워요 💭', true, '삼두, 이두, 유산소', '10. 6', ['케이블 푸쉬다운', '해머 컬', '천국의 계단'], '볼륨 3,874kg, 29% 과부하 실패!')}
+      <div class="label">이전 기록</div>
+      ${workout('성공 🔥', false, '유산소', '10. 5', ['걷기', '천국의 계단'], '오늘 유산소 30분 기록!')}
+    </div>` },
+  { cap: '② 운동 탭 · 운동 안 한 날(오늘)', sub: '빈 화면 대신 짧은 안내 + 최근 기록', html: header(7, 'w') + `<div class="body">
+      <div class="card slim"><p>아침 공복 체중</p><span class="link">입력하기</span></div>
+      <div class="card slim"><p>오늘은 아직 운동 기록이 없어요</p><span class="link">기록하기</span></div>
+      ${recent}
+    </div>` },
+  { cap: '③ 식단 탭 · 고른 날짜의 식단만', sub: '식단은 하루 단위로 딱 떨어짐', html: header(6, 'd') + `<div class="body">
+      <div class="card">
+        <div class="big"><div><p>섭취 칼로리</p><div class="kcal"><b>1,850</b><span>/ 2,100kcal</span></div></div><div class="mini"><div class=""><i style="height:18px"></i>1</div><div class=""><i style="height:23px"></i>2</div><div class=""><i style="height:15px"></i>3</div><div class=""><i style="height:26px"></i>4</div><div class=""><i style="height:21px"></i>5</div><div class="on"><i style="height:22px"></i>6</div></div></div>
+        <div class="range"><div class="zone"></div><div class="fill"></div></div>
+        <div class="scale"><span>0</span><b>적정 1,900~2,300</b><span>3,000</span></div>
+        <div class="macros"><span>탄수<b>210g</b></span><span>단백질<b>112g</b></span><span>지방<b>58g</b></span></div>
+      </div>
+      <div class="card"><div class="meal2 "><div class="k">320<small>kcal</small></div><div class="t"><b>아침</b><span>그릭요거트, 바나나</span></div><div class="plus">+</div></div><div class="meal2 "><div class="k">540<small>kcal</small></div><div class="t"><b>점심</b><span>닭가슴살 샐러드, 아메리카노</span></div><div class="plus">+</div></div><div class="meal2 none"><div class="k">0<small>kcal</small></div><div class="t"><b>오후 간식</b><span>아직 기록이 없어요</span></div><div class="plus">+</div></div><div class="meal2 "><div class="k">990<small>kcal</small></div><div class="t"><b>저녁</b><span>소고기 덮밥, 된장국</span></div><div class="plus">+</div></div></div>
+    </div>` },
+];
+document.getElementById('root').innerHTML = frames.map(f => `<div class="col"><div class="cap">${f.cap}<small>${f.sub}</small></div><div class="phone">${f.html}${nav}</div></div>`).join('');
+</script>
+</body>
+</html>

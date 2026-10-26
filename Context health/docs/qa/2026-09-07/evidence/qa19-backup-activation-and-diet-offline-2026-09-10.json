@@ -1,0 +1,133 @@
+{
+  "checkedAt": "2026-09-10T17:57:51+09:00",
+  "updatedAt": "2026-09-11T09:41:57+09:00",
+  "productionFirestore": {
+    "projectId": "context-health-3eb84",
+    "sourceDatabase": "(default)",
+    "location": "asia-northeast3",
+    "mutationsAuthorized": true,
+    "sourceDataMutated": false,
+    "applicationCodeMutated": false,
+    "dailyBackupSchedule": {
+      "resource": "projects/context-health-3eb84/databases/(default)/backupSchedules/de252b68-b9f2-4894-85ef-b1e492b239a6",
+      "createdAt": "2026-09-10T08:44:50.146957Z",
+      "retention": "1209600s",
+      "recurrence": "DAILY"
+    },
+    "pointInTimeRecovery": {
+      "state": "POINT_IN_TIME_RECOVERY_ENABLED",
+      "versionRetentionPeriod": "604800s"
+    },
+    "deleteProtection": "DELETE_PROTECTION_ENABLED",
+    "databaseSettingsUpdatedAt": "2026-09-10T08:44:58.406449Z",
+    "firstBackup": {
+      "resource": "projects/context-health-3eb84/locations/asia-northeast3/backups/6b1f136c-254d-4ff0-9aff-c94f2616443f",
+      "snapshotTime": "2026-09-10T08:46:14.976854Z",
+      "expireTime": "2026-09-24T08:46:14.976854Z",
+      "state": "READY"
+    },
+    "restore": {
+      "targetDatabase": "qa-restore-20260910",
+      "operation": "projects/context-health-3eb84/databases/qa-restore-20260910/operations/mgS6O0Ckw6oJQ5URwDMlPhAqM3RzYWVodHJvbi1haXNhDyIKECUa",
+      "startedAt": "2026-09-10T08:55:00.961970Z",
+      "stateAtEvidenceWrite": "SUCCESSFUL",
+      "completedAt": "2026-09-10T09:05:14.155571Z",
+      "elapsedSeconds": 613.194,
+      "sourceAtBackupSnapshot": {
+        "readTime": "2026-09-10T08:46:14.976854Z",
+        "totals": {
+          "users": 5,
+          "logs": 98,
+          "coachRooms": 8
+        },
+        "ownershipChecks": {
+          "logsMissingUid": 0,
+          "logsUnknownOwner": 0,
+          "roomsUnknownOwner": 0
+        },
+        "perOwnerByUidSha256Prefix": {
+          "40a93764ce2f": { "logs": 0, "coachRooms": 0 },
+          "04d593d9453d": { "logs": 90, "coachRooms": 6 },
+          "2a1839a14e8a": { "logs": 0, "coachRooms": 2 },
+          "03f87daa7723": { "logs": 0, "coachRooms": 0 },
+          "d0655841b267": { "logs": 8, "coachRooms": 0 }
+        }
+      },
+      "restoredDatabase": {
+        "totals": {
+          "users": 5,
+          "logs": 98,
+          "coachRooms": 8
+        },
+        "ownershipChecks": {
+          "logsMissingUid": 0,
+          "logsUnknownOwner": 0,
+          "roomsUnknownOwner": 0
+        },
+        "perOwnerByUidSha256Prefix": {
+          "40a93764ce2f": { "logs": 0, "coachRooms": 0 },
+          "04d593d9453d": { "logs": 90, "coachRooms": 6 },
+          "2a1839a14e8a": { "logs": 0, "coachRooms": 2 },
+          "03f87daa7723": { "logs": 0, "coachRooms": 0 },
+          "d0655841b267": { "logs": 8, "coachRooms": 0 }
+        }
+      },
+      "collectionCountComparison": "EXACT_MATCH",
+      "ownershipComparison": "EXACT_MATCH",
+      "indexComparison": {
+        "sourceCompositeIndexes": 2,
+        "restoredCompositeIndexes": 2,
+        "exactMatch": true
+      },
+      "ttlComparison": {
+        "sourceFieldOverrides": 0,
+        "restoredFieldOverrides": 0,
+        "exactMatch": true
+      },
+      "rtoTarget": "4h",
+      "rtoResult": "PASS",
+      "cleanup": {
+        "authorizedAt": "2026-09-11",
+        "deleteProtectionDisabledAt": "2026-09-11T00:41:47.799178Z",
+        "deletedAt": "2026-09-11T00:41:57.340071Z",
+        "deletedDatabase": "qa-restore-20260910",
+        "postDeleteDatabaseList": ["(default)"],
+        "postDeleteSourceRead": {
+          "users": 5,
+          "logs": 98,
+          "coachRooms": 8
+        },
+        "postDeleteHostingHttp": 200,
+        "postDeleteManifestHttp": 200,
+        "sourceDatabaseProtectionPreserved": true,
+        "dailyBackupSchedulePreserved": true
+      }
+    }
+  },
+  "dietOfflineBrowserE2E": {
+    "environment": "Chrome, Vite localhost, Firebase Auth and Firestore emulators",
+    "account": "pseudonymous emulator diet test account",
+    "steps": [
+      "Enter an unparsed breakfast note and wait for local draft persistence",
+      "Close the browser tab, reopen the same origin, and confirm the exact note is restored",
+      "Stop Firestore, press save, and confirm the 8 second timeout keeps the input and re-enables save",
+      "Close the tab, restart Auth and Firestore from an emulator export, and reopen the same UID",
+      "Confirm the exact draft is restored and retry save online",
+      "Query the emulator with Admin SDK and confirm exactly one diet log document",
+      "Open a new diet record and confirm the breakfast draft value is empty"
+    ],
+    "results": {
+      "draftRestoredAfterTabClose": true,
+      "offlineTimeoutMessageShown": true,
+      "inputPreservedAfterTimeout": true,
+      "saveReenabledAfterTimeout": true,
+      "draftRestoredAfterEmulatorRestart": true,
+      "onlineRetrySucceeded": true,
+      "dietDocumentCount": 1,
+      "duplicateDocumentObserved": false,
+      "savedDocumentContainedExpectedBreakfastText": true,
+      "draftClearedAfterConfirmedSave": true
+    },
+    "verdict": "PASS"
+  }
+}

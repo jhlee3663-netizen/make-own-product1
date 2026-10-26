@@ -1,0 +1,61 @@
+[
+  {
+    "path": "/",
+    "status": 200,
+    "contentType": "text/html; charset=utf-8",
+    "cacheControl": "no-cache, no-store, must-revalidate",
+    "sha256": "752a4150246f9a5950dc9b035a1a69a436aff04e14e8b9f70f8bf0602a5f7e49"
+  },
+  {
+    "path": "/sw.js",
+    "status": 200,
+    "contentType": "text/javascript; charset=utf-8",
+    "cacheControl": "no-cache, no-store, must-revalidate",
+    "sha256": "440bba878af95b9e2e91bacdcfe0f3ba940ca33b1644845a138e784effb93400",
+    "includesSkipWaiting": true,
+    "includesClientsClaim": true,
+    "cachesGemini": false,
+    "cachesFirestore": false
+  },
+  {
+    "path": "/manifest.webmanifest",
+    "status": 200,
+    "contentType": "application/manifest+json",
+    "cacheControl": "no-cache, no-store, must-revalidate",
+    "sha256": "e65ca2516945c457f8acf57dcc458b3c2b9274daa23edfc12a5231d3e03e1c3a"
+  },
+  {
+    "path": "/assets/index-CKOo1DWA.js",
+    "status": 200,
+    "contentType": "text/javascript; charset=utf-8",
+    "cacheControl": "max-age=3600",
+    "sha256": "f7480d83f12b1e5271ea7ca20c49ee3547043f077cb1f6469b322ee2ed8b8c30",
+    "geminiKeyPresent": true,
+    "matchesFreshLocalBuild": true
+  },
+  {
+    "path": "/assets/index-BGY0rgCc.css",
+    "status": 200,
+    "contentType": "text/css; charset=utf-8",
+    "cacheControl": "max-age=3600",
+    "sha256": "b41fa5fc4308afb91b62a302202eb201a317db143c4c2c0833d321708584cd19"
+  },
+  {
+    "path": "/api/social-auth",
+    "test": "unauthenticated invalid input",
+    "status": 400,
+    "body": "{\"error\":\"invalid-request\"}"
+  },
+  {
+    "path": "/api/delete-account",
+    "test": "unauthenticated invalid input",
+    "status": 404,
+    "body": "\n<html><head>\n<meta http-equiv=\"content-type\" content=\"text/html;charset=utf-8\">\n<title>404 Page not found</title>\n</head>\n<body text=#000000 bgcolor=#ffffff>\n<h1>Error: Page not found</h1>\n<h2>The requested URL was not found on this server.</h2>\n<h2></h2>\n</body></html>\n"
+  },
+  {
+    "test": "Apple provider createAuthUri",
+    "status": 400,
+    "error": "OPERATION_NOT_ALLOWED : The identity provider configuration is not found.",
+    "authUriPresent": false
+  }
+]

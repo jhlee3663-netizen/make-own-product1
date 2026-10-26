@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>친구 탭 시안 2</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Pretendard, 'Apple SD Gothic Neo', sans-serif; background: #e9ecef; padding: 28px 32px; letter-spacing: -0.025em; color: #171a1d; width: 1560px; }
+  h1 { font-size: 20px; font-weight: 700; } h1 small { font-size: 14px; font-weight: 500; color: #868e96; margin-left: 8px; }
+  .wrap { display: flex; gap: 22px; align-items: flex-start; margin-top: 16px; }
+  .col { display: flex; flex-direction: column; gap: 10px; }
+  .cap { font-size: 14px; font-weight: 700; color: #495057; height: 40px; }
+  .cap small { display: block; font-weight: 500; font-size: 12px; color: #868e96; margin-top: 2px; }
+  .phone { width: 350px; height: 740px; background: #7171ff; border-radius: 26px; overflow: hidden; position: relative; box-shadow: 0 8px 28px rgba(0,0,0,.12); display: flex; flex-direction: column; }
+  .phone.white { background: #fff; }
+  .head { display: flex; justify-content: space-between; align-items: center; padding: 22px 20px 16px; color: #fff; }
+  .head b { font-size: 20px; font-weight: 700; } .head span { font-size: 13px; font-weight: 600; opacity: .85; }
+  .head .pill { background: rgba(255,255,255,.18); padding: 6px 12px; border-radius: 99px; opacity: 1; }
+  .sheet { flex: 1; background: #f8f9fa; border-radius: 24px 24px 0 0; padding: 16px 16px 90px; display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
+  .label { font-size: 13px; font-weight: 600; color: #868e96; padding: 4px 4px 0; display: flex; justify-content: space-between; }
+  .label a { color: #7171ff; text-decoration: none; }
+  .card { background: #fff; border-radius: 20px; box-shadow: 0 2px 12px rgba(3,27,38,.05); }
+  .fade { height: 1px; background: linear-gradient(90deg, rgba(241,243,245,0), #f1f3f5 22%, #f1f3f5 78%, rgba(241,243,245,0)); }
+  .row { display: flex; align-items: center; gap: 12px; padding: 14px 18px; }
+  .av { width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; color: #fff; flex: none; position: relative; }
+  .av.done::after { content: ''; position: absolute; right: -1px; bottom: -1px; width: 12px; height: 12px; border-radius: 50%; background: #7171ff; border: 2px solid #fff; }
+  .who { flex: 1; min-width: 0; }
+  .who b { font-size: 15px; font-weight: 700; display: block; }
+  .who span { font-size: 13px; color: #868e96; display: block; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .who span.off { color: #ced4da; }
+  .clap { flex: none; height: 30px; padding: 0 10px; border-radius: 99px; background: rgba(113,113,255,.1); color: #7171ff; font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 4px; }
+  .clap.on { background: #7171ff; color: #fff; }
+  .today { font-weight: 700; background-image: linear-gradient(-34.5deg, #f79fff 0%, #3aa0ff 103%); -webkit-background-clip: text; color: transparent; }
+  /* 이번 주 표 */
+  .grid { padding: 14px 18px 16px; }
+  .grid .days, .grid .line { display: grid; grid-template-columns: 52px repeat(7, 1fr); align-items: center; }
+  .grid .days span { font-size: 11px; color: #adb5bd; text-align: center; }
+  .grid .days span.t { color: #7171ff; font-weight: 700; }
+  .grid .line { height: 30px; }
+  .grid .line b { font-size: 13px; font-weight: 600; color: #495057; }
+  .dot { width: 22px; height: 22px; border-radius: 7px; margin: 0 auto; background: #f1f3f5; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: #fff; }
+  .dot.y { background: linear-gradient(135deg, #a5a5ff, #7171ff); }
+  .dot.r { background: transparent; }
+  .sum { font-size: 12px; color: #868e96; padding: 0 18px 14px; }
+  .sum b { color: #7171ff; }
+  /* 하단 내비 */
+  .nav { position: absolute; left: 0; right: 0; bottom: 0; height: 64px; background: #fff; border-top: 1px solid #f1f3f5; display: grid; grid-template-columns: repeat(5, 1fr); align-items: center; text-align: center; font-size: 10px; color: #adb5bd; font-weight: 600; }
+  .nav i { display: block; width: 22px; height: 22px; border-radius: 7px; background: #e9ecef; margin: 0 auto 4px; }
+  .nav .on { color: #7171ff; } .nav .on i { background: #7171ff; }
+  .nav .plus i { width: 40px; height: 40px; border-radius: 50%; background: #7171ff; margin-bottom: 0; }
+  /* 친구 기록 보기 */
+  .top { display: flex; align-items: center; gap: 10px; padding: 20px 16px 14px; }
+  .top .back { font-size: 22px; color: #495057; width: 24px; }
+  .top b { font-size: 17px; font-weight: 700; flex: 1; }
+  .prof { display: flex; align-items: center; gap: 14px; padding: 4px 20px 18px; }
+  .prof .av { width: 56px; height: 56px; font-size: 19px; }
+  .prof b { font-size: 18px; font-weight: 700; display: block; }
+  .prof span { font-size: 13px; color: #868e96; }
+  .stats { display: flex; gap: 8px; padding: 0 16px 16px; }
+  .stats div { flex: 1; background: #f8f9fa; border-radius: 14px; padding: 10px 12px; }
+  .stats small { font-size: 11px; color: #868e96; display: block; }
+  .stats b { font-size: 16px; font-weight: 700; }
+  .wsheet { flex: 1; background: #f8f9fa; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
+  .wc { padding: 16px 18px; }
+  .wc .h { display: flex; justify-content: space-between; align-items: center; }
+  .wc .h b { font-size: 16px; font-weight: 700; }
+  .wc .h span { font-size: 13px; color: #868e96; }
+  .badge { display: inline-block; font-size: 11px; font-weight: 700; color: #7171ff; background: rgba(113,113,255,.1); padding: 3px 8px; border-radius: 99px; margin-top: 8px; }
+  .ex { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+  .ex p { font-size: 13px; color: #495057; display: flex; justify-content: space-between; }
+  .ex p span { color: #868e96; }
+  .wc .fade { margin: 12px 0; }
+  .copy { display: flex; align-items: center; justify-content: center; gap: 6px; height: 40px; border-radius: 12px; background: rgba(113,113,255,.1); color: #7171ff; font-size: 14px; font-weight: 700; }
+  .react { display: flex; gap: 6px; margin-top: 10px; }
+  .react span { font-size: 12px; padding: 4px 9px; border-radius: 99px; background: #f1f3f5; color: #495057; }
+  .react span.me { background: rgba(113,113,255,.12); color: #7171ff; font-weight: 700; }
+  /* 초대 */
+  .center { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 0 28px; gap: 10px; }
+  .center .ill { width: 120px; height: 84px; position: relative; margin-bottom: 10px; }
+  .center .ill .av { position: absolute; width: 56px; height: 56px; font-size: 18px; border: 3px solid #f8f9fa; }
+  .center b { font-size: 19px; font-weight: 700; line-height: 1.4; }
+  .center p { font-size: 14px; color: #868e96; line-height: 1.5; }
+  .btn { height: 52px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; width: 100%; }
+  .btn.kakao { background: #fee500; color: #191919; }
+  .btn.sub { background: #f1f3f5; color: #495057; }
+  .btn.main { background: #7171ff; color: #fff; }
+  .btns { display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: 18px; }
+  /* 공개 범위 */
+  .opt { display: flex; align-items: center; padding: 16px 18px; gap: 12px; }
+  .opt .t { flex: 1; } .opt .t b { font-size: 15px; font-weight: 600; display: block; } .opt .t span { font-size: 12px; color: #868e96; }
+  .tg { width: 46px; height: 28px; border-radius: 99px; background: #dee2e6; position: relative; flex: none; }
+  .tg::after { content: ''; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+  .tg.on { background: #7171ff; } .tg.on::after { left: 21px; }
+  .note { font-size: 12px; color: #868e96; line-height: 1.5; padding: 0 6px; }
+  .modal { position: absolute; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: flex-end; }
+  .msheet { background: #fff; width: 100%; border-radius: 24px 24px 0 0; padding: 26px 20px 22px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; }
+  .msheet .av { width: 60px; height: 60px; font-size: 20px; }
+  .msheet b { font-size: 18px; font-weight: 700; margin-top: 6px; }
+  .msheet p { font-size: 14px; color: #868e96; line-height: 1.5; }
+  .chips { display: flex; gap: 6px; margin-top: 4px; }
+  .chips span { font-size: 12px; padding: 5px 10px; border-radius: 99px; background: #f1f3f5; color: #495057; }
+  .chips span.no { color: #adb5bd; text-decoration: line-through; }
+</style>
+<style>
+  .sheetm { background:#fff; width:100%; border-radius:24px 24px 0 0; padding:22px 20px 20px; }
+  .sheetm h3 { font-size:18px; font-weight:700; } .sheetm .s { font-size:13px; color:#868e96; margin-top:4px; }
+  .imp { margin-top:16px; display:flex; flex-direction:column; }
+  .imp .r { display:flex; align-items:center; padding:11px 0; gap:10px; }
+  .imp .n { flex:1; font-size:14px; font-weight:600; } .imp .n small { display:block; font-size:12px; color:#adb5bd; font-weight:500; margin-top:2px; }
+  .imp .v { font-size:14px; font-weight:700; color:#7171ff; background:rgba(113,113,255,.08); padding:6px 10px; border-radius:10px; }
+  .imp .v.g { color:#868e96; background:#f1f3f5; font-weight:600; }
+  .seg { display:flex; background:#f1f3f5; border-radius:12px; padding:3px; margin-top:14px; }
+  .seg span { flex:1; text-align:center; font-size:13px; font-weight:600; color:#868e96; padding:8px 0; border-radius:10px; }
+  .seg span.on { background:#fff; color:#171a1d; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+  .cm { display:flex; gap:10px; padding:10px 0; }
+  .cm .av { width:30px; height:30px; font-size:12px; }
+  .cm b { font-size:13px; font-weight:700; } .cm b small { font-weight:500; color:#adb5bd; margin-left:6px; font-size:11px; }
+  .cm p { font-size:14px; color:#343a40; margin-top:2px; line-height:1.45; }
+  .cm .tag { color:#7171ff; font-weight:600; }
+  .input { position:absolute; left:0; right:0; bottom:0; background:#fff; padding:10px 14px 18px; border-top:1px solid #f1f3f5; display:flex; gap:8px; align-items:center; }
+  .input div { flex:1; height:42px; border-radius:21px; background:#f1f3f5; display:flex; align-items:center; padding:0 16px; font-size:14px; color:#adb5bd; }
+  .input i { width:36px; height:36px; border-radius:50%; background:#7171ff; flex:none; }
+  .nt { display:flex; gap:12px; padding:14px 18px; align-items:flex-start; }
+  .nt .av { width:38px; height:38px; font-size:14px; }
+  .nt .ic { position:absolute; right:-3px; bottom:-3px; width:18px; height:18px; border-radius:50%; background:#fff; font-size:10px; display:flex; align-items:center; justify-content:center; box-shadow:0 1px 3px rgba(0,0,0,.15); }
+  .nt .tx { flex:1; font-size:14px; line-height:1.45; color:#343a40; } .nt .tx b { font-weight:700; color:#171a1d; }
+  .nt .tx small { display:block; font-size:12px; color:#adb5bd; margin-top:3px; }
+  .nt.new { background:rgba(113,113,255,.05); }
+  .nt .mini { font-size:12px; font-weight:700; color:#7171ff; background:rgba(113,113,255,.1); padding:6px 10px; border-radius:99px; flex:none; align-self:center; }
+  .bell { position:relative; width:36px; height:36px; border-radius:50%; background:rgba(255,255,255,.18); display:flex; align-items:center; justify-content:center; }
+  .bell::after { content:''; position:absolute; top:7px; right:8px; width:8px; height:8px; border-radius:50%; background:#ff7043; border:2px solid #7171ff; }
+  .week { display:flex; justify-content:space-between; padding:0 20px 18px; color:#fff; }
+  .week span { width:36px; text-align:center; font-size:12px; opacity:.75; } .week span b { display:block; font-size:16px; margin-top:4px; opacity:1; }
+  .week span.on { opacity:1; } .week span.on b { background:#fff; color:#7171ff; border-radius:50%; width:32px; height:32px; line-height:32px; margin:4px auto 0; }
+  .push { position:absolute; left:10px; right:10px; top:150px; background:rgba(255,255,255,.96); border-radius:18px; padding:12px 14px; display:flex; gap:10px; box-shadow:0 8px 24px rgba(0,0,0,.18); z-index:5; }
+  .push i { width:34px; height:34px; border-radius:9px; background:#7171ff; flex:none; }
+  .push b { font-size:13px; font-weight:700; display:block; } .push span { font-size:13px; color:#495057; }
+</style>
+</head>
+<body>
+<h1>친구 탭 시안 2 <small>댓글 · 무게 맞춰 가져오기 · 알림</small></h1>
+<div class="wrap">
+
+  <div class="col">
+    <div class="cap">⑤ 홈 오른쪽 위 종 + 푸시<small>친구가 운동하면 알림 · 빨간 점 = 안 읽음</small></div>
+    <div class="phone">
+      <div class="push"><i></i><div><b>Context Health</b><span>민수님이 방금 가슴·어깨 운동을 마쳤어요 💪</span></div></div>
+      <div class="head" style="padding-top:26px"><b>10월 15일 수</b><div class="bell"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M6 9a6 6 0 1112 0c0 5 2 6 2 6H4s2-1 2-6zM10 19a2 2 0 004 0" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div></div>
+      <div class="week"><span>월<b>13</b></span><span>화<b>14</b></span><span class="on">수<b>15</b></span><span>목<b>16</b></span><span>금<b>17</b></span><span>토<b>18</b></span><span>일<b>19</b></span></div>
+      <div class="sheet"><div class="card" style="height:200px"></div><div class="card" style="height:160px"></div></div>
+      <div class="nav"><div class="on"><i></i>홈</div><div><i></i>분석</div><div class="plus"><i></i></div><div><i></i>친구</div><div><i></i>마이</div></div>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="cap">⑥ 알림 페이지<small>종을 누르면 · 운동 · 박수 · 댓글 · 초대</small></div>
+    <div class="phone white">
+      <div class="top"><span class="back">‹</span><b>알림</b></div>
+      <div class="wsheet" style="padding:0;background:#fff;gap:0">
+        <div class="label" style="padding:8px 20px 6px">오늘</div>
+        <div class="nt new"><div class="av" style="background:#ff8fa3">민<span class="ic">💪</span></div><div class="tx"><b>민수</b>님이 가슴·어깨 운동을 마쳤어요<small>12분 전 · 12,400kg</small></div><span class="mini">👏</span></div>
+        <div class="nt new"><div class="av" style="background:#38c9a0">지<span class="ic">💬</span></div><div class="tx"><b>지훈</b>님이 내 등 운동에 댓글을 남겼어요 “데드 140 미쳤다 ㅋㅋ”<small>1시간 전</small></div></div>
+        <div class="nt"><div class="av" style="background:#ff8fa3">민<span class="ic">👏</span></div><div class="tx"><b>민수</b>님 외 1명이 내 등 운동에 박수를 보냈어요<small>2시간 전</small></div></div>
+        <div class="fade" style="margin:6px 18px"></div>
+        <div class="label" style="padding:8px 20px 6px">이번 주</div>
+        <div class="nt"><div class="av" style="background:#ff8fa3">민<span class="ic">↧</span></div><div class="tx"><b>민수</b>님이 내 하체 루틴을 가져갔어요<small>10. 14</small></div></div>
+        <div class="nt"><div class="av" style="background:#ffb547">서<span class="ic">👉</span></div><div class="tx"><b>서연</b>님이 콕 찔렀어요. 오늘 운동 어때요?<small>10. 13</small></div></div>
+        <div class="nt"><div class="av" style="background:#ffb547">서<span class="ic">🤝</span></div><div class="tx"><b>서연</b>님이 친구 초대를 수락했어요<small>10. 13</small></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="cap">⑦ 기록에 댓글<small>친구 기록 카드를 누르면 · 친구끼리만 보임</small></div>
+    <div class="phone white">
+      <div class="top"><span class="back">‹</span><b>민수 · 가슴·어깨</b></div>
+      <div class="wsheet" style="background:#fff;padding-bottom:80px">
+        <div class="card wc" style="box-shadow:none;background:#f8f9fa">
+          <div class="h"><b>가슴 · 어깨</b><span class="today">오늘</span></div>
+          <div class="ex">
+            <p>벤치프레스 <span>90kg × 5 × 5</span></p>
+            <p>인클라인 덤벨 프레스 <span>30kg × 10 × 3</span></p>
+            <p>오버헤드 프레스 <span>50kg × 8 × 4</span></p>
+          </div>
+          <div class="react"><span class="me">👏 나</span><span>👏 지훈</span></div>
+        </div>
+        <div class="label" style="padding:4px 2px 0"><span>댓글 3</span></div>
+        <div>
+          <div class="cm"><div class="av" style="background:#38c9a0">지</div><div><b>지훈<small>40분 전</small></b><p>벤치 90 5x5 실화냐 ㄷㄷ</p></div></div>
+          <div class="cm"><div class="av" style="background:#ff8fa3">민</div><div><b>민수<small>32분 전</small></b><p><span class="tag">@지훈</span> 마지막 세트 4개 겨우 ㅋㅋ 다음주 92.5 간다</p></div></div>
+          <div class="cm"><div class="av" style="background:#7171ff">나</div><div><b>나<small>방금</small></b><p>인클라인 덤벨 순서 앞으로 빼는 거 좋다 나도 해봐야지</p></div></div>
+        </div>
+      </div>
+      <div class="input"><div>댓글 달기</div><i></i></div>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="cap">⑧ 루틴 가져오기 · 무게 맞추기<small>내가 했던 무게가 있으면 그걸로, 없으면 비율로</small></div>
+    <div class="phone white">
+      <div class="top"><span class="back">‹</span><b>민수</b></div>
+      <div class="wsheet"><div class="card" style="height:240px"></div></div>
+      <div class="modal">
+        <div class="sheetm">
+          <h3>내 무게로 맞춰서 가져올게요</h3>
+          <p class="s">세트·횟수는 민수 루틴 그대로, 무게만 나에게 맞춰요</p>
+          <div class="seg"><span class="on">내 기록 기준</span><span>민수 무게 그대로</span><span>비워두기</span></div>
+          <div class="imp">
+            <div class="r"><div class="n">벤치프레스<small>민수 90kg · 내 지난번 72.5kg</small></div><span class="v">72.5kg × 5 × 5</span></div>
+            <div class="fade"></div>
+            <div class="r"><div class="n">인클라인 덤벨 프레스<small>민수 30kg · 내 지난번 24kg</small></div><span class="v">24kg × 10 × 3</span></div>
+            <div class="fade"></div>
+            <div class="r"><div class="n">오버헤드 프레스<small>민수 50kg · 내 기록 없음 → 벤치 비율로 추정</small></div><span class="v">40kg × 8 × 4</span></div>
+            <div class="fade"></div>
+            <div class="r"><div class="n">사이드 레터럴 레이즈<small>민수 10kg · 내 기록 없음</small></div><span class="v g">직접 입력</span></div>
+          </div>
+          <div class="btns" style="margin-top:16px"><div class="btn main">오늘 메모로 가져오기</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

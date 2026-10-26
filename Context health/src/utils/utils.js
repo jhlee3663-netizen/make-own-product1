@@ -1,4 +1,5 @@
 import { BODYWEIGHT_BASES } from './exerciseData';
+import { compareWithPrevious, gradeSession } from '../lib/strengthProgress';
 
 function isBodyweightBase(title) {
   if (!title) return false;
@@ -211,15 +212,11 @@ export function findComparableLastVolumeFromLogs(logs, currentSections, currentT
 }
 
 /* 홈 카드 상단 성공/아쉬움 뱃지 판정. 디로딩 세션은 항상 성공으로 취급하고,
-   그 외에는 직전 비교 가능한 기록 대비 볼륨을 유지/증가했는지로 판정한다. */
+   그 외에는 종목별 탑세트 추정 1RM을 직전 같은 종목과 비교해 올린 종목 수 ≥ 떨어진 종목 수면 성공 (src/lib/strengthProgress.js).
+   olderLogs는 이 기록보다 오래된 기록(최신순). */
 export function getWorkoutPerfGrade(log, olderLogs = []) {
   const isDeload = /디로딩/.test(log.overloadMsg || log.aiComment || '');
-  if (isDeload) return 'success';
-  const totalVolume = log.totalVolume || 0;
-  if (totalVolume === 0) return 'success';
-  const lastVolume = findComparableLastVolumeFromLogs(olderLogs, log.sections || [], log.title || '', log.docId || log.id);
-  if (!lastVolume) return 'success';
-  return totalVolume >= lastVolume ? 'success' : 'meh';
+  return gradeSession(compareWithPrevious(log.sections || [], olderLogs), { deload: isDeload });
 }
 
 export function buildWorkoutSummaryMessage(totalVolume, lastVolume = 0, mode = 'overload', cardioMinutes = 0) {

@@ -1,4 +1,5 @@
 import { auth } from './firebase';
+import { apiUrl } from './native';
 
 /* Claude 커넥터(MCP) 연결 관리. 서버(/api/mcp-oauth/*)가 Firebase ID 토큰으로 본인을 확인한다. */
 
@@ -30,7 +31,7 @@ async function post(action, body) {
   const user = auth.currentUser;
   if (!user) throw new Error('unauthenticated');
   const token = await user.getIdToken();
-  const res = await fetch(`/api/mcp-oauth/${action}`, {
+  const res = await fetch(apiUrl(`/api/mcp-oauth/${action}`), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify(body || {}),

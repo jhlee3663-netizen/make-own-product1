@@ -1,0 +1,73 @@
+{
+  "date": "2026-09-09",
+  "environment": {
+    "app": "Vite 127.0.0.1:5177",
+    "firebaseProject": "demo-context-health",
+    "authEmulator": "127.0.0.1:9099",
+    "firestoreEmulator": "127.0.0.1:8080",
+    "browser": "Codex in-app Chromium, desktop viewport",
+    "productionDataTouched": false
+  },
+  "results": [
+    {
+      "id": "QA-03",
+      "status": "pass",
+      "steps": ["Open a new workout", "Enter QA bench press 60kg x 10", "Double-click Save"],
+      "evidence": { "firestoreLogCount": 1, "documentId": "ZlpwFMmHaaHH8etHMNNO" }
+    },
+    {
+      "id": "QA-05-browser-back",
+      "status": "pass",
+      "steps": ["Enter text in a new workout", "Use browser Back", "Choose Continue editing"],
+      "evidence": { "dialogVisible": true, "inputPreserved": true }
+    },
+    {
+      "id": "QA-06",
+      "status": "pass",
+      "steps": ["Save 60kg revision with a 1500ms AI delay", "Reopen immediately", "Save 80kg revision", "Wait for both AI responses"],
+      "evidence": { "sameDocument": true, "finalOriginalText": "80kg x 10", "finalSectionBody": "80kg x 10", "aiStatus": "done" }
+    },
+    {
+      "id": "QA-07-unparsed",
+      "status": "pass",
+      "steps": ["Enter breakfast text without AI analysis", "Save", "Reopen the saved diet card"],
+      "evidence": { "firestoreField": "unparsedInputs.breakfast", "savedAndRestored": true }
+    },
+    {
+      "id": "QA-04-profile-timeout",
+      "status": "pass-after-fix",
+      "steps": ["Open profile editing", "Stop Firestore while keeping Auth available", "Change weight to 63", "Save and wait"],
+      "evidence": { "timeoutMs": 8000, "inlineErrorVisible": true, "toastVisible": true, "editingRetained": true, "inputPreserved": "63", "saveReenabled": true }
+    },
+    {
+      "id": "QA-21-workout-ai-tab-close",
+      "status": "pass-after-fix",
+      "steps": ["Save a workout with a 10000ms AI delay", "Close the tab 120ms after Save", "Wait past the mock response", "Reopen the app", "Age the emulator-only job beyond the 120000ms stale threshold", "Retry from the card"],
+      "evidence": { "documentId": "Lw61RyVNEncW4b1Q3wTO", "beforeFixStatus": "processing", "originalTextPreserved": "99kg x 10", "fallbackSummaryPreserved": true, "staleMessageVisible": true, "retryButtonVisible": true, "retryFinished": true }
+    },
+    {
+      "id": "QA-07-diet-save-during-analysis",
+      "status": "pass",
+      "steps": ["Start delayed dinner AI analysis", "Save before analysis finishes", "Wait for the abandoned response", "Reopen the diet card"],
+      "evidence": { "documentId": "7hUcLuBl0t6HXu87vZgg", "firestoreField": "unparsedInputs.dinner", "restoredInput": "QA_DIET_DELAY unique_20260909_1" }
+    },
+    {
+      "id": "QA-07-diet-save-after-ai-failure",
+      "status": "pass",
+      "steps": ["Force both diet AI requests to fail", "Dismiss the error alert", "Save", "Reopen the diet card"],
+      "evidence": { "errorAlertVisible": true, "inputPreservedBeforeSave": true, "restoredInput": "QA_DIET_FAIL unique_20260909_2" }
+    },
+    {
+      "id": "RESPONSIVE-390x844",
+      "status": "pass-browser-emulation",
+      "steps": ["Set browser viewport to 390x844", "Inspect workout dashboard", "Inspect diet dashboard", "Reset viewport"],
+      "evidence": { "workoutCardReadable": true, "dietCardReadable": true, "logoVisible": true, "bottomNavigationVisible": true, "overlapObserved": false },
+      "limitation": "Browser viewport emulation does not verify Android hardware back or iOS swipe behavior."
+    }
+  ],
+  "stillUnverified": [
+    "Android hardware back",
+    "iOS swipe back",
+    "real mobile slow-network retries"
+  ]
+}

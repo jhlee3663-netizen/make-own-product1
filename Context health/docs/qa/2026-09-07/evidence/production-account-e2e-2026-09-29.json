@@ -1,0 +1,58 @@
+{
+  "verifiedAt": "2026-09-29T15:49:00+09:00",
+  "project": "context-health-3eb84",
+  "account": "disposable Google test account",
+  "result": "PASS_WITH_NEW_P2",
+  "journey": {
+    "googleLogin": "PASS",
+    "profileEmailMatchedExpectedTestAccount": true,
+    "authenticatedAiProxy": {
+      "result": "PASS",
+      "responsePersistedAfterReload": true
+    },
+    "workout": {
+      "result": "PASS",
+      "documentsCreated": 1,
+      "displayedVolumeKg": 200,
+      "aiNormalizationCompleted": true
+    },
+    "diet": {
+      "result": "PASS",
+      "documentsCreated": 1,
+      "displayedKcal": 77,
+      "aiNutritionAnalysisCompleted": true
+    },
+    "reload": "PASS: workout, diet and AI conversation remained",
+    "logoutRelogin": "PASS: same account restored workout and AI conversation",
+    "deleteAccount": {
+      "result": "PASS_WITH_RESIDUAL_METADATA",
+      "functionReported": {
+        "logs": 2,
+        "coachRooms": 1,
+        "user": 1,
+        "auth": true
+      },
+      "postDeleteVerification": {
+        "authEmailMatches": 0,
+        "userDocument": 0,
+        "logs": 0,
+        "coachRooms": 0,
+        "aiUsage": 1,
+        "accountDeletions": 1
+      },
+      "manualTestResidueCleanup": {
+        "aiUsageDeleteStatus": 200,
+        "accountDeletionsDeleteStatus": 200,
+        "bothAbsentAfterCleanup": true
+      }
+    }
+  },
+  "newFinding": {
+    "id": "QA-22",
+    "severity": "P2",
+    "title": "회원 탈퇴 후 UID 연결 서버 메타데이터가 남음",
+    "status": "CONFIRMED_NOT_FIXED",
+    "scope": "aiUsage and accountDeletions only; Auth, profile, health logs and coach conversations were deleted",
+    "recommendation": "Define a retention policy. Delete aiUsage during successful account deletion and either remove accountDeletions after completion or retain a non-identifying, TTL-bound audit record with documented purpose."
+  }
+}

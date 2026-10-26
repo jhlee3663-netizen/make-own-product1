@@ -1,0 +1,13 @@
+{
+  "authorizedDomains": [
+    "localhost",
+    "context-health-3eb84.firebaseapp.com",
+    "context-health-3eb84.web.app"
+  ],
+  "providers": [
+    {
+      "name": "projects/419860500152/defaultSupportedIdpConfigs/google.com",
+      "enabled": true
+    }
+  ]
+}

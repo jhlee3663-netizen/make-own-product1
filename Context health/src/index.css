@@ -56,7 +56,9 @@ body {
 .tab-panel {
   position: absolute;
   inset: 0;
-  transition: transform 420ms cubic-bezier(0.42, 0, 0.58, 1);
+  /* 토스식: 화면을 끝까지 밀지 않는다. 쉬는 탭은 제자리에서 5%만 비켜 서서 투명하게 기다린다(App.jsx tabStyle).
+     누르면 떠나는 화면은 바로 사라지고, 들어오는 화면은 바로 보인 채 남은 5%만 스윽 들어와 멈춘다. */
+  transition: transform 450ms cubic-bezier(0.25, 1, 0.5, 1), opacity 40ms linear;
   will-change: transform;
   pointer-events: none;
 }
@@ -115,21 +117,21 @@ body {
   animation: slideOutToRight 350ms cubic-bezier(0.4, 0, 1, 1) forwards;
 }
 
-.memo-menu {
-  transition: opacity .15s ease-out;
+/* 기록 선택지: 가운데 버튼에서 튀어나오듯 나타난다 (살짝 지나쳤다 돌아오는 탄성). 식단이 조금 늦게 따라 나온다. */
+.memo-option {
   opacity: 0;
-  pointer-events: none;
+  transform: translate(var(--from-x, 0), 72px) scale(0.3);
+  transition: transform 220ms cubic-bezier(0.4, 0, 1, 1), opacity 160ms ease-in;
 }
-
-.memo-menu.open {
+.memo-option.open {
   opacity: 1;
-  pointer-events: auto;
-  animation: memoMenuEnter .2s ease-out;
+  transform: none;
+  transition: transform 460ms cubic-bezier(0.25, 1.45, 0.45, 1), opacity 160ms ease-out;
 }
-
-@keyframes memoMenuEnter {
-  from { transform: translate(-50%, 8px); }
-  to { transform: translate(-50%, 0); }
+.memo-option.open:nth-child(2) { transition-delay: 50ms; }
+.memo-icon { transition: transform 260ms cubic-bezier(0.3, 1.3, 0.5, 1), opacity 160ms ease; }
+@media (prefers-reduced-motion: reduce) {
+  .memo-option, .memo-option.open, .memo-icon { transition: opacity 120ms ease; transform: none; }
 }
 
 .bottom-sheet {
@@ -338,6 +340,7 @@ textarea:focus {
 .stagger-in > :nth-child(6) { animation-delay: 325ms; }
 .stagger-in > :nth-child(7) { animation-delay: 390ms; }
 .stagger-in > :nth-child(n+8) { animation-delay: 455ms; }
+.stagger-in > :nth-child(n+10):not(.card-exit-wrapper) { animation: none; }
 .stagger-in > .card-exit-wrapper { animation-delay: 0ms; }
 
 /* 그래프 등장: 선은 왼쪽에서 오른쪽으로 그려지고, 막대는 왼쪽부터 하나씩 올라온다 */
@@ -367,11 +370,116 @@ textarea:focus {
   .stagger-in > *, .chart-draw, .chart-wipe, .chart-bar, .chart-grow-x, .chart-dot { animation: none; }
 }
 
+/* 식단 기록 화면: 시트·팝업·하위 화면. 닫힐 때도 들어온 길로 돌아간다.
+   나가는 모션은 끝 모양을 75%에서 잡아 두고, 그 사이(200ms)에 화면에서 걷어낸다 (forwards를 쓰지 않으려고) */
+@keyframes dietViewIn { from { opacity: 0; transform: translateX(24px); } }
+@keyframes dietViewOut { 75%, 100% { opacity: 0; transform: translateX(24px); } }
+@keyframes dietSheetOut { 75%, 100% { transform: translateY(100%); } }
+@keyframes dietFadeOut { 75%, 100% { opacity: 0; } }
+@keyframes dietPopUp { from { opacity: 0; transform: translateY(8px) scale(0.96); } }
+.diet-view-in { animation: dietViewIn 280ms cubic-bezier(0.2, 0.8, 0.3, 1) backwards; }
+.diet-view-out { animation: dietViewOut 270ms ease-in; pointer-events: none; }
+.diet-sheet-in { animation: bottomSheetUp 400ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+.diet-sheet-out { animation: dietSheetOut 270ms ease-in; }
+.diet-fade-in { animation: bsFadeIn 220ms ease-out backwards; }
+.diet-fade-out { animation: dietFadeOut 270ms ease-in; }
+.diet-pop { animation: dropdownEnter 200ms cubic-bezier(0.2, 0.8, 0.3, 1) backwards; }
+.diet-pop-up { animation: dietPopUp 200ms cubic-bezier(0.2, 0.8, 0.3, 1) backwards; }
+.diet-plus { transition: width 220ms cubic-bezier(0.2, 0.8, 0.3, 1), margin 220ms cubic-bezier(0.2, 0.8, 0.3, 1), opacity 180ms; }
+.diet-turn { transition: transform 220ms cubic-bezier(0.3, 1.3, 0.45, 1); }
+.diet-check { transition: transform 220ms cubic-bezier(0.3, 1.35, 0.5, 1); }
+.diet-input { box-shadow: 0 4px 16px rgba(113, 113, 255, 0.18); transition: box-shadow 200ms ease-out; }
+.diet-input.is-focused { box-shadow: 0 6px 20px rgba(113, 113, 255, 0.32); }
+.diet-bar { transition: width 420ms cubic-bezier(0.2, 0.8, 0.3, 1), left 420ms cubic-bezier(0.2, 0.8, 0.3, 1); }
+
+@media (prefers-reduced-motion: reduce) {
+  .diet-view-in, .diet-view-out, .diet-sheet-in, .diet-sheet-out, .diet-fade-in, .diet-fade-out, .diet-pop, .diet-pop-up { animation: none; }
+  .diet-plus, .diet-turn, .diet-check, .diet-bar, .diet-input { transition: none; }
+}
+
 /* 홈: 점 표의 점은 왼쪽부터 톡톡 나타나고, 폴더 탭의 흰 바탕은 옆으로 미끄러진다 */
 .chart-dot-in { animation: chartDot 300ms ease-out backwards; animation-delay: var(--d, 0ms); }
 .home-tab-slider { transition: transform 380ms cubic-bezier(0.3, 1.15, 0.4, 1); will-change: transform; }
+/* 탭의 흰 바탕: 평소엔 아래가 각져 시트와 이어진다. 시트를 당기면 목이 가늘어지다 끊어지고,
+   끊어지는 순간 탭은 알약 모양으로 튕겨 올라가며(위쪽 기준으로 늘어났다 줄었다) 자리를 잡는다. */
+.home-tab-shape { border-radius: 24px 24px 0 0; transform-origin: top center; transition: border-radius 320ms cubic-bezier(0.3, 1.3, 0.5, 1); }
+.home-tab-shape.is-detached { border-radius: 24px; animation: homeTabSnap 520ms cubic-bezier(0.25, 0.8, 0.3, 1); }
+@keyframes homeTabSnap {
+  0%   { transform: scaleY(1.22); }
+  35%  { transform: scaleY(0.92); }
+  62%  { transform: scaleY(1.05); }
+  82%  { transform: scaleY(0.99); }
+  100% { transform: scaleY(1); }
+}
+/* 끊어진 뒤 시트 쪽에 남은 방울이 탄력 있게 가라앉는다 */
+.home-drip {
+  position: absolute; bottom: 0; width: 64px; height: 14px; margin-left: -32px;
+  background: #f8f9fa; border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  transform-origin: bottom center; animation: homeDrip 460ms cubic-bezier(0.25, 0.8, 0.3, 1) forwards;
+}
+@keyframes homeDrip {
+  0%   { transform: scale(1, 1); }
+  40%  { transform: scale(1.5, 0); }
+  60%  { transform: scale(1.2, 0.22); }
+  100% { transform: scale(1.4, 0); }
+}
 .home-day { transition: background-color 180ms ease, color 180ms ease; }
 @media (prefers-reduced-motion: reduce) {
   .chart-dot-in { animation: none; }
-  .home-tab-slider, .home-day { transition: none; }
+  .home-tab-slider, .home-day, .home-tab-shape { transition: none; }
+  .home-tab-shape.is-detached, .home-drip { animation: none; }
+  .home-drip { display: none; }
+}
+
+/* 구분선은 전부 가운데만 보이고 양 끝으로 사라지는 그라데이션 선이다 */
+.fade-line { height: 1px; background: linear-gradient(90deg, rgba(241,243,245,0), #f1f3f5 22%, #f1f3f5 78%, rgba(241,243,245,0)); }
+
+/* 피드·친구 화면: 오른쪽에서 밀려 들어오고, 닫힐 때 같은 길로 나간다 */
+@keyframes socialScreenOut { 75%, 100% { transform: translateX(100%); } }
+.social-screen-in { animation: slideInFromRight 380ms cubic-bezier(0.25, 1, 0.5, 1) backwards; }
+.social-screen-out { animation: socialScreenOut 300ms cubic-bezier(0.4, 0, 1, 1); pointer-events: none; }
+/* 박수: 누르면 톡 커졌다 제자리 */
+@keyframes clapPop { 0% { transform: scale(1); } 40% { transform: scale(1.28); } 100% { transform: scale(1); } }
+.clap-pop { animation: clapPop 360ms cubic-bezier(0.3, 1.35, 0.5, 1); }
+/* 스토리 진행 바 */
+@keyframes storyProgress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.story-progress { transform-origin: left; animation: storyProgress linear forwards; }
+@media (prefers-reduced-motion: reduce) {
+  .social-screen-in, .social-screen-out, .clap-pop { animation: none; }
+}
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+/* 분석 탭을 옆으로 밀어 넘겼을 때: 민 방향에서 들어온다 */
+@keyframes swipeInRight { from { transform: translateX(40px); opacity: 0.4; } }
+@keyframes swipeInLeft { from { transform: translateX(-40px); opacity: 0.4; } }
+.swipe-in-right { animation: swipeInRight 320ms cubic-bezier(0.25, 1, 0.5, 1) backwards; }
+.swipe-in-left { animation: swipeInLeft 320ms cubic-bezier(0.25, 1, 0.5, 1) backwards; }
+@media (prefers-reduced-motion: reduce) { .swipe-in-right, .swipe-in-left { animation: none; } }
+/* AI가 생각하는 중: 그라데이션 글자가 흐르고, 진행 중인 단계는 숨 쉬듯 깜빡이고, 새 단계는 톡 나타난다 */
+@keyframes aiTextFlow { from { background-position: 0% 50%; } to { background-position: 200% 50%; } }
+.ai-text-flow {
+  background: linear-gradient(90deg, #228bed, #c509d6, #7171ff, #228bed);
+  background-size: 200% 100%;
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: aiTextFlow 2.4s linear infinite;
+}
+@keyframes thinkingText { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+.thinking-text { animation: thinkingText 1.4s ease-in-out infinite; }
+@keyframes thinkingPulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(0.72); opacity: 0.6; } }
+.thinking-pulse { animation: thinkingPulse 1.1s ease-in-out infinite; }
+@keyframes stepPop { 0% { opacity: 0; transform: translateY(6px) scale(0.92); } 60% { opacity: 1; transform: translateY(0) scale(1.03); } 100% { transform: none; } }
+.step-pop { animation: stepPop 420ms cubic-bezier(0.3, 1.35, 0.5, 1) backwards; }
+@keyframes thinkingDot { 0%, 80%, 100% { opacity: 0.2; } 40% { opacity: 1; } }
+.thinking-dots span { animation: thinkingDot 1.2s ease-in-out infinite; }
+.thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+.thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+@media (prefers-reduced-motion: reduce) {
+  .ai-text-flow, .thinking-text, .thinking-pulse, .step-pop, .thinking-dots span { animation: none; }
+}
+
+/* Surface Duo처럼 화면 두 장을 펼친 기기: 가운데 경첩에 앱이 걸리지 않게 왼쪽 화면 한 장에만 띄운다 */
+@media (horizontal-viewport-segments: 2) {
+  .app-stage { justify-content: flex-start; }
+  .app-frame { width: env(viewport-segment-width 0 0, 100%); max-width: none; }
 }

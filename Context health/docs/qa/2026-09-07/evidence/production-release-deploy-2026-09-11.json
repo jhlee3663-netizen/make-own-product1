@@ -1,0 +1,107 @@
+{
+  "verifiedAt": "2026-09-11T10:15:00+09:00",
+  "project": "context-health-3eb84",
+  "result": "PARTIAL_PASS",
+  "deployments": {
+    "firestoreIndexes": {
+      "result": "PASS",
+      "logsUidDeletedAt": {
+        "resource": "projects/context-health-3eb84/databases/(default)/collectionGroups/logs/indexes/CICAgJim14AK",
+        "state": "READY",
+        "fields": ["uid ASC", "deletedAt DESC", "__name__ DESC"]
+      }
+    },
+    "firestoreRules": {
+      "result": "PASS",
+      "ruleset": "projects/context-health-3eb84/rulesets/f389cb3b-e9d0-4563-b81a-7dd456e32039",
+      "releasedAt": "2026-09-11T01:06:07.455031Z",
+      "emulatorRegression": "18/18"
+    },
+    "functions": {
+      "result": "PASS",
+      "aiGenerate": {
+        "state": "ACTIVE",
+        "runtime": "nodejs20",
+        "sourceHash": "1323606fcabaf2c17031b95e85aecb0d37038a23",
+        "secret": "GEMINI_KEY version 1",
+        "unauthenticatedProbe": "401 unauthorized"
+      },
+      "deleteAccount": {
+        "state": "ACTIVE",
+        "runtime": "nodejs20",
+        "sourceHash": "83866fa80c3ff08f908a46ff24a0ce8777d24f6c",
+        "unauthenticatedProbe": "401 unauthorized"
+      },
+      "unchanged": ["socialAuth", "sentryWebhook"]
+    },
+    "hosting": {
+      "result": "PASS",
+      "version": "75104a651bb4db45",
+      "url": "https://context-health-3eb84.web.app",
+      "assets": {
+        "javascript": "/assets/index-Cxwdw8c_.js",
+        "css": "/assets/index-B3-IeXOd.css",
+        "javascriptSha256": "e7aef90ce391ad1a12a1130285c358a0352834f6cb45a1de6f35bcd2a3094586",
+        "localRemoteJavascriptExactMatch": true
+      },
+      "rewrites": ["/api/ai-generate", "/api/social-auth", "/api/delete-account"],
+      "cacheChecks": {
+        "/": "200; no-cache, no-store, must-revalidate",
+        "/index.html": "200; no-cache, no-store, must-revalidate",
+        "/sw.js": "200; no-cache, no-store, must-revalidate",
+        "/manifest.webmanifest": "200; no-cache, no-store, must-revalidate"
+      },
+      "bundleChecks": {
+        "gemini-3.6-flash": true,
+        "gemini-2.5-flash": false,
+        "directGenerativeLanguageUrl": false,
+        "VITE_GEMINI_KEY": false
+      }
+    }
+  },
+  "aiKeyRotation": {
+    "result": "PASS",
+    "generativeLanguageApi": "ENABLED",
+    "newKey": {
+      "resource": "projects/419860500152/locations/global/keys/context-health-ai-proxy-20260911",
+      "restriction": "generativelanguage.googleapis.com only",
+      "secretVersion": 1,
+      "directGemini36Probe": "200 with non-empty text"
+    },
+    "modelCompatibility": {
+      "gemini-2.5-flash": "404 for new users",
+      "gemini-3.6-flash": "200",
+      "thinkingConfig": "thinkingLevel minimal accepted"
+    },
+    "oldKey": {
+      "resource": "projects/426769231313/locations/global/keys/9e1293d2-90b9-442c-b7ec-b430a7e369c5",
+      "deleted": true,
+      "deleteTime": "2026-09-11T01:11:44.147585Z",
+      "localViteEnvRemoved": true
+    }
+  },
+  "runtimeVerification": {
+    "local": {
+      "aiProxy": "10/10",
+      "deleteAccount": "9/9",
+      "firestoreRules": "18/18",
+      "pagination": "7/7",
+      "typecheck": "PASS",
+      "build": "PASS"
+    },
+    "production": {
+      "desktopFreshTab": "PASS: logo, Korean text, numbers, units and charts rendered without overlap",
+      "existingTabRefresh": "PASS: previously open authenticated tab rendered AI coach normally after refresh; one transient gray automation capture cleared on recheck",
+      "authenticatedExistingSessionRead": "PASS",
+      "authenticatedAiProxy": "NOT_RUN: dedicated email/password and anonymous account creation are disabled; service-account signBlob permission denied; existing user data was not modified",
+      "accountDeletion": "NOT_RUN: no disposable production account available"
+    }
+  },
+  "remainingRisks": [
+    "Run one authenticated AI request and account deletion with a disposable production account.",
+    "Verify Google/Kakao/Naver login and cancellation/conflict paths with real provider accounts.",
+    "Verify installed PWA update and offline recovery on physical iOS and Android devices.",
+    "Upgrade Cloud Functions from Node.js 20 before its announced 2026-10-30 decommission date.",
+    "Confirm AI quota and billing alerts in production usage monitoring."
+  ]
+}

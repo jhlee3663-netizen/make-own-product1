@@ -1,0 +1,76 @@
+{
+  "date": "2026-09-09",
+  "environment": {
+    "browser": "Google Chrome on macOS",
+    "app": "Vite local server and production preview",
+    "firebase": "demo-context-health Auth and Firestore emulators only",
+    "productionChanged": false
+  },
+  "results": [
+    {
+      "id": "V-OFFLINE-WORKOUT-DRAFT",
+      "result": "PASS",
+      "steps": [
+        "Sign in with an Auth Emulator Google account and finish onboarding",
+        "Open a new workout and enter 오프라인 등",
+        "Wait for the 300ms draft debounce and close the browser tab",
+        "Open the same origin again and enter a new workout"
+      ],
+      "evidence": "The workout part text field was restored with value 오프라인 등 after the original tab was closed."
+    },
+    {
+      "id": "V-OFFLINE-SAVE-TIMEOUT",
+      "result": "PASS",
+      "steps": [
+        "Stop the Firestore Emulator while the workout editor is open",
+        "Press 저장하기 and wait nine seconds",
+        "Dismiss the error dialog and inspect the editor"
+      ],
+      "evidence": "At eight seconds the app displayed 서버 저장 확인이 지연되고 있습니다. 작성 내용은 이 기기에 보관했습니다. 네트워크 연결 후 다시 시도해주세요. The editor retained 오프라인 등 and the 저장하기 button was enabled again."
+    },
+    {
+      "id": "V-PWA-WARM-LAUNCH",
+      "result": "PASS",
+      "steps": [
+        "Open the production build on http://127.0.0.1:4173 and wait for service-worker installation",
+        "Stop the preview server and close the tab",
+        "Open the same origin in a new tab"
+      ],
+      "evidence": "The complete login screen, logo, and three social login buttons rendered with the origin server stopped."
+    },
+    {
+      "id": "V-PWA-COLD-LAUNCH",
+      "result": "EXPECTED_LIMITATION",
+      "steps": [
+        "Open an unvisited origin http://127.0.0.1:4174 while no server is listening"
+      ],
+      "evidence": "Chrome returned net::ERR_CONNECTION_REFUSED. A PWA cannot cold-launch before its app shell has been installed."
+    },
+    {
+      "id": "V-PWA-A-TO-B",
+      "result": "PASS",
+      "steps": [
+        "Install build A with title Context Health and chunk assets/index-CTMGY3Uk.js",
+        "Serve a temporary build B on the same origin with a changed index and JS chunk assets/index-gnS3SYtj.js",
+        "Open once to trigger update, close the tab, and reopen"
+      ],
+      "evidence": "The reopened document title was Context Health B and the changed subtitle ending in B rendered completely. No broken UI or missing-chunk page was observed. Build B existed only under /tmp."
+    }
+  ],
+  "automatedChecks": {
+    "recordDrafts": "PASS",
+    "firestoreRules": "PASS 18/18",
+    "pagination": "PASS 7/7",
+    "volume": "PASS 20/20",
+    "nutritionGuard": "PASS 16/16",
+    "typecheck": "PASS",
+    "productionBuild": "PASS",
+    "gitDiffCheck": "PASS"
+  },
+  "limitations": [
+    "The browser run directly exercised workout draft restoration; diet draft storage was covered by the shared helper regression and build, not a full browser journey.",
+    "The exact offline failure then online retry with the same emulator identity could not be completed because restarting the Auth Emulator deletes its in-memory test account.",
+    "No real mobile device, social provider redirect, installed standalone PWA, or production Firebase project was used.",
+    "No browser network trace was captured, so absence of old-chunk HTTP 404 is supported by the complete B render rather than request logs."
+  ]
+}

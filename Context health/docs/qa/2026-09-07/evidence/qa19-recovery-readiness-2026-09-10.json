@@ -1,0 +1,38 @@
+{
+  "checkedAt": "2026-09-10T17:24:00+09:00",
+  "projectId": "context-health-3eb84",
+  "projectAccess": {
+    "visibleFirebaseProjects": 1,
+    "billingPlan": "Blaze",
+    "billingPlanEvidence": "Firebase Console usage and billing page, read-only visual inspection"
+  },
+  "sourceDatabase": {
+    "databaseId": "(default)",
+    "edition": "STANDARD",
+    "type": "FIRESTORE_NATIVE",
+    "location": "asia-northeast3",
+    "pointInTimeRecovery": "DISABLED",
+    "versionRetentionPeriod": "3600s",
+    "deleteProtection": "DISABLED"
+  },
+  "backupState": {
+    "scheduleCount": 0,
+    "backupCountInAsiaNortheast3": 0
+  },
+  "recommendedPolicyPendingApproval": {
+    "dailyBackupRetention": "14d",
+    "pointInTimeRecovery": "ENABLED",
+    "deleteProtection": "ENABLED",
+    "rpo": "24h or less after the first scheduled backup completes",
+    "rtoTarget": "4h",
+    "restoreTarget": "A new named database in the same project, never (default)"
+  },
+  "preparedCommands": [
+    "npx -y firebase-tools@latest firestore:backups:schedules:create --database '(default)' --recurrence DAILY --retention 14d --project context-health-3eb84",
+    "npx -y firebase-tools@latest firestore:databases:update '(default)' --point-in-time-recovery ENABLED --delete-protection ENABLED --project context-health-3eb84 --json",
+    "npx -y firebase-tools@latest firestore:backups:schedules:list --database '(default)' --project context-health-3eb84 --json",
+    "npx -y firebase-tools@latest firestore:backups:list --location asia-northeast3 --project context-health-3eb84 --json"
+  ],
+  "mutationsPerformed": false,
+  "blocker": "Backup, PITR, and restore are billable. The recommended retention policy was not previously approved, and no backup exists yet to restore."
+}

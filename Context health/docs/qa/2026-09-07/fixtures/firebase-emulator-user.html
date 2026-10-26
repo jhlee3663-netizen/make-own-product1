@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Firebase emulator test user</title>
+    <style>body { font: 16px/1.5 system-ui, sans-serif; padding: 24px; } .pass { color: #087f23; } .fail { color: #c92a2a; }</style>
+  </head>
+  <body>
+    <h1>Firebase emulator test user</h1>
+    <p id="result">준비 중</p>
+    <script type="module">
+      import { auth, db } from '/src/lib/firebase.js';
+      import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, updateProfile } from 'firebase/auth';
+      import { doc, setDoc } from 'firebase/firestore';
+      import { setUserStorage } from '/src/lib/userStorage.js';
+
+      const result = document.querySelector('#result');
+      const label = new URLSearchParams(location.search).get('user') === 'B' ? 'B' : 'A';
+      const email = `qa-${label.toLowerCase()}@context-health.test`;
+      const password = `Local-QA-${label}-2026!`;
+
+      async function run() {
+        if (import.meta.env.VITE_USE_FIREBASE_EMULATORS !== 'true') {
+          throw new Error('Firebase emulator mode is not enabled');
+        }
+        if (auth.currentUser) await signOut(auth);
+        let credential;
+        try {
+          credential = await signInWithEmailAndPassword(auth, email, password);
+        } catch (error) {
+          if (error.code !== 'auth/user-not-found' && error.code !== 'auth/invalid-credential') throw error;
+          credential = await createUserWithEmailAndPassword(auth, email, password);
+        }
+        await updateProfile(credential.user, { displayName: `QA 사용자 ${label}` });
+        await setDoc(doc(db, 'users', credential.user.uid), {
+          profile: { name: `QA 사용자 ${label}`, weight: label === 'A' ? 61 : 82, targetKcal: label === 'A' ? 1800 : 2400 },
+          onboardingDone: true,
+          goals: [],
+        });
+        setUserStorage(credential.user.uid, 'diet_custom_foods', JSON.stringify([{ name: `${label} 전용 음식`, kcal: label === 'A' ? 111 : 222 }]));
+        setUserStorage(credential.user.uid, 'coaching_insight_workout', JSON.stringify({ text: `${label} 전용 코칭`, timestamp: Date.now() }));
+        localStorage.setItem('auth_user', JSON.stringify({ uid: credential.user.uid, name: `QA 사용자 ${label}`, email }));
+        result.textContent = `PASS: ${label} 로그인 및 격리 데이터 준비`;
+        result.className = 'pass';
+        document.documentElement.dataset.qaResult = 'pass';
+      }
+
+      run().catch(error => {
+        result.textContent = `FAIL: ${error.code || error.message}`;
+        result.className = 'fail';
+        document.documentElement.dataset.qaResult = 'fail';
+      });
+    </script>
+  </body>
+</html>

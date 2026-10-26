@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>친구 탭 시안</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Pretendard, 'Apple SD Gothic Neo', sans-serif; background: #e9ecef; padding: 28px 32px; letter-spacing: -0.025em; color: #171a1d; width: 1940px; }
+  h1 { font-size: 20px; font-weight: 700; } h1 small { font-size: 14px; font-weight: 500; color: #868e96; margin-left: 8px; }
+  .wrap { display: flex; gap: 22px; align-items: flex-start; margin-top: 16px; }
+  .col { display: flex; flex-direction: column; gap: 10px; }
+  .cap { font-size: 14px; font-weight: 700; color: #495057; height: 40px; }
+  .cap small { display: block; font-weight: 500; font-size: 12px; color: #868e96; margin-top: 2px; }
+  .phone { width: 350px; height: 740px; background: #7171ff; border-radius: 26px; overflow: hidden; position: relative; box-shadow: 0 8px 28px rgba(0,0,0,.12); display: flex; flex-direction: column; }
+  .phone.white { background: #fff; }
+  .head { display: flex; justify-content: space-between; align-items: center; padding: 22px 20px 16px; color: #fff; }
+  .head b { font-size: 20px; font-weight: 700; } .head span { font-size: 13px; font-weight: 600; opacity: .85; }
+  .head .pill { background: rgba(255,255,255,.18); padding: 6px 12px; border-radius: 99px; opacity: 1; }
+  .sheet { flex: 1; background: #f8f9fa; border-radius: 24px 24px 0 0; padding: 16px 16px 90px; display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
+  .label { font-size: 13px; font-weight: 600; color: #868e96; padding: 4px 4px 0; display: flex; justify-content: space-between; }
+  .label a { color: #7171ff; text-decoration: none; }
+  .card { background: #fff; border-radius: 20px; box-shadow: 0 2px 12px rgba(3,27,38,.05); }
+  .fade { height: 1px; background: linear-gradient(90deg, rgba(241,243,245,0), #f1f3f5 22%, #f1f3f5 78%, rgba(241,243,245,0)); }
+  .row { display: flex; align-items: center; gap: 12px; padding: 14px 18px; }
+  .av { width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; color: #fff; flex: none; position: relative; }
+  .av.done::after { content: ''; position: absolute; right: -1px; bottom: -1px; width: 12px; height: 12px; border-radius: 50%; background: #7171ff; border: 2px solid #fff; }
+  .who { flex: 1; min-width: 0; }
+  .who b { font-size: 15px; font-weight: 700; display: block; }
+  .who span { font-size: 13px; color: #868e96; display: block; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .who span.off { color: #ced4da; }
+  .clap { flex: none; height: 30px; padding: 0 10px; border-radius: 99px; background: rgba(113,113,255,.1); color: #7171ff; font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 4px; }
+  .clap.on { background: #7171ff; color: #fff; }
+  .today { font-weight: 700; background-image: linear-gradient(-34.5deg, #f79fff 0%, #3aa0ff 103%); -webkit-background-clip: text; color: transparent; }
+  /* 이번 주 표 */
+  .grid { padding: 14px 18px 16px; }
+  .grid .days, .grid .line { display: grid; grid-template-columns: 52px repeat(7, 1fr); align-items: center; }
+  .grid .days span { font-size: 11px; color: #adb5bd; text-align: center; }
+  .grid .days span.t { color: #7171ff; font-weight: 700; }
+  .grid .line { height: 30px; }
+  .grid .line b { font-size: 13px; font-weight: 600; color: #495057; }
+  .dot { width: 22px; height: 22px; border-radius: 7px; margin: 0 auto; background: #f1f3f5; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: #fff; }
+  .dot.y { background: linear-gradient(135deg, #a5a5ff, #7171ff); }
+  .dot.r { background: transparent; }
+  .sum { font-size: 12px; color: #868e96; padding: 0 18px 14px; }
+  .sum b { color: #7171ff; }
+  /* 하단 내비 */
+  .nav { position: absolute; left: 0; right: 0; bottom: 0; height: 64px; background: #fff; border-top: 1px solid #f1f3f5; display: grid; grid-template-columns: repeat(5, 1fr); align-items: center; text-align: center; font-size: 10px; color: #adb5bd; font-weight: 600; }
+  .nav i { display: block; width: 22px; height: 22px; border-radius: 7px; background: #e9ecef; margin: 0 auto 4px; }
+  .nav .on { color: #7171ff; } .nav .on i { background: #7171ff; }
+  .nav .plus i { width: 40px; height: 40px; border-radius: 50%; background: #7171ff; margin-bottom: 0; }
+  /* 친구 기록 보기 */
+  .top { display: flex; align-items: center; gap: 10px; padding: 20px 16px 14px; }
+  .top .back { font-size: 22px; color: #495057; width: 24px; }
+  .top b { font-size: 17px; font-weight: 700; flex: 1; }
+  .prof { display: flex; align-items: center; gap: 14px; padding: 4px 20px 18px; }
+  .prof .av { width: 56px; height: 56px; font-size: 19px; }
+  .prof b { font-size: 18px; font-weight: 700; display: block; }
+  .prof span { font-size: 13px; color: #868e96; }
+  .stats { display: flex; gap: 8px; padding: 0 16px 16px; }
+  .stats div { flex: 1; background: #f8f9fa; border-radius: 14px; padding: 10px 12px; }
+  .stats small { font-size: 11px; color: #868e96; display: block; }
+  .stats b { font-size: 16px; font-weight: 700; }
+  .wsheet { flex: 1; background: #f8f9fa; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
+  .wc { padding: 16px 18px; }
+  .wc .h { display: flex; justify-content: space-between; align-items: center; }
+  .wc .h b { font-size: 16px; font-weight: 700; }
+  .wc .h span { font-size: 13px; color: #868e96; }
+  .badge { display: inline-block; font-size: 11px; font-weight: 700; color: #7171ff; background: rgba(113,113,255,.1); padding: 3px 8px; border-radius: 99px; margin-top: 8px; }
+  .ex { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+  .ex p { font-size: 13px; color: #495057; display: flex; justify-content: space-between; }
+  .ex p span { color: #868e96; }
+  .wc .fade { margin: 12px 0; }
+  .copy { display: flex; align-items: center; justify-content: center; gap: 6px; height: 40px; border-radius: 12px; background: rgba(113,113,255,.1); color: #7171ff; font-size: 14px; font-weight: 700; }
+  .react { display: flex; gap: 6px; margin-top: 10px; }
+  .react span { font-size: 12px; padding: 4px 9px; border-radius: 99px; background: #f1f3f5; color: #495057; }
+  .react span.me { background: rgba(113,113,255,.12); color: #7171ff; font-weight: 700; }
+  /* 초대 */
+  .center { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 0 28px; gap: 10px; }
+  .center .ill { width: 120px; height: 84px; position: relative; margin-bottom: 10px; }
+  .center .ill .av { position: absolute; width: 56px; height: 56px; font-size: 18px; border: 3px solid #f8f9fa; }
+  .center b { font-size: 19px; font-weight: 700; line-height: 1.4; }
+  .center p { font-size: 14px; color: #868e96; line-height: 1.5; }
+  .btn { height: 52px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; width: 100%; }
+  .btn.kakao { background: #fee500; color: #191919; }
+  .btn.sub { background: #f1f3f5; color: #495057; }
+  .btn.main { background: #7171ff; color: #fff; }
+  .btns { display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: 18px; }
+  /* 공개 범위 */
+  .opt { display: flex; align-items: center; padding: 16px 18px; gap: 12px; }
+  .opt .t { flex: 1; } .opt .t b { font-size: 15px; font-weight: 600; display: block; } .opt .t span { font-size: 12px; color: #868e96; }
+  .tg { width: 46px; height: 28px; border-radius: 99px; background: #dee2e6; position: relative; flex: none; }
+  .tg::after { content: ''; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+  .tg.on { background: #7171ff; } .tg.on::after { left: 21px; }
+  .note { font-size: 12px; color: #868e96; line-height: 1.5; padding: 0 6px; }
+  .modal { position: absolute; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: flex-end; }
+  .msheet { background: #fff; width: 100%; border-radius: 24px 24px 0 0; padding: 26px 20px 22px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; }
+  .msheet .av { width: 60px; height: 60px; font-size: 20px; }
+  .msheet b { font-size: 18px; font-weight: 700; margin-top: 6px; }
+  .msheet p { font-size: 14px; color: #868e96; line-height: 1.5; }
+  .chips { display: flex; gap: 6px; margin-top: 4px; }
+  .chips span { font-size: 12px; padding: 5px 10px; border-radius: 99px; background: #f1f3f5; color: #495057; }
+  .chips span.no { color: #adb5bd; text-decoration: line-through; }
+</style>
+</head>
+<body>
+<h1>친구 탭 시안 <small>초대한 사람끼리만 서로 운동 기록을 본다 · 글쓰기·댓글 없음</small></h1>
+<div class="wrap">
+
+  <!-- 1. 친구 탭 -->
+  <div class="col">
+    <div class="cap">① 친구 탭<small>오늘 누가 했나 + 이번 주 누가 언제 했나</small></div>
+    <div class="phone">
+      <div class="head"><b>친구</b><span class="pill">+ 초대</span></div>
+      <div class="sheet">
+        <div class="label"><span>오늘</span></div>
+        <div class="card">
+          <div class="row">
+            <div class="av done" style="background:#7171ff">나</div>
+            <div class="who"><b>나</b><span>등 · 이두 · 6종목 · 14,820kg</span></div>
+          </div>
+          <div class="fade"></div>
+          <div class="row">
+            <div class="av done" style="background:#ff8fa3">민</div>
+            <div class="who"><b>민수</b><span>가슴 · 어깨 · 5종목 · 12,400kg</span></div>
+            <div class="clap on">👏 2</div>
+          </div>
+          <div class="fade"></div>
+          <div class="row">
+            <div class="av done" style="background:#38c9a0">지</div>
+            <div class="who"><b>지훈</b><span>하체 · 4종목 · 21,300kg</span></div>
+            <div class="clap">👏</div>
+          </div>
+          <div class="fade"></div>
+          <div class="row">
+            <div class="av" style="background:#ffb547">서</div>
+            <div class="who"><b>서연</b><span class="off">오늘은 쉬는 중 · 마지막 3일 전</span></div>
+            <div class="clap">콕 찌르기</div>
+          </div>
+        </div>
+        <div class="label"><span>이번 주</span><span>10.13 – 10.19</span></div>
+        <div class="card">
+          <div class="grid">
+            <div class="days"><span></span><span>월</span><span>화</span><span class="t">수</span><span>목</span><span>금</span><span>토</span><span>일</span></div>
+            <div class="line"><b>나</b><i class="dot y">가</i><i class="dot">·</i><i class="dot y">등</i><i class="dot r"></i><i class="dot r"></i><i class="dot r"></i><i class="dot r"></i></div>
+            <div class="line"><b>민수</b><i class="dot y">하</i><i class="dot y">등</i><i class="dot y">가</i><i class="dot r"></i><i class="dot r"></i><i class="dot r"></i><i class="dot r"></i></div>
+            <div class="line"><b>지훈</b><i class="dot">·</i><i class="dot y">가</i><i class="dot y">하</i><i class="dot r"></i><i class="dot r"></i><i class="dot r"></i><i class="dot r"></i></div>
+            <div class="line"><b>서연</b><i class="dot y">전</i><i class="dot">·</i><i class="dot">·</i><i class="dot r"></i><i class="dot r"></i><i class="dot r"></i><i class="dot r"></i></div>
+          </div>
+          <div class="sum">이번 주 <b>민수</b>가 가장 많이 했어요 · 3회</div>
+        </div>
+      </div>
+      <div class="nav"><div><i></i>홈</div><div><i></i>분석</div><div class="plus"><i></i></div><div class="on"><i></i>친구</div><div><i></i>마이</div></div>
+    </div>
+  </div>
+
+  <!-- 2. 친구 기록 보기 -->
+  <div class="col">
+    <div class="cap">② 친구 기록 보기<small>친구를 누르면 · 홈 카드 그대로 · 루틴 가져오기</small></div>
+    <div class="phone white">
+      <div class="top"><span class="back">‹</span><b></b><span style="font-size:13px;color:#868e96">•••</span></div>
+      <div class="prof">
+        <div class="av" style="background:#ff8fa3">민</div>
+        <div><b>민수</b><span>함께한 지 42일</span></div>
+      </div>
+      <div class="stats">
+        <div><small>이번 주</small><b>3회</b></div>
+        <div><small>이번 달</small><b>11회</b></div>
+        <div><small>벤치 최고</small><b>92.5kg</b></div>
+      </div>
+      <div class="wsheet">
+        <div class="card wc">
+          <div class="h"><b>가슴 · 어깨</b><span class="today">오늘</span></div>
+          <span class="badge">볼륨 12,400kg · 지난번보다 +6%</span>
+          <div class="ex">
+            <p>벤치프레스 <span>90kg × 5 × 5</span></p>
+            <p>인클라인 덤벨 프레스 <span>30kg × 10 × 3</span></p>
+            <p>오버헤드 프레스 <span>50kg × 8 × 4</span></p>
+            <p style="color:#adb5bd">외 2종목</p>
+          </div>
+          <div class="fade"></div>
+          <div class="copy">↧ 이 루틴 내 메모로 가져오기</div>
+          <div class="react"><span class="me">👏 나</span><span>👏 지훈</span></div>
+        </div>
+        <div class="card wc">
+          <div class="h"><b>등</b><span>10. 14</span></div>
+          <span class="badge">볼륨 15,100kg</span>
+          <div class="ex">
+            <p>데드리프트 <span>140kg × 5 × 3</span></p>
+            <p>바벨 로우 <span>70kg × 8 × 4</span></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. 처음 / 초대 -->
+  <div class="col">
+    <div class="cap">③ 친구가 없을 때<small>카톡 링크 한 번으로 초대</small></div>
+    <div class="phone">
+      <div class="head"><b>친구</b><span></span></div>
+      <div class="sheet" style="padding-bottom:64px">
+        <div class="center">
+          <div class="ill">
+            <div class="av" style="background:#7171ff;left:8px;top:14px">나</div>
+            <div class="av" style="background:#ffd2db;color:#ff8fa3;left:56px;top:14px">?</div>
+          </div>
+          <b>같이 운동하는 친구를<br>불러보세요</b>
+          <p>서로 오늘 어디를 얼마나 했는지 보여요.<br>식단과 체중은 보이지 않아요.</p>
+          <div class="btns">
+            <div class="btn kakao">카카오톡으로 초대하기</div>
+            <div class="btn sub">링크 복사</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3b. 초대 받음 -->
+  <div class="col">
+    <div class="cap">③-2 초대 링크를 받은 사람<small>앱이 열리면 수락만</small></div>
+    <div class="phone">
+      <div class="head"><b>친구</b><span></span></div>
+      <div class="sheet"></div>
+      <div class="modal">
+        <div class="msheet">
+          <div class="av" style="background:#ff8fa3">민</div>
+          <b>민수님이 친구 초대를 보냈어요</b>
+          <p>수락하면 서로 아래 기록이 보여요</p>
+          <div class="chips"><span>운동 기록</span><span class="no">식단</span><span class="no">체중</span></div>
+          <div class="btns" style="margin-top:14px">
+            <div class="btn main">수락하기</div>
+            <div class="btn sub" style="background:none;color:#868e96;height:40px">다음에</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. 공개 범위 -->
+  <div class="col">
+    <div class="cap">④ 친구에게 보여줄 것<small>마이 › 친구 · 기본은 운동만</small></div>
+    <div class="phone white">
+      <div class="top"><span class="back">‹</span><b>친구에게 보여줄 것</b></div>
+      <div class="wsheet" style="gap:10px">
+        <div class="card">
+          <div class="opt"><div class="t"><b>운동 기록</b><span>부위 · 종목 · 무게 · 볼륨</span></div><div class="tg on"></div></div>
+          <div class="fade"></div>
+          <div class="opt"><div class="t"><b>식단</b><span>칼로리와 탄단지만, 음식 이름은 안 보여요</span></div><div class="tg"></div></div>
+          <div class="fade"></div>
+          <div class="opt"><div class="t"><b>체중</b><span>변화량만 (예: -1.2kg)</span></div><div class="tg"></div></div>
+        </div>
+        <p class="note">초대 링크로 연결된 친구에게만 보여요. 모르는 사람은 볼 수 없어요.</p>
+        <div class="label" style="margin-top:8px"><span>친구 3명</span></div>
+        <div class="card">
+          <div class="row"><div class="av" style="background:#ff8fa3">민</div><div class="who"><b>민수</b></div><span style="font-size:13px;color:#adb5bd">끊기</span></div>
+          <div class="fade"></div>
+          <div class="row"><div class="av" style="background:#38c9a0">지</div><div class="who"><b>지훈</b></div><span style="font-size:13px;color:#adb5bd">끊기</span></div>
+          <div class="fade"></div>
+          <div class="row"><div class="av" style="background:#ffb547">서</div><div class="who"><b>서연</b></div><span style="font-size:13px;color:#adb5bd">끊기</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

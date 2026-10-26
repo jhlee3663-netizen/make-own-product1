@@ -1,5 +1,6 @@
-import React, { useEffect, useId, useState } from 'react';
-import MainTab from '../common/MainTab';
+import React, { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { HomeTabs, NECK_BREAK, PullGap, PullSpinner } from '../home/HomeHeader';
+import usePullRefresh from '../../lib/usePullRefresh';
 import { IcBack, IcMore } from '../icons/Icons';
 import Pressable from '../common/Pressable';
 import PressCard from '../common/PressCard';
@@ -154,7 +155,7 @@ function Caption({ children, small = false }) {
 
 function Segmented({ options, value, onChange, label }) {
   return (
-    <div role="radiogroup" aria-label={label} className="inline-flex p-0.5 rounded-lg bg-[#f1f3f5]">
+    <div role="radiogroup" aria-label={label} className="inline-flex shrink-0 p-0.5 rounded-lg bg-[#f1f3f5]">
       {options.map(option => {
         const on = value === option.value;
         return (
@@ -163,7 +164,7 @@ function Segmented({ options, value, onChange, label }) {
             role="radio"
             aria-checked={on}
             onClick={() => onChange(option.value)}
-            className={`px-3 py-1 rounded-md font-pretendard font-semibold text-[13px] leading-5 ${TRACKING} ${on ? 'bg-white text-[#171a1d]' : 'text-[#868e96]'}`}
+            className={`px-3 py-1 rounded-md whitespace-nowrap font-pretendard font-semibold text-[13px] leading-5 ${TRACKING} ${on ? 'bg-white text-[#171a1d]' : 'text-[#868e96]'}`}
           >
             {option.label}
           </button>
@@ -366,24 +367,43 @@ function Tile({ label, value, sub, subColor = '#868e96', visual, visualAlign = '
   );
 }
 
+/* 타일 안의 작은 그림은 타일 폭에 맞춰 늘어난다 (폴드·태블릿처럼 넓은 화면에서 한쪽에 몰리지 않게).
+   비율은 폰 화면(타일 안쪽 133px)에서 Figma 시안과 같은 크기가 되도록 잡았다. */
+function useElementWidth(fallback) {
+  const ref = useRef(null);
+  const [width, setWidth] = useState(fallback);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    const update = () => setWidth(el.clientWidth || fallback);
+    update();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [fallback]);
+  return [ref, width];
+}
+
 function TileSpark({ values }) {
-  const W = 116; const H = 20;
+  const [ref, W] = useElementWidth(116);
+  const H = 20;
   const curve = flowPoints(reducePoints(sparkPoints(values, W, H, 1), 7));
   const end = curve[curve.length - 1];
   return (
-    <span className="relative block" style={{ width: W, height: H }}>
-      <FadeLine d={toPath(curve)} width={W} height={H} />
+    <span ref={ref} className="relative block w-[87%]" style={{ height: H }}>
+      <FadeLine key={W} d={toPath(curve)} width={W} height={H} />
       <HaloDot size={12} style={{ left: end[0] - 6, top: end[1] - 6 }} />
     </span>
   );
 }
 
 function TileProgress({ ratio }) {
-  const fill = Math.max(8, Math.min(120, 120 * ratio));
+  const pct = Math.max(7, Math.min(100, ratio * 100));
   return (
-    <span className="relative block w-[120px] h-1.5 rounded-[3px] bg-[#f1f3f5]">
-      <span className="chart-grow-x absolute left-0 top-0 h-1.5 rounded-[3px]" style={{ width: fill, background: FADE_GRADIENT }} />
-      <HaloDot size={16} style={{ left: fill - 10, top: -5 }} />
+    <span className="relative block w-[90%] h-1.5 rounded-[3px] bg-[#f1f3f5]">
+      <span className="chart-grow-x absolute left-0 top-0 h-1.5 rounded-[3px]" style={{ width: `${pct}%`, background: FADE_GRADIENT }} />
+      <HaloDot size={16} style={{ left: `calc(${pct}% - 10px)`, top: -5 }} />
     </span>
   );
 }
@@ -391,9 +411,9 @@ function TileProgress({ ratio }) {
 function TileBars({ values }) {
   const max = Math.max(...values, 1);
   return (
-    <span className="flex items-end gap-1 h-[30px]">
+    <span className="flex items-end gap-1 w-[51%] h-[30px]">
       {values.map((v, i) => (
-        <span key={i} className="chart-bar w-[5px] rounded-[1px]" style={{ '--d': `${150 + i * 40}ms`, height: Math.max(2, (v / max) * 23), background: i === values.length - 1 ? POINT : 'rgba(113,113,255,0.2)' }} />
+        <span key={i} className="chart-bar flex-1 min-w-[5px] rounded-[1px]" style={{ '--d': `${150 + i * 40}ms`, height: Math.max(2, (v / max) * 23), background: i === values.length - 1 ? POINT : 'rgba(113,113,255,0.2)' }} />
       ))}
     </span>
   );
@@ -473,7 +493,7 @@ function WeightChart({ series }) {
   const pcty = v => `${(v / H) * 100}%`;
 
   return (
-    <div className="relative w-full touch-pan-y" style={{ aspectRatio: `${W} / ${H}` }} onPointerDown={pick} onPointerMove={e => e.buttons && pick(e)} role="img" aria-label="공복 체중 추이">
+    <div data-no-swipe className="relative w-full touch-pan-y" style={{ aspectRatio: `${W} / ${H}` }} onPointerDown={pick} onPointerMove={e => e.buttons && pick(e)} role="img" aria-label="공복 체중 추이">
       <svg viewBox={`0 0 ${W} ${H}`} className="chart-wipe absolute inset-0 w-full h-full" style={{ overflow: 'visible' }}>
         <defs>
           <linearGradient id="weight-line" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2={W} y2="0">
@@ -575,7 +595,7 @@ function IntakeChart({ days, from, to, maintenance, weightSeries }) {
   };
 
   return (
-    <div className="relative w-full touch-pan-y" style={{ aspectRatio: `${W} / ${H}` }} onPointerDown={pick} onPointerMove={e => e.buttons && pick(e)} role="img" aria-label="하루 섭취 칼로리와 체중">
+    <div data-no-swipe className="relative w-full touch-pan-y" style={{ aspectRatio: `${W} / ${H}` }} onPointerDown={pick} onPointerMove={e => e.buttons && pick(e)} role="img" aria-label="하루 섭취 칼로리와 체중">
       <svg viewBox={`0 0 ${W} ${H}`} className="chart-wipe absolute inset-0 w-full h-full" style={{ overflow: 'visible' }}>
         <defs>
           <linearGradient id="intake-fill" x1="0" y1="0" x2="0" y2="1">
@@ -701,6 +721,7 @@ function DietTab({ diet, maintenance, trend, onRecord }) {
 /* ── 운동 ── */
 const WORKOUT_METRICS = [
   { value: 'volume', label: '볼륨', format: v => `${comma(v)}kg` },
+  { value: 'sets', label: '유효 세트', format: v => `${v}세트` },
   { value: 'days', label: '운동 일수', format: v => `${v}일` },
 ];
 
@@ -775,7 +796,8 @@ function WorkoutTab({ strength, weekly, week, weeks, setWeeks, onRecord }) {
         sub={change !== null ? `볼륨은 ${comma(thisWeek.volume)}kg, 그 전 7일보다 ${change > 0 ? '+' : ''}${change}%예요.` : `볼륨은 ${comma(thisWeek.volume)}kg이에요.`}
       />
       <Card className="px-5 py-6 flex flex-col gap-6">
-        <div className="flex items-center justify-between">
+        {/* 좁은 화면(폴드 커버 등)에서는 기간 선택이 다음 줄로 내려간다 */}
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <Segmented label="지표" value={metric} onChange={setMetric} options={WORKOUT_METRICS} />
           <Segmented label="기간" value={weeks} onChange={setWeeks} options={[{ value: 4, label: '4주' }, { value: 8, label: '8주' }]} />
         </div>
@@ -849,7 +871,7 @@ function Sheet({ onClose, children }) {
   return (
     <div className="fixed inset-0 z-[100] flex flex-col justify-end">
       <div onClick={onClose} className="absolute inset-0 bg-[#171719]/50 animate-[bsFadeIn_0.3s_cubic-bezier(0.16,1,0.3,1)_forwards]" />
-      <div className="relative w-full max-w-[430px] mx-auto bg-white rounded-t-[24px] px-4 pb-[calc(40px+env(safe-area-inset-bottom))] flex flex-col items-center animate-[bottomSheetUp_0.4s_cubic-bezier(0.2,0.8,0.2,1)_forwards] shadow-lg">
+      <div className="relative w-full md:max-w-[430px] mx-auto bg-white rounded-t-[24px] px-4 pb-[calc(40px+env(safe-area-inset-bottom))] flex flex-col items-center animate-[bottomSheetUp_0.4s_cubic-bezier(0.2,0.8,0.2,1)_forwards] shadow-lg">
         <div className="py-3 w-full flex justify-center"><div className="w-10 h-1 rounded-full bg-[#e9ecef]" /></div>
         {children}
       </div>
@@ -914,30 +936,99 @@ export default function AnalysisTabsView({ status = 'ready', model, report, repo
   const [weeks, setWeeks] = useState(8);
   const ready = status === 'ready' && model;
 
+  /* 옆으로 밀어 탭 넘기기. 미는 동안은 민 거리만큼 따라오고(거리 기반), 손을 떼면 넘어가거나 제자리로 돌아간다.
+     그래프처럼 가로로 끄는 영역(data-no-swipe)과 세로 스크롤은 건드리지 않는다. */
+  const swipeRef = useRef(null);
+  const contentRef = useRef(null);
+  const mainRef = useRef(null);
+  /* 홈과 같은 당겨서 새로고침: 탭과 시트가 물방울처럼 늘어지다 끊어진다 */
+  const { pull, refreshing, handlers: pullHandlers } = usePullRefresh(mainRef, () => onRetry?.());
+  const pullDetached = refreshing || pull >= NECK_BREAK;
+  const [swipeDir, setSwipeDir] = useState(0); // 넘어온 방향: 1 오른쪽에서, -1 왼쪽에서
+  function changeTab(next, dir = 0) {
+    setSwipeDir(dir);
+    setTab(next);
+  }
+  function onTouchStart(e) {
+    if (e.touches.length !== 1 || e.target.closest('[data-no-swipe]')) { swipeRef.current = null; return; }
+    const t = e.touches[0];
+    swipeRef.current = { x: t.clientX, y: t.clientY, dx: 0, lock: null };
+  }
+  function onTouchMove(e) {
+    const s = swipeRef.current;
+    if (!s) return;
+    const t = e.touches[0];
+    const dx = t.clientX - s.x;
+    const dy = t.clientY - s.y;
+    if (!s.lock && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) s.lock = Math.abs(dx) > Math.abs(dy) * 1.2 ? 'x' : 'y';
+    if (s.lock !== 'x') return;
+    const index = TABS.findIndex(item => item.id === tab);
+    const edge = (dx > 0 && index === 0) || (dx < 0 && index === TABS.length - 1);
+    s.dx = edge ? dx * 0.25 : dx * 0.6;
+    if (contentRef.current) {
+      contentRef.current.style.transition = 'none';
+      contentRef.current.style.transform = `translateX(${s.dx}px)`;
+    }
+  }
+  function onTouchEnd() {
+    const s = swipeRef.current;
+    swipeRef.current = null;
+    const el = contentRef.current;
+    if (!s || s.lock !== 'x' || !el) return;
+    const index = TABS.findIndex(item => item.id === tab);
+    const next = s.dx < -48 ? index + 1 : s.dx > 48 ? index - 1 : index;
+    if (next !== index && next >= 0 && next < TABS.length) {
+      el.style.transition = 'none';
+      el.style.transform = '';
+      changeTab(TABS[next].id, s.dx < 0 ? 1 : -1);
+    } else {
+      el.style.transition = 'transform 300ms cubic-bezier(0.3, 1.3, 0.45, 1)';
+      el.style.transform = '';
+    }
+  }
+
   return (
     <div className="flex flex-col h-full bg-[#f8f9fa]">
-      <header className="flex-none bg-white border-b border-[#f1f3f5]" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+      {/* 상단은 홈과 같은 보라 머리 + 폴더 탭 (Figma 📚 스터디 1316:19). 탭 모션도 홈 HomeTabs를 그대로 쓴다. */}
+      <header className="flex-none bg-brand text-white" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
         <div className="flex items-center gap-4 h-14 px-4">
-          <Pressable pressScale={0.85} onClick={onBack} aria-label="홈으로" className="flex items-center justify-center w-6 h-6 flex-none">
+          <Pressable pressScale={0.85} onClick={onBack} aria-label="홈으로" className="flex items-center justify-center w-6 h-6 flex-none [&_path]:stroke-white">
             <IcBack />
           </Pressable>
-          <h1 className={`flex-1 pl-1 font-pretendard font-semibold text-[20px] leading-[30px] text-black ${TRACKING}`}>분석</h1>
-          <Pressable pressScale={0.85} onClick={() => setMenu('menu')} aria-label="더보기" className="flex items-center justify-center w-6 h-6 flex-none">
+          <h1 className={`flex-1 pl-1 font-pretendard font-bold text-[20px] leading-[30px] text-white ${TRACKING}`}>분석</h1>
+          <Pressable pressScale={0.85} onClick={() => setMenu('menu')} aria-label="더보기" className="flex items-center justify-center w-6 h-6 flex-none [&_circle]:fill-white">
             <IcMore />
           </Pressable>
         </div>
-        <MainTab
+        <HomeTabs
           tabs={TABS}
-          activeId={tab}
-          onChange={setTab}
-          labelClass={`font-pretendard text-[16px] leading-6 ${TRACKING}`}
-          activeClass="font-bold text-[#7171FF]"
-          inactiveClass="font-medium text-[#868e96]"
-          barClass="bg-[#7171FF]"
+          sticky={false}
+          pull={pull}
+          detached={pullDetached}
+          tab={tab}
+          onTabChange={next => changeTab(next, TABS.findIndex(item => item.id === next) > TABS.findIndex(item => item.id === tab) ? 1 : -1)}
         />
       </header>
-      <main className="flex-1 overflow-y-auto">
-        <div key={`${tab}-${enter}`} className="stagger-in flex flex-col gap-3 px-4 pt-4 pb-[120px]">
+      <div className="flex-none">
+        <PullGap height={pull} pull={pull} detached={pullDetached} tabIndex={TABS.findIndex(item => item.id === tab)} tabCount={TABS.length} width={mainRef.current?.clientWidth || 390} animate={false}>
+          <PullSpinner pull={pull} refreshing={refreshing} />
+        </PullGap>
+      </div>
+      <div className="relative flex-none h-0 z-10" aria-hidden="true">
+        {/* 시트 위쪽 둥근 모서리: 스크롤 영역을 둥글게 자르지 않고 보라 조각을 덮는다 (홈 SheetCorners와 같은 방식) */}
+        <span className="absolute left-0 top-0 w-6 h-6 pointer-events-none" style={{ background: 'radial-gradient(circle at 100% 100%, transparent 23.5px, #7171FF 24px)' }} />
+        <span className="absolute right-0 top-0 w-6 h-6 pointer-events-none" style={{ background: 'radial-gradient(circle at 0 100%, transparent 23.5px, #7171FF 24px)' }} />
+      </div>
+      <main
+        ref={mainRef}
+        className="flex-1 overflow-y-auto overflow-x-hidden overscroll-none"
+        onTouchStart={(e) => { pullHandlers.onTouchStart(e); onTouchStart(e); }}
+        onTouchMove={onTouchMove}
+        onTouchEnd={() => { pullHandlers.onTouchEnd(); onTouchEnd(); }}
+        onTouchCancel={() => { pullHandlers.onTouchCancel(); onTouchEnd(); }}
+      >
+        <div ref={contentRef}>
+        <div key={`${tab}-${enter}`} className={`stagger-in flex flex-col gap-3 px-4 pt-4 pb-[120px] ${swipeDir === 1 ? 'swipe-in-right' : swipeDir === -1 ? 'swipe-in-left' : ''}`}>
           {status === 'loading' && (
             <div className="flex justify-center py-20">
               <div className="w-8 h-8 border-2 rounded-full animate-spin" style={{ borderColor: 'rgba(113,113,255,0.2)', borderTopColor: POINT }} />
@@ -949,10 +1040,11 @@ export default function AnalysisTabsView({ status = 'ready', model, report, repo
               <button onClick={onRetry} className={`mt-3 font-pretendard font-semibold text-[14px] active:opacity-50 ${TRACKING}`} style={{ color: POINT }}>다시 시도</button>
             </div>
           )}
-          {ready && tab === 'summary' && <SummaryTab model={model} report={report} reportStatus={reportStatus} onAskCoach={onAskCoach} onRetryReport={onRetryReport} goTab={setTab} />}
+          {ready && tab === 'summary' && <SummaryTab model={model} report={report} reportStatus={reportStatus} onAskCoach={onAskCoach} onRetryReport={onRetryReport} goTab={next => changeTab(next, 1)} />}
           {ready && tab === 'weight' && <WeightTab trend={model.trend} weeks={weeks} setWeeks={setWeeks} onRecord={onRecord} />}
           {ready && tab === 'diet' && <DietTab diet={model.diet} maintenance={model.maintenance} trend={model.trend} onRecord={onRecord} />}
           {ready && tab === 'workout' && <WorkoutTab strength={model.strength} weekly={model.weekly} week={model.week} weeks={weeks} setWeeks={setWeeks} onRecord={onRecord} />}
+        </div>
         </div>
       </main>
       <MoreMenu view={menu} setView={setMenu} actions={{ onRefresh: onRetry, onRegenerateReport, onEditGoal }} />

@@ -1,6 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
-import { connectAuthEmulator, getAuth, GoogleAuthProvider, OAuthProvider } from "firebase/auth";
+import { connectAuthEmulator, getAuth, GoogleAuthProvider, indexedDBLocalPersistence, initializeAuth, OAuthProvider } from "firebase/auth";
+import { isNativeApp } from "./native";
 
 // 인증 도메인을 앱 도메인과 같게 맞춰야 Safari/Chrome의 저장소 분리 정책에서도 리다이렉트 로그인이 유지된다.
 // Firebase Hosting 도메인은 /__/auth/* 를 직접 제공하므로 현재 호스트를 그대로 쓴다.
@@ -22,7 +23,12 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
-export const auth = getAuth(app);
+/* 스토어 앱의 웹뷰에서는 팝업·리다이렉트 로그인을 쓰지 않는다(네이티브 플러그인으로 대신함).
+   getAuth 기본값은 리다이렉트용 iframe을 불러오다 iOS 웹뷰에서 멈출 수 있어, 앱에서는 저장소만 정해서 만든다.
+   처음 한 번 정하는 것이라 아래 setPersistence 주의와는 다르다. */
+export const auth = isNativeApp
+  ? initializeAuth(app, { persistence: indexedDBLocalPersistence })
+  : getAuth(app);
 
 if (import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true' && !globalThis.__contextHealthFirebaseEmulatorsConnected) {
   connectFirestoreEmulator(db, '127.0.0.1', 8080);

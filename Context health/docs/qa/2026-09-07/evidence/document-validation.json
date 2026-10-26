@@ -1,0 +1,14 @@
+{
+  "findings": 19,
+  "severityCounts": {
+    "P0": 0,
+    "P1": 9,
+    "P2": 9,
+    "P3": 1
+  },
+  "brokenLinks": [],
+  "sourceChangesDuringDocumentation": [],
+  "secretScanFlaggedFiles": [],
+  "typecheckExit": 0,
+  "note": "TypeScript config excludes src JSX. No application code edits or deployment performed."
+}

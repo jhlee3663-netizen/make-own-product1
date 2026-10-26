@@ -25,6 +25,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => `/${FUNCTIONS_EMULATOR_PROJECT}/us-central1/mcp${path}`,
       },
+      '/api/social/': {
+        target: FUNCTIONS_EMULATOR_ORIGIN,
+        changeOrigin: true,
+        rewrite: (path) => `/${FUNCTIONS_EMULATOR_PROJECT}/us-central1/social${path.replace(/^\/api\/social/, '')}`,
+      },
       '/api/social-auth': {
         target: FUNCTIONS_EMULATOR_ORIGIN,
         changeOrigin: true,
@@ -36,14 +41,15 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['logo.png', 'logo-gradient-fill.jpg', 'favicon.png', 'apple-touch-icon.png'],
+      includeAssets: ['logo.png', 'logo-gradient-fill.jpg', 'favicon.png', 'apple-touch-icon.png', 'memo-workout.png', 'memo-diet.png', 'logo-badge.svg'],
       manifest: {
         name: 'Context Health',
         short_name: 'Context Health',
         description: 'AI 기반 운동·식단 관리',
         theme_color: '#ffffff',
         // 폰이 앱을 띄우는 순간 보여주는 화면의 배경. 시작 화면 그라데이션의 중간색으로 맞춘다.
-        background_color: '#999fff',
+        // 설치한 앱(안드로이드)은 이 색으로 화면 맨 아래 시스템 줄을 칠한다. 보라로 두면 하단 네비 아래에 보라 띠가 생긴다.
+        background_color: '#ffffff',
         display: 'standalone',
         orientation: 'portrait',
         scope: '/',
@@ -72,7 +78,7 @@ export default defineConfig({
         skipWaiting: true,
         clientsClaim: true,
         // Firebase 인증 핸들러(/__/auth/*)와 API는 절대 앱 셸로 가로채지 않는다.
-        navigateFallbackDenylist: [/^\/__\//, /^\/api\//, /^\/mcp$/, /^\/\.well-known\//],
+        navigateFallbackDenylist: [/^\/__\//, /^\/api\//, /^\/mcp$/, /^\/\.well-known\//, /^\/firebase-messaging-sw\.js/],
       },
     }),
   ],

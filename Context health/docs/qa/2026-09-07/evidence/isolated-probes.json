@@ -1,0 +1,112 @@
+[
+  {
+    "id": "QA-03",
+    "probe": "Two save invocations before first Firestore acknowledgement",
+    "writes": 0,
+    "stableDocId": "stable-create-id"
+  },
+  {
+    "id": "QA-02",
+    "probe": "Exact logout handler, account A synthetic local data",
+    "remaining": {
+      "context_health_user:QA-B:diet_custom_foods": "QA-B-scoped"
+    },
+    "reloads": 1
+  },
+  {
+    "id": "QA-04",
+    "probe": "Profile remote write rejects",
+    "savedLocal": {
+      "uid": "QA-A",
+      "profile": {
+        "weight": 77
+      }
+    },
+    "uiProfile": {
+      "weight": 77
+    },
+    "remoteAttempts": 1,
+    "errorPropagated": "permission-denied",
+    "visibleFailure": true
+  },
+  {
+    "id": "QA-05",
+    "probe": "Browser back while detail reports unsaved changes",
+    "viewChanged": false,
+    "historyRestored": true,
+    "guardCalls": 1
+  },
+  {
+    "id": "QA-10",
+    "case": "empty-candidates",
+    "result": {
+      "text": "죄송해요, 잠시 후 다시 시도해 주세요.",
+      "suggestion": null
+    }
+  },
+  {
+    "id": "QA-10",
+    "case": "empty-parts",
+    "result": {
+      "text": "죄송해요, 잠시 후 다시 시도해 주세요.",
+      "suggestion": null
+    }
+  },
+  {
+    "id": "QA-10",
+    "case": "429",
+    "error": "quota exceeded"
+  },
+  {
+    "id": "QA-11",
+    "probe": "Pullup 10 reps x 3 sets, weight 70kg",
+    "actual": 2100,
+    "expected": 2100
+  },
+  {
+    "id": "QA-06",
+    "probe": "A AI in flight, user saves B revision, A completes late",
+    "finalSections": [
+      {
+        "part": "B",
+        "items": [
+          {
+            "title": "벤치프레스",
+            "body": "80kg 10회"
+          }
+        ]
+      }
+    ],
+    "finalRevision": "revision-B",
+    "expectedBody": "80kg 10회"
+  },
+  {
+    "id": "QA-07",
+    "probe": "Unanalysed meal input then Save",
+    "input": {
+      "breakfast": "QA 바나나 하나"
+    }
+  },
+  {
+    "id": "QA-15",
+    "probe": "Deleted diet passed to AI context",
+    "result": {
+      "workouts": [],
+      "diets": []
+    }
+  },
+  {
+    "id": "QA-14",
+    "probe": "AI coach fetch that never settles",
+    "abortSignalProvided": true,
+    "settledAfter50ms": false,
+    "note": "50ms probe alone is not a real timeout test. callGemini now has a 45s AbortController timeout and cancels on screen unmount; this probe only observes that a signal is passed."
+  },
+  {
+    "id": "QA-13",
+    "probe": "Soft deletion rejected",
+    "deletingId": null,
+    "failureToastShown": true,
+    "failureToastMessage": "삭제하지 못했어요. 잠시 후 다시 시도해주세요."
+  }
+]

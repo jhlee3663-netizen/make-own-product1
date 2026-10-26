@@ -626,6 +626,17 @@ export async function resolveFoodNutrition(food, customFoods = []) {
     }, modifiers);
   }
 
+  // 공용 음식 사전: 누군가 이미 찾았거나 고친 값 (src/lib/sharedFoods.js). firebase에 의존하므로 늦게 불러온다.
+  const shared = await loadSharedFood(foodText, food);
+  if (shared) {
+    return applyIntakeModifiers({
+      ...shared,
+      name: cleanFoodText(`${food.name}${food.amount ? ` ${food.amount}` : ''}`),
+      source: 'shared',
+      matchedName: '공용 기준값',
+    }, modifiers);
+  }
+
   const standardFood = getStandardFood(foodText, food.amount);
   if (standardFood) {
     const userFoodName = cleanFoodText(`${food.name}${food.amount ? ` ${food.amount}` : ''}`);
@@ -654,5 +665,20 @@ export async function resolveFoodNutrition(food, customFoods = []) {
   }
 
   const estimated = await estimateFoodNutrition(foodText);
+  // AI가 처음 추정한 값을 사전에 "추정값"으로 남겨, 다음 사람은 다시 묻지 않게 한다
+  shareFood({ ...estimated, name: foodText }, 'ai');
   return applyIntakeModifiers(estimated, modifiers);
+}
+
+async function loadSharedFood(foodText, food) {
+  try {
+    const { lookupSharedFood } = await import('../lib/sharedFoods.js');
+    return (await lookupSharedFood(foodText)) || (food.query && food.query !== foodText ? await lookupSharedFood(food.query) : null);
+  } catch {
+    return null;
+  }
+}
+
+export function shareFood(item, source) {
+  import('../lib/sharedFoods.js').then(({ contributeFoods }) => contributeFoods([item], source)).catch(() => {});
 }

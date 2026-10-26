@@ -22,10 +22,15 @@
     "test:volume": "node scripts/test-volume.mjs",
     "test:nutrition-guard": "node scripts/test-nutrition-guard.mjs",
     "test:mcp-parse": "node scripts/test-mcp-parse.mjs",
-    "test:mcp-server": "node scripts/test-mcp-server.mjs"
+    "test:mcp-server": "node scripts/test-mcp-server.mjs",
+    "test:strength": "node scripts/test-strength-progress.mjs",
+    "test:social": "node scripts/test-social.mjs"
   },
   "dependencies": {
+    "@capacitor-firebase/authentication": "^8.5.2",
     "@capacitor/android": "^8.3.4",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/browser": "^8.0.5",
     "@capacitor/cli": "^8.3.4",
     "@capacitor/core": "^8.3.4",
     "@capacitor/ios": "^8.3.4",

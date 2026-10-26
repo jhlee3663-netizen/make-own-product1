@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>피드 탭 시안</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Pretendard, 'Apple SD Gothic Neo', sans-serif; background: #e9ecef; padding: 28px 32px; letter-spacing: -0.025em; color: #171a1d; width: 1560px; }
+  h1 { font-size: 20px; font-weight: 700; } h1 small { font-size: 14px; font-weight: 500; color: #868e96; margin-left: 8px; }
+  .wrap { display: flex; gap: 22px; align-items: flex-start; margin-top: 16px; }
+  .col { display: flex; flex-direction: column; gap: 10px; }
+  .cap { font-size: 14px; font-weight: 700; color: #495057; height: 40px; }
+  .cap small { display: block; font-weight: 500; font-size: 12px; color: #868e96; margin-top: 2px; }
+  .phone { width: 350px; height: 740px; background: #7171ff; border-radius: 26px; overflow: hidden; position: relative; box-shadow: 0 8px 28px rgba(0,0,0,.12); display: flex; flex-direction: column; }
+  .phone.white { background: #fff; }
+  .head { display: flex; justify-content: space-between; align-items: center; padding: 22px 20px 16px; color: #fff; }
+  .head b { font-size: 20px; font-weight: 700; } .head span { font-size: 13px; font-weight: 600; opacity: .85; }
+  .head .pill { background: rgba(255,255,255,.18); padding: 6px 12px; border-radius: 99px; opacity: 1; }
+  .sheet { flex: 1; background: #f8f9fa; border-radius: 24px 24px 0 0; padding: 16px 16px 90px; display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
+  .label { font-size: 13px; font-weight: 600; color: #868e96; padding: 4px 4px 0; display: flex; justify-content: space-between; }
+  .label a { color: #7171ff; text-decoration: none; }
+  .card { background: #fff; border-radius: 20px; box-shadow: 0 2px 12px rgba(3,27,38,.05); }
+  .fade { height: 1px; background: linear-gradient(90deg, rgba(241,243,245,0), #f1f3f5 22%, #f1f3f5 78%, rgba(241,243,245,0)); }
+  .row { display: flex; align-items: center; gap: 12px; padding: 14px 18px; }
+  .av { width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; color: #fff; flex: none; position: relative; }
+  .av.done::after { content: ''; position: absolute; right: -1px; bottom: -1px; width: 12px; height: 12px; border-radius: 50%; background: #7171ff; border: 2px solid #fff; }
+  .who { flex: 1; min-width: 0; }
+  .who b { font-size: 15px; font-weight: 700; display: block; }
+  .who span { font-size: 13px; color: #868e96; display: block; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .who span.off { color: #ced4da; }
+  .clap { flex: none; height: 30px; padding: 0 10px; border-radius: 99px; background: rgba(113,113,255,.1); color: #7171ff; font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 4px; }
+  .clap.on { background: #7171ff; color: #fff; }
+  .today { font-weight: 700; background-image: linear-gradient(-34.5deg, #f79fff 0%, #3aa0ff 103%); -webkit-background-clip: text; color: transparent; }
+  /* 이번 주 표 */
+  .grid { padding: 14px 18px 16px; }
+  .grid .days, .grid .line { display: grid; grid-template-columns: 52px repeat(7, 1fr); align-items: center; }
+  .grid .days span { font-size: 11px; color: #adb5bd; text-align: center; }
+  .grid .days span.t { color: #7171ff; font-weight: 700; }
+  .grid .line { height: 30px; }
+  .grid .line b { font-size: 13px; font-weight: 600; color: #495057; }
+  .dot { width: 22px; height: 22px; border-radius: 7px; margin: 0 auto; background: #f1f3f5; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: #fff; }
+  .dot.y { background: linear-gradient(135deg, #a5a5ff, #7171ff); }
+  .dot.r { background: transparent; }
+  .sum { font-size: 12px; color: #868e96; padding: 0 18px 14px; }
+  .sum b { color: #7171ff; }
+  /* 하단 내비 */
+  .nav { position: absolute; left: 0; right: 0; bottom: 0; height: 64px; background: #fff; border-top: 1px solid #f1f3f5; display: grid; grid-template-columns: repeat(5, 1fr); align-items: center; text-align: center; font-size: 10px; color: #adb5bd; font-weight: 600; }
+  .nav i { display: block; width: 22px; height: 22px; border-radius: 7px; background: #e9ecef; margin: 0 auto 4px; }
+  .nav .on { color: #7171ff; } .nav .on i { background: #7171ff; }
+  .nav .plus i { width: 40px; height: 40px; border-radius: 50%; background: #7171ff; margin-bottom: 0; }
+  /* 친구 기록 보기 */
+  .top { display: flex; align-items: center; gap: 10px; padding: 20px 16px 14px; }
+  .top .back { font-size: 22px; color: #495057; width: 24px; }
+  .top b { font-size: 17px; font-weight: 700; flex: 1; }
+  .prof { display: flex; align-items: center; gap: 14px; padding: 4px 20px 18px; }
+  .prof .av { width: 56px; height: 56px; font-size: 19px; }
+  .prof b { font-size: 18px; font-weight: 700; display: block; }
+  .prof span { font-size: 13px; color: #868e96; }
+  .stats { display: flex; gap: 8px; padding: 0 16px 16px; }
+  .stats div { flex: 1; background: #f8f9fa; border-radius: 14px; padding: 10px 12px; }
+  .stats small { font-size: 11px; color: #868e96; display: block; }
+  .stats b { font-size: 16px; font-weight: 700; }
+  .wsheet { flex: 1; background: #f8f9fa; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
+  .wc { padding: 16px 18px; }
+  .wc .h { display: flex; justify-content: space-between; align-items: center; }
+  .wc .h b { font-size: 16px; font-weight: 700; }
+  .wc .h span { font-size: 13px; color: #868e96; }
+  .badge { display: inline-block; font-size: 11px; font-weight: 700; color: #7171ff; background: rgba(113,113,255,.1); padding: 3px 8px; border-radius: 99px; margin-top: 8px; }
+  .ex { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+  .ex p { font-size: 13px; color: #495057; display: flex; justify-content: space-between; }
+  .ex p span { color: #868e96; }
+  .wc .fade { margin: 12px 0; }
+  .copy { display: flex; align-items: center; justify-content: center; gap: 6px; height: 40px; border-radius: 12px; background: rgba(113,113,255,.1); color: #7171ff; font-size: 14px; font-weight: 700; }
+  .react { display: flex; gap: 6px; margin-top: 10px; }
+  .react span { font-size: 12px; padding: 4px 9px; border-radius: 99px; background: #f1f3f5; color: #495057; }
+  .react span.me { background: rgba(113,113,255,.12); color: #7171ff; font-weight: 700; }
+  /* 초대 */
+  .center { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 0 28px; gap: 10px; }
+  .center .ill { width: 120px; height: 84px; position: relative; margin-bottom: 10px; }
+  .center .ill .av { position: absolute; width: 56px; height: 56px; font-size: 18px; border: 3px solid #f8f9fa; }
+  .center b { font-size: 19px; font-weight: 700; line-height: 1.4; }
+  .center p { font-size: 14px; color: #868e96; line-height: 1.5; }
+  .btn { height: 52px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; width: 100%; }
+  .btn.kakao { background: #fee500; color: #191919; }
+  .btn.sub { background: #f1f3f5; color: #495057; }
+  .btn.main { background: #7171ff; color: #fff; }
+  .btns { display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: 18px; }
+  /* 공개 범위 */
+  .opt { display: flex; align-items: center; padding: 16px 18px; gap: 12px; }
+  .opt .t { flex: 1; } .opt .t b { font-size: 15px; font-weight: 600; display: block; } .opt .t span { font-size: 12px; color: #868e96; }
+  .tg { width: 46px; height: 28px; border-radius: 99px; background: #dee2e6; position: relative; flex: none; }
+  .tg::after { content: ''; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+  .tg.on { background: #7171ff; } .tg.on::after { left: 21px; }
+  .note { font-size: 12px; color: #868e96; line-height: 1.5; padding: 0 6px; }
+  .modal { position: absolute; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: flex-end; }
+  .msheet { background: #fff; width: 100%; border-radius: 24px 24px 0 0; padding: 26px 20px 22px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; }
+  .msheet .av { width: 60px; height: 60px; font-size: 20px; }
+  .msheet b { font-size: 18px; font-weight: 700; margin-top: 6px; }
+  .msheet p { font-size: 14px; color: #868e96; line-height: 1.5; }
+  .chips { display: flex; gap: 6px; margin-top: 4px; }
+  .chips span { font-size: 12px; padding: 5px 10px; border-radius: 99px; background: #f1f3f5; color: #495057; }
+  .chips span.no { color: #adb5bd; text-decoration: line-through; }
+</style>
+<style>
+  .stories { display:flex; gap:14px; padding:4px 18px 18px; overflow:hidden; }
+  .st { display:flex; flex-direction:column; align-items:center; gap:6px; flex:none; width:60px; }
+  .st .ring { width:60px; height:60px; border-radius:50%; padding:2.5px; background:linear-gradient(-34.5deg,#f79fff,#3aa0ff); }
+  .st .ring.seen { background:rgba(255,255,255,.35); }
+  .st .ring .av { width:100%; height:100%; border:2.5px solid #7171ff; font-size:17px; }
+  .st span { font-size:11px; color:#fff; font-weight:600; white-space:nowrap; }
+  .st span small { display:block; text-align:center; font-weight:500; opacity:.75; font-size:10px; margin-top:1px; }
+  .st .add { width:60px; height:60px; border-radius:50%; border:2px dashed rgba(255,255,255,.5); display:flex; align-items:center; justify-content:center; color:#fff; font-size:24px; }
+  .fc { padding:16px 18px; }
+  .src { display:flex; align-items:center; gap:8px; font-size:12px; color:#868e96; }
+  .src i { width:22px; height:22px; border-radius:6px; flex:none; display:flex; align-items:center; justify-content:center; font-style:normal; font-size:10px; color:#fff; font-weight:800; }
+  .src b { color:#495057; font-weight:600; }
+  .fc h4 { font-size:17px; font-weight:700; margin-top:10px; line-height:1.35; }
+  .tags { display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
+  .tags span { font-size:11px; font-weight:600; color:#7171ff; background:rgba(113,113,255,.1); padding:3px 8px; border-radius:99px; }
+  .tags span.g { color:#495057; background:#f1f3f5; }
+  .thumb { height:120px; border-radius:14px; margin-top:12px; background:linear-gradient(135deg,#343a40,#868e96); position:relative; display:flex; align-items:flex-end; padding:10px; }
+  .thumb::after { content:'▶'; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:44px; height:44px; border-radius:50%; background:rgba(0,0,0,.45); color:#fff; display:flex; align-items:center; justify-content:center; font-size:15px; }
+  .thumb span { font-size:11px; color:#fff; background:rgba(0,0,0,.6); padding:2px 6px; border-radius:4px; margin-left:auto; }
+  .mini-ex { margin-top:12px; display:flex; flex-direction:column; gap:5px; }
+  .mini-ex p { font-size:13px; color:#495057; display:flex; justify-content:space-between; } .mini-ex p span { color:#868e96; }
+  .fc .fade { margin:12px 0 10px; }
+  .acts { display:flex; align-items:center; gap:8px; }
+  .acts .get { flex:1; height:40px; border-radius:12px; background:#7171ff; color:#fff; font-size:14px; font-weight:700; display:flex; align-items:center; justify-content:center; gap:6px; }
+  .acts .ico { width:40px; height:40px; border-radius:12px; background:#f1f3f5; display:flex; align-items:center; justify-content:center; font-size:15px; color:#495057; }
+  .acts small { font-size:12px; color:#868e96; }
+  .meals { margin-top:12px; display:flex; flex-direction:column; gap:8px; }
+  .meals div { display:flex; gap:10px; align-items:center; font-size:13px; }
+  .meals b { width:30px; font-size:12px; color:#868e96; font-weight:600; flex:none; }
+  .meals span { flex:1; color:#343a40; } .meals em { font-style:normal; color:#868e96; font-size:12px; }
+  .paste { display:flex; align-items:center; gap:10px; padding:12px 14px; }
+  .paste .yt { width:34px; height:34px; border-radius:10px; background:#ff3b30; color:#fff; display:flex; align-items:center; justify-content:center; font-size:12px; flex:none; }
+  .paste div { flex:1; } .paste b { font-size:14px; font-weight:700; display:block; } .paste span { font-size:12px; color:#868e96; }
+  .paste .go { font-size:13px; font-weight:700; color:#7171ff; }
+  /* 스토리 보기 */
+  .story { position:absolute; inset:0; background:linear-gradient(170deg,#5b5bf0 0%,#7171ff 45%,#b38cff 100%); color:#fff; display:flex; flex-direction:column; padding:14px 18px 22px; }
+  .bars { display:flex; gap:4px; } .bars i { flex:1; height:3px; border-radius:2px; background:rgba(255,255,255,.35); } .bars i.on { background:#fff; }
+  .shead { display:flex; align-items:center; gap:10px; margin-top:12px; }
+  .shead .av { width:34px; height:34px; font-size:13px; border:2px solid #fff; }
+  .shead b { font-size:14px; } .shead span { font-size:12px; opacity:.75; margin-left:4px; }
+  .shead .x { margin-left:auto; font-size:20px; opacity:.85; }
+  .sbody { flex:1; display:flex; flex-direction:column; justify-content:center; }
+  .sbody .part { font-size:34px; font-weight:800; letter-spacing:-.04em; }
+  .sbody .vol { font-size:15px; opacity:.85; margin-top:6px; }
+  .sbody .vol b { font-weight:800; opacity:1; }
+  .slist { margin-top:26px; background:rgba(255,255,255,.14); border-radius:18px; padding:14px 16px; display:flex; flex-direction:column; gap:9px; }
+  .slist p { display:flex; justify-content:space-between; font-size:14px; } .slist p span { opacity:.8; }
+  .slist .pr { font-size:11px; font-weight:800; background:#fff; color:#7171ff; padding:1px 6px; border-radius:99px; margin-left:6px; }
+  .memo { margin-top:14px; font-size:14px; line-height:1.5; opacity:.92; }
+  .sfoot { display:flex; gap:8px; align-items:center; }
+  .sfoot .in { flex:1; height:44px; border-radius:22px; border:1.5px solid rgba(255,255,255,.55); display:flex; align-items:center; padding:0 16px; font-size:14px; opacity:.85; }
+  .sfoot .c { width:44px; height:44px; border-radius:50%; background:rgba(255,255,255,.2); display:flex; align-items:center; justify-content:center; font-size:18px; }
+  .sfoot .get2 { height:44px; padding:0 14px; border-radius:22px; background:#fff; color:#7171ff; font-size:13px; font-weight:800; display:flex; align-items:center; }
+  /* AI 정리 */
+  .ai { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:700; color:#7171ff; margin-top:14px; }
+  .ai i { width:16px; height:16px; border-radius:50%; background:linear-gradient(135deg,#228bed,#c509d6); }
+  .exl { margin-top:8px; display:flex; flex-direction:column; }
+  .exl .r { display:flex; align-items:center; gap:10px; padding:10px 0; }
+  .exl .ts { font-size:11px; font-weight:700; color:#7171ff; background:rgba(113,113,255,.1); padding:2px 6px; border-radius:6px; flex:none; width:44px; text-align:center; }
+  .exl .n { flex:1; font-size:14px; font-weight:600; } .exl .n small { display:block; font-size:12px; color:#868e96; font-weight:500; margin-top:2px; }
+  .exl .w { font-size:13px; font-weight:700; color:#343a40; }
+  .tip { margin-top:6px; background:#f8f9fa; border-radius:12px; padding:10px 12px; font-size:12px; color:#495057; line-height:1.5; }
+  .tip b { color:#171a1d; }
+</style>
+<style>
+  .ph { display:flex; align-items:center; gap:18px; padding:4px 20px 14px; }
+  .ph .ring { width:78px; height:78px; border-radius:50%; padding:3px; background:linear-gradient(-34.5deg,#f79fff,#3aa0ff); flex:none; }
+  .ph .ring .av { width:100%; height:100%; border:3px solid #fff; font-size:24px; }
+  .cnt { flex:1; display:flex; justify-content:space-around; text-align:center; }
+  .cnt b { display:block; font-size:18px; font-weight:800; } .cnt span { font-size:12px; color:#868e96; }
+  .bio { padding:0 20px; } .bio b { font-size:15px; font-weight:700; } .bio p { font-size:13px; color:#495057; margin-top:3px; line-height:1.45; }
+  .pbtn { display:flex; gap:8px; padding:12px 20px 14px; } .pbtn div { flex:1; height:36px; border-radius:10px; background:#f1f3f5; font-size:13px; font-weight:700; display:flex; align-items:center; justify-content:center; color:#343a40; }
+  .pbtn div.p { background:#7171ff; color:#fff; }
+  .ptabs { display:flex; border-bottom:1px solid #f1f3f5; } .ptabs span { flex:1; text-align:center; font-size:14px; font-weight:600; color:#adb5bd; padding:10px 0; }
+  .ptabs span.on { color:#171a1d; font-weight:700; box-shadow:inset 0 -2px 0 #7171ff; }
+  .pr3 { display:flex; gap:8px; } .pr3 div { flex:1; background:#fff; border-radius:14px; padding:10px 12px; box-shadow:0 2px 12px rgba(3,27,38,.05); }
+  .pr3 small { font-size:11px; color:#868e96; display:block; } .pr3 b { font-size:15px; font-weight:800; }
+  .entry { background:#fff; border-radius:20px; padding:18px; box-shadow:0 8px 28px rgba(0,0,0,.08); width:300px; font-size:13px; line-height:1.6; color:#343a40; }
+  .entry h5 { font-size:15px; font-weight:800; margin-bottom:10px; }
+  .entry p { display:flex; gap:8px; margin-bottom:8px; } .entry p i { font-style:normal; color:#7171ff; font-weight:800; flex:none; width:16px; }
+</style>
+</head>
+<body>
+<h1>친구 프로필 시안 <small>스토리 · 피드 카드 · 알림에서 이름/사진을 누르면 여기로</small></h1>
+<div class="wrap">
+  <div class="col">
+    <div class="cap">⑤ 친구 프로필<small>인스타 프로필처럼 · 기록 / 루틴 / 최고 기록</small></div>
+    <div class="phone white">
+      <div class="top"><span class="back">‹</span><b>minsu_lift</b><span style="font-size:15px;color:#868e96">•••</span></div>
+      <div class="ph">
+        <div class="ring"><div class="av" style="background:#ff8fa3">민</div></div>
+        <div class="cnt"><div><b>142</b><span>운동</span></div><div><b>3</b><span>루틴</span></div><div><b>5</b><span>친구</span></div></div>
+      </div>
+      <div class="bio"><b>민수</b><p>3분할 · 벤치 100 목표 · 주 5회</p></div>
+      <div class="pbtn"><div>친구 ✓</div><div class="p">👉 콕 찌르기</div></div>
+      <div class="ptabs"><span class="on">기록</span><span>루틴</span><span>최고 기록</span></div>
+      <div class="wsheet" style="gap:10px">
+        <div class="card grid" style="padding:12px 16px">
+          <div class="days"><span style="text-align:left;font-weight:700;color:#495057">이번 주</span><span>월</span><span>화</span><span class="t">수</span><span>목</span><span>금</span><span>토</span><span>일</span></div>
+          <div class="line"><b>가슴</b><i class="dot"></i><i class="dot"></i><i class="dot y"></i><i class="dot r"></i><i class="dot r"></i><i class="dot r"></i><i class="dot r"></i></div>
+          <div class="line"><b>등</b><i class="dot"></i><i class="dot y"></i><i class="dot"></i><i class="dot r"></i><i class="dot r"></i><i class="dot r"></i><i class="dot r"></i></div>
+          <div class="line"><b>하체</b><i class="dot y"></i><i class="dot"></i><i class="dot"></i><i class="dot r"></i><i class="dot r"></i><i class="dot r"></i><i class="dot r"></i></div>
+        </div>
+        <div class="card wc">
+          <div class="h"><b>가슴 · 어깨</b><span class="today">오늘</span></div>
+          <div class="ex"><p>벤치프레스 <span>90kg × 5 × 5</span></p><p>인클라인 덤벨 프레스 <span>30kg × 10 × 3</span></p></div>
+          <div class="react"><span class="me">👏 나</span><span>💬 2</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="cap">⑤-2 루틴 탭<small>민수가 만든 루틴 · 따라 하는 사람 수</small></div>
+    <div class="phone white">
+      <div class="top"><span class="back">‹</span><b>minsu_lift</b></div>
+      <div class="ptabs" style="margin-top:4px"><span>기록</span><span class="on">루틴</span><span>최고 기록</span></div>
+      <div class="wsheet" style="gap:10px">
+        <div class="card fc">
+          <h4 style="margin-top:0">민수표 3분할 · 가슴/어깨 날</h4>
+          <div class="tags"><span>가슴</span><span>어깨</span><span>5종목</span><span class="g">실제 기록 12회에서 만듦</span></div>
+          <div class="fade"></div>
+          <div class="acts"><div class="get">↧ 내 메모로 가져오기</div></div>
+          <p style="font-size:12px;color:#868e96;margin-top:8px">지훈 외 2명이 따라 하는 중</p>
+        </div>
+        <div class="card fc">
+          <h4 style="margin-top:0">민수표 3분할 · 등 날</h4>
+          <div class="tags"><span>등</span><span>6종목</span></div>
+          <div class="fade"></div>
+          <div class="acts"><div class="get">↧ 내 메모로 가져오기</div></div>
+        </div>
+        <div class="label" style="margin-top:6px"><span>최고 기록 미리보기</span></div>
+        <div class="pr3"><div><small>벤치</small><b>92.5kg</b></div><div><small>스쿼트</small><b>140kg</b></div><div><small>데드</small><b>170kg</b></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="cap">들어오는 길<small>어디서 누르면 프로필이 열리나</small></div>
+    <div class="entry">
+      <h5>프로필로 들어오는 곳</h5>
+      <p><i>1</i><span>스토리를 연 화면 위쪽의 <b>사진·이름</b> (스토리 동그라미 자체는 스토리를 연다)</span></p>
+      <p><i>2</i><span>피드 카드의 <b>"민수가 가져옴"</b>, "민수도 가져갔어요"의 이름</span></p>
+      <p><i>3</i><span>알림의 사진·이름</span></p>
+      <p><i>4</i><span>마이 › 친구 목록</span></p>
+      <h5 style="margin-top:16px">친구가 아니면</h5>
+      <p><i>·</i><span>이름·사진·올린 루틴만 보이고, 기록과 최고 기록은 잠겨 있다 → "친구 요청"</span></p>
+    </div>
+  </div>
+</div>
+</body>
+</html>

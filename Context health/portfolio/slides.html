@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>Context Health Portfolio</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+:root{
+  --blue:#3B82F6; --b2:#6EA2F8; --b3:#9EC0FB; --b4:#D6E4FD; --b5:#EEF4FF;
+  --purple:#8B7CF6;
+  --ink:#111827; --ink2:#374151; --sub:#6B7280; --mute:#9CA3AF; --line:#ECEEF2;
+  --bg2:#F8F9FB;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:Pretendard,-apple-system,sans-serif;background:#E5E7EB;color:var(--ink);-webkit-font-smoothing:antialiased;letter-spacing:-0.02em}
+.slide{width:1920px;height:1080px;background:#fff;display:flex;flex-direction:column;overflow:hidden;position:relative;margin:0 auto 40px}
+.render .slide{margin:0}
+/* header */
+.hd{display:grid;grid-template-columns:240px 1fr;padding:72px 140px 0 140px;height:336px;flex-shrink:0}
+.eb{font-size:28px;font-weight:600;color:var(--blue);padding-top:14px;letter-spacing:-0.01em}
+.tt{font-size:64px;font-weight:800;line-height:1.28;letter-spacing:-0.035em}
+.tt .bl{color:var(--blue)}
+.tt .gr{background:linear-gradient(90deg,#3B82F6 0%,#7C6CF4 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.sb{font-size:25px;color:var(--sub);line-height:1.6;margin-top:20px;font-weight:400}
+/* body */
+.bd{flex:1;background:var(--bg2);padding:44px 140px 0 380px;position:relative}
+.card{background:#fff;border:1px solid var(--line);border-radius:28px;box-shadow:0 2px 16px rgba(17,24,39,.03)}
+.q{font-size:30px;font-weight:500;color:var(--ink2);line-height:1.4}
+.src{font-size:17px;color:var(--mute);margin-top:12px;line-height:1.5}
+/* timeline */
+.tl{position:absolute;left:222px;top:0;bottom:0;width:36px}
+.tl .dot{width:40px;height:40px;border-radius:50%;background:var(--blue);color:#fff;font-weight:700;font-size:20px;display:flex;align-items:center;justify-content:center;position:absolute;left:-2px}
+.tl .ln{position:absolute;left:17px;width:0;border-left:4px dotted var(--b3)}
+/* bars */
+.bars{display:flex;flex-direction:column;gap:18px}
+.bar{display:flex;align-items:center;gap:18px}
+.bar .f{height:60px;border-radius:10px;color:#fff;font-size:21px;font-weight:600;display:flex;align-items:center;padding:0 22px;white-space:nowrap}
+.bar .v{font-size:22px;font-weight:700;color:var(--blue)}
+/* donut */
+.dn{width:250px;height:250px;border-radius:50%;position:relative;flex-shrink:0}
+.dn::after{content:"";position:absolute;inset:18%;background:#fff;border-radius:50%}
+.dn .c{position:absolute;inset:0;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.dn .c small{font-size:16px;color:var(--sub);font-weight:500}
+.dn .c b{font-size:46px;color:var(--blue);font-weight:800;line-height:1.15}
+.dn .c span{font-size:17px;color:var(--ink2);font-weight:600}
+.lg{display:flex;flex-direction:column;gap:16px;font-size:21px;color:var(--ink2)}
+.lg div{display:flex;align-items:center;gap:12px}
+.lg i{width:16px;height:16px;border-radius:50%;display:inline-block}
+.lg em{font-style:normal;margin-left:auto;font-weight:600;padding-left:36px}
+/* summary box */
+.sum{border:2px solid var(--blue);border-radius:28px;background:#fff;text-align:center;padding:26px 0}
+.sum p{font-size:28px;color:var(--ink2);font-weight:300;line-height:1.5}
+.sum p b{font-weight:800;color:var(--ink)}
+.chip{display:inline-flex;align-items:center;height:40px;padding:0 18px;border-radius:999px;background:var(--b5);color:var(--blue);font-size:18px;font-weight:600}
+.num{font-size:64px;font-weight:800;color:var(--blue);letter-spacing:-0.04em;line-height:1}
+.lbl{font-size:21px;color:var(--sub);margin-top:14px;line-height:1.45}
+.arrow{color:var(--b3);font-size:36px;font-weight:300}
+.foot{position:absolute;right:56px;bottom:32px;font-size:15px;color:var(--mute)}
+.pg{position:absolute;right:140px;top:100px;font-size:18px;color:var(--mute);font-weight:500;letter-spacing:0}
+/* phone mockup */
+.ph{--w:300px;width:var(--w);background:#0F1115;border-radius:calc(var(--w)*.155);padding:calc(var(--w)*.034);box-shadow:0 28px 56px rgba(17,24,39,.16),inset 0 0 0 2px #2B2F36;flex-shrink:0;position:relative}
+.ph img{display:block;width:100%;aspect-ratio:1170/2532;object-fit:cover;border-radius:calc(var(--w)*.125)}
+.co{display:flex;gap:22px;align-items:flex-start}
+.co .n{width:40px;height:40px;border-radius:50%;background:var(--blue);color:#fff;font-weight:700;font-size:19px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px}
+.co h4{font-size:28px;font-weight:700;line-height:1.35}
+.co p{font-size:20px;color:var(--sub);line-height:1.6;margin-top:8px}
+.memo{background:#FFFBEA;border-radius:24px;padding:34px 38px;font-size:24px;line-height:1.75;color:#3F3A2E}
+.memo .d{font-size:16px;color:#A8A08A;margin-bottom:8px}
+.pin{display:inline-block;background:#FEE2E2;color:#DC2626;border-radius:6px;padding:0 6px;font-weight:600}
+</style>
+</head>
+<body>
+
+<!-- 01 OVERVIEW -->
+<section class="slide" id="s1">
+  <div style="position:absolute;right:0;top:0;bottom:0;width:820px;background:var(--bg2)"></div>
+  <div style="position:absolute;right:500px;top:170px"><div class="ph" style="--w:330px"><img src="capture/shots/memo-structured.png"></div></div>
+  <div style="position:absolute;right:150px;top:110px"><div class="ph" style="--w:330px"><img src="capture/shots/home-workout.png"></div></div>
+  <div style="padding:190px 140px 0;width:1000px">
+    <div class="eb" style="padding:0">Overview</div>
+    <div class="tt" style="font-size:96px;margin-top:22px;letter-spacing:-0.04em">Context Health</div>
+    <div class="tt" style="font-size:52px;margin-top:12px"><span class="gr">메모하듯 적으면,<br>AI가 성장을 기록해요</span></div>
+    <div class="sb" style="font-size:25px;margin-top:34px">기구 변경·보조·아쉬움까지 메모 그대로 남기고<br>AI가 세트·볼륨·과부하 데이터로 정리하는 운동 기록 앱</div>
+    <div style="display:flex;gap:48px;margin-top:84px">
+      <div><div class="num" style="font-size:52px">1인</div><div class="lbl" style="font-size:19px;margin-top:10px">기획·디자인·개발</div></div>
+      <div style="border-left:1px solid var(--line);padding-left:48px"><div class="num" style="font-size:52px">5.5<span style="font-size:28px">개월</span></div><div class="lbl" style="font-size:19px;margin-top:10px">2026.04 – 09</div></div>
+      <div style="border-left:1px solid var(--line);padding-left:48px"><div class="num" style="font-size:52px">3<span style="font-size:28px">플랫폼</span></div><div class="lbl" style="font-size:19px;margin-top:10px">iOS·Android·Web</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 02 BACKGROUND -->
+<section class="slide" id="s2">
+  <div class="hd">
+    <div class="eb">Background</div>
+    <div>
+      <div class="tt">운동 앱을 써봐도,<br><span class="bl">결국 메모장으로 돌아와요</span></div>
+      <div class="sb">부위·종목 중심의 정해진 입력 칸은<br>기구가 바뀌거나, 보조가 들어간 세트를 담지 못했어요</div>
+    </div>
+  </div>
+  <div class="bd">
+    <div class="tl"><div class="dot">1</div><div class="ln"></div><div class="dot">2</div></div>
+    <div class="card" style="padding:30px 64px;display:flex;flex-direction:column;gap:24px">
+      <div data-r style="display:grid;grid-template-columns:460px 1fr;align-items:center">
+        <div><div class="q">운동 기록,<br>지금 어디에 하나요?</div><div class="src">주 3회 이상 웨이트 트레이닝 24명,<br>자체 인터뷰(2026.04)</div></div>
+        <div class="bars">
+          <div class="bar"><div class="f" style="width:600px;background:var(--blue)">메모장 · 카톡 나와의 채팅</div><div class="v">58%</div></div>
+          <div class="bar"><div class="f" style="width:259px;background:var(--b2)">운동 기록 앱</div><div class="v">25%</div></div>
+          <div class="bar"><div class="f" style="width:176px;background:var(--b3)">기록 안 함</div><div class="v">17%</div></div>
+        </div>
+      </div>
+      <div style="height:1px;background:var(--line)"></div>
+      <div data-r style="display:grid;grid-template-columns:460px 1fr;align-items:center">
+        <div><div class="q">메모장 사용자는<br>왜 앱을 떠났나요?</div><div class="src">앱 사용 경험이 있는 메모장 사용자 11명,<br>복수 응답</div></div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px">
+          <div style="background:var(--b5);border-radius:20px;padding:16px 24px"><div style="font-size:40px;font-weight:800;color:var(--blue)">9<span style="font-size:26px">명</span></div><div style="font-size:19px;color:var(--ink2);margin-top:10px;line-height:1.45">기구가 바뀌면<br>다른 운동이 돼요</div></div>
+          <div style="background:var(--b5);border-radius:20px;padding:16px 24px"><div style="font-size:40px;font-weight:800;color:var(--blue)">7<span style="font-size:26px">명</span></div><div style="font-size:19px;color:var(--ink2);margin-top:10px;line-height:1.45">보조·드랍세트를<br>적을 칸이 없어요</div></div>
+          <div style="background:var(--b5);border-radius:20px;padding:16px 24px"><div style="font-size:40px;font-weight:800;color:var(--blue)">6<span style="font-size:26px">명</span></div><div style="font-size:19px;color:var(--ink2);margin-top:10px;line-height:1.45">아쉬움·통증 같은<br>특이사항이 묻혀요</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="sum" style="margin-top:20px"><p>정교하게 기록하려는 사람일수록<br><b>정해진 칸보다 메모 한 줄이 더 정확한 기록이었어요.</b></p></div>
+  </div>
+</section>
+
+<!-- 03 PROBLEM -->
+<section class="slide" id="s3">
+  <div class="hd">
+    <div class="eb">Problem</div>
+    <div>
+      <div class="tt">메모장은 가장 정확하지만,<br><span class="bl">성장을 보여주진 못해요</span></div>
+      <div class="sb">맥락은 다 담기지만 구조가 없어서,<br>지난 기록과 비교하고 과부하를 확인하는 건 여전히 사람의 몫이에요</div>
+    </div>
+  </div>
+  <div class="bd" style="padding-left:140px">
+    <div style="display:grid;grid-template-columns:600px 1fr;gap:32px;align-items:stretch">
+      <div class="card" style="padding:36px 40px">
+        <div class="chip" style="background:#F3F4F6;color:var(--sub)">실제 메모장 기록</div>
+        <div class="memo" style="margin-top:24px">
+          <div class="d">9월 27일 토요일 · 가슴</div>
+          벤치 60 12 / 70 10 / 80 8<br>
+          82.5 8 <span class="pin">마지막 보조2</span><br>
+          인클 28 10 28 10 26 10<br>
+          펙덱 <span class="pin">머신 고장 → 해머</span><br>
+          45 12 드랍 35 12 25 15<br>
+          <span class="pin">왼쪽 어깨 살짝 걸림</span>
+        </div>
+      </div>
+      <div class="card" style="padding:44px 52px;display:flex;flex-direction:column;justify-content:space-between">
+        <div class="co"><div class="n" style="background:#EF4444">1</div><div><h4>지난 기록을 찾으려면 스크롤부터</h4><p>지난주 벤치 무게를 찾는 데 평균 <b style="color:var(--ink)">47초</b></p></div></div>
+        <div style="height:1px;background:var(--line)"></div>
+        <div class="co"><div class="n" style="background:#EF4444">2</div><div><h4>볼륨·과부하는 머릿속 계산</h4><p>응답자 11명 중 <b style="color:var(--ink)">10명</b>이 볼륨을 계산해 본 적 없음</p></div></div>
+        <div style="height:1px;background:var(--line)"></div>
+        <div class="co"><div class="n" style="background:#EF4444">3</div><div><h4>같은 운동도 표기가 제각각</h4><p>벤치 · 벤프 · bench — 한 사람 메모에서 평균 <b style="color:var(--ink)">3가지</b> 표기</p></div></div>
+      </div>
+    </div>
+    <div class="sum" style="margin-top:28px"><p>문제는 메모 자체가 아니라,<br><b>메모가 쌓여도 데이터가 되지 않는다는 점이었어요.</b></p></div>
+  </div>
+</section>
+
+<!-- 04 SOLUTION -->
+<section class="slide" id="s4">
+  <div class="hd">
+    <div class="eb">Solution</div>
+    <div>
+      <div class="tt">메모는 그대로 쓰고,<br><span class="bl">구조와 비교는 AI가 채워요</span></div>
+      <div class="sb">입력의 자유는 메모장에서, 데이터의 구조는 앱에서 가져와<br>기록의 본질인 ‘정확함’을 지키는 데 집중했어요</div>
+    </div>
+  </div>
+  <div class="bd" style="padding-left:140px">
+    <div style="display:grid;grid-template-columns:560px 1fr;gap:32px">
+      <div class="card" style="padding:44px 48px;border:2px solid var(--blue)">
+        <div class="chip">Target</div>
+        <div style="font-size:32px;font-weight:800;line-height:1.4;margin-top:24px">정교하게 본인의 성장을<br>기록하고자 하는 사람</div>
+        <div style="display:flex;flex-direction:column;gap:14px;margin-top:30px;font-size:21px;color:var(--ink2)">
+          <div>✓ 세트마다 무게와 횟수를 남기고</div>
+          <div>✓ 보조·기구·컨디션까지 적으며</div>
+          <div>✓ 지난주보다 나아졌는지 확인하고 싶은</div>
+        </div>
+      </div>
+      <div class="card" style="padding:40px 52px;display:flex;flex-direction:column;justify-content:space-between">
+        <div class="co"><div class="n">1</div><div><h4>형식 없는 입력</h4><p>줄임말·숫자 나열 그대로, 메모장처럼 적어요</p></div></div>
+        <div style="height:1px;background:var(--line)"></div>
+        <div class="co"><div class="n">2</div><div><h4>맥락 보존</h4><p>보조·드랍·기구 변경·특이사항을 버리지 않고 세트 옆에 남겨요</p></div></div>
+        <div style="height:1px;background:var(--line)"></div>
+        <div class="co"><div class="n" style="background:linear-gradient(135deg,#3B82F6,#7C6CF4)">3</div><div><h4>자동 비교</h4><p>지난 기록과 종목별 무게·볼륨을 비교해 과부하를 알려줘요</p></div></div>
+      </div>
+    </div>
+    <div class="sum" style="margin-top:28px"><p>앱의 구조와 메모장의 자유,<br><b>둘 중 하나를 고르지 않아도 되게 만들었어요.</b></p></div>
+  </div>
+</section>
+
+<!-- 05 WORKFLOW -->
+<section class="slide" id="s5">
+  <div class="hd">
+    <div class="eb">Workflow</div>
+    <div>
+      <div class="tt">Claude가 설계하고 검수하고,<br><span class="bl">Codex가 구현해요</span></div>
+      <div class="sb">Antigravity 안에서 두 AI 에이전트의 역할을 나눠<br>작성자와 검수자가 분리된 개발 루프를 만들었어요</div>
+    </div>
+  </div>
+  <div class="bd" style="padding-left:140px">
+    <div style="display:grid;grid-template-columns:1fr 64px 1fr 64px 1fr 64px 1fr;align-items:stretch">
+      <div class="card" style="padding:36px 32px">
+        <div style="font-size:18px;font-weight:700;color:var(--blue)">STEP 1 · Claude Code</div>
+        <div style="font-size:30px;font-weight:700;margin-top:14px">작업 지시서</div>
+        <div style="font-size:20px;color:var(--sub);line-height:1.55;margin-top:14px">요구사항·범위·검수 기준을<br>fix.md에 정리</div>
+      </div>
+      <div class="arrow" style="display:flex;align-items:center;justify-content:center">→</div>
+      <div class="card" style="padding:36px 32px">
+        <div style="font-size:18px;font-weight:700;color:var(--purple)">STEP 2 · Codex</div>
+        <div style="font-size:30px;font-weight:700;margin-top:14px">구현</div>
+        <div style="font-size:20px;color:var(--sub);line-height:1.55;margin-top:14px">지시서 범위 안에서만<br>코드 작성·테스트</div>
+      </div>
+      <div class="arrow" style="display:flex;align-items:center;justify-content:center">→</div>
+      <div class="card" style="padding:36px 32px">
+        <div style="font-size:18px;font-weight:700;color:var(--blue)">STEP 3 · Claude Code</div>
+        <div style="font-size:30px;font-weight:700;margin-top:14px">코드 리뷰</div>
+        <div style="font-size:20px;color:var(--sub);line-height:1.55;margin-top:14px">기준 대비 diff 검수<br>PASS / FAIL 판정</div>
+      </div>
+      <div class="arrow" style="display:flex;align-items:center;justify-content:center">→</div>
+      <div class="card" style="padding:36px 32px;display:flex;flex-direction:column;gap:14px;justify-content:center">
+        <div style="background:var(--b5);border-radius:16px;padding:18px 22px"><div style="font-size:20px;font-weight:700;color:var(--blue)">PASS</div><div style="font-size:18px;color:var(--sub);margin-top:4px">work_log 기록 · 배포</div></div>
+        <div style="background:#FEF2F2;border-radius:16px;padding:18px 22px"><div style="font-size:20px;font-weight:700;color:#EF4444">FAIL</div><div style="font-size:18px;color:var(--sub);margin-top:4px">fail_log 기록 · STEP 2로</div></div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:32px;padding:34px 48px;display:grid;grid-template-columns:260px 1fr;align-items:center;gap:32px">
+      <div><div style="font-size:18px;color:var(--mute)">실제 FAIL 사례</div><div style="font-size:26px;font-weight:700;margin-top:8px">유산소 볼륨 계산</div></div>
+      <div style="display:flex;align-items:center;gap:18px;font-size:21px;color:var(--ink2)">
+        <span style="background:#FEF2F2;color:#EF4444;border-radius:12px;padding:12px 18px;font-weight:600">“400m”를 400분으로 해석</span>
+        <span class="arrow" style="font-size:26px">→</span>
+        <span style="background:#FEF2F2;color:#EF4444;border-radius:12px;padding:12px 18px;font-weight:600">같은 로직 3곳 중복</span>
+        <span class="arrow" style="font-size:26px">→</span>
+        <span style="background:var(--b5);color:var(--blue);border-radius:12px;padding:12px 18px;font-weight:600">단위 파서 통합 후 PASS</span>
+      </div>
+    </div>
+    <div class="sum" style="margin-top:32px"><p>만든 AI와 검사하는 AI를 분리해<br><b>혼자서도 코드 리뷰가 있는 개발 환경을 만들었어요.</b></p></div>
+  </div>
+</section>
+
+
+<!-- 06 SERVICE FLOW -->
+<section class="slide" id="s6">
+  <div class="hd" style="height:250px">
+    <div class="eb">Service Flow</div>
+    <div>
+      <div class="tt">적고, 정리하고, <span class="bl">성장을 확인해요</span></div>
+      <div class="sb" style="margin-top:14px">쉬는 시간의 메모 한 장이 저장까지 네 단계로 이어져요</div>
+    </div>
+  </div>
+  <div class="bd" style="padding:40px 140px 0">
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0;justify-items:center">
+      <div style="text-align:center"><div style="font-size:18px;font-weight:700;color:var(--blue)">01 · Write</div><div style="font-size:26px;font-weight:700;margin:8px 0 26px">메모하듯 기록</div><div class="ph" style="--w:270px"><img src="capture/shots/memo-raw.png"></div></div>
+      <div style="text-align:center"><div style="font-size:18px;font-weight:700;color:var(--purple)">02 · AI Tidy</div><div style="font-size:26px;font-weight:700;margin:8px 0 26px">AI 글 정리 · 과부하 비교</div><div class="ph" style="--w:270px"><img src="capture/shots/memo-ai-sheet.png"></div></div>
+      <div style="text-align:center"><div style="font-size:18px;font-weight:700;color:var(--blue)">03 · Structure</div><div style="font-size:26px;font-weight:700;margin:8px 0 26px">맥락을 담은 세트 기록</div><div class="ph" style="--w:270px"><img src="capture/shots/memo-structured.png"></div></div>
+      <div style="text-align:center"><div style="font-size:18px;font-weight:700;color:var(--blue)">04 · Track</div><div style="font-size:26px;font-weight:700;margin:8px 0 26px">주간 볼륨 · AI 코멘트</div><div class="ph" style="--w:270px"><img src="capture/shots/home-workout.png"></div></div>
+    </div>
+    <div style="position:absolute;left:140px;right:140px;top:360px;display:grid;grid-template-columns:repeat(4,1fr);pointer-events:none">
+      <div></div><div class="arrow" style="margin-left:-24px">→</div><div class="arrow" style="margin-left:-24px">→</div><div class="arrow" style="margin-left:-24px">→</div>
+    </div>
+  </div>
+</section>
+
+<!-- 07 FEATURE 1 -->
+<section class="slide" id="s7">
+  <div class="hd">
+    <div class="eb">Key Feature 01</div>
+    <div>
+      <div class="tt">휘갈겨 쓴 메모도,<br><span class="bl">맥락까지 그대로 정리돼요</span></div>
+      <div class="sb">AI가 숫자만 뽑아내지 않고, 보조·기구 변경·통증 메모를<br>해당 세트와 종목 옆에 남겨요</div>
+    </div>
+  </div>
+  <div class="bd" style="padding:44px 140px 0 140px">
+    <div style="display:grid;grid-template-columns:auto 72px auto 1fr;align-items:start">
+      <div style="text-align:center"><div class="chip" style="background:#fff;border:1px solid var(--line);color:var(--sub);margin-bottom:20px">Before · 원문 메모</div><div class="ph" style="--w:280px"><img src="capture/shots/memo-raw.png"></div></div>
+      <div class="arrow" style="text-align:center;margin-top:320px">→</div>
+      <div style="text-align:center"><div class="chip" style="margin-bottom:20px">After · AI 정리</div><div class="ph" style="--w:280px"><img src="capture/shots/memo-structured.png"></div></div>
+      <div style="padding:60px 0 0 72px;display:flex;flex-direction:column;gap:40px">
+        <div class="co"><div class="n">1</div><div><h4>“마지막 보조2” → 강제반복</h4><p>보조가 들어간 세트를 강제반복으로 태그해<br>순수 성공 세트와 구분해요</p></div></div>
+        <div class="co"><div class="n">2</div><div><h4>“어깨 살짝 걸림” → 종목 메모</h4><p>통증·아쉬움은 해당 종목의 메모로 남아<br>다음 기록 때 다시 보여요</p></div></div>
+        <div class="co"><div class="n">3</div><div><h4>“머신 고장 → 해머” → 기구 변경</h4><p>기구가 바뀌어도 같은 운동의 흐름으로<br>이어서 기록돼요</p></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 08 FEATURE 2 -->
+<section class="slide" id="s8">
+  <div class="hd">
+    <div class="eb">Key Feature 02</div>
+    <div>
+      <div class="tt">쌓인 메모를 읽고,<br><span class="bl">다음 세트를 제안해요</span></div>
+      <div class="sb">정리된 기록은 지난 세션과 자동으로 비교되고,<br>AI 코치는 숫자 뒤에 적힌 메모까지 근거로 삼아요</div>
+    </div>
+  </div>
+  <div class="bd" style="padding:44px 140px 0 140px">
+    <div style="display:grid;grid-template-columns:1fr auto auto;gap:56px;align-items:start">
+      <div style="padding-top:60px;display:flex;flex-direction:column;gap:36px">
+        <div class="card" style="padding:32px 40px">
+          <div style="font-size:18px;font-weight:700;color:var(--purple)">자동 과부하 비교</div>
+          <div style="display:flex;gap:40px;margin-top:16px;align-items:flex-end">
+            <div><div class="num" style="font-size:52px">+3.8<span style="font-size:28px">%</span></div><div class="lbl" style="font-size:18px;margin-top:8px">벤치프레스 · 지난 기록 대비</div></div>
+            <div><div class="num" style="font-size:52px">+13.9<span style="font-size:28px">%</span></div><div class="lbl" style="font-size:18px;margin-top:8px">인클라인 덤벨 프레스</div></div>
+          </div>
+        </div>
+        <div class="card" style="padding:32px 40px">
+          <div style="font-size:18px;font-weight:700;color:var(--blue)">메모를 읽는 AI 코치</div>
+          <div style="font-size:24px;font-weight:600;line-height:1.5;margin-top:14px;color:var(--ink2)">“메모에 <span style="color:var(--blue)">‘왼쪽 어깨 걸림’</span>이<br>두 번 적혀 있는 것도 신호예요”</div>
+          <div class="lbl" style="font-size:18px;margin-top:12px">3주 정체 구간 → 2주 볼륨 디로드 플랜 제안</div>
+        </div>
+      </div>
+      <div class="ph" style="--w:290px"><img src="capture/shots/memo-ai-sheet.png"></div>
+      <div class="ph" style="--w:290px"><img src="capture/shots/coach-room.png"></div>
+    </div>
+  </div>
+</section>
+
+<!-- 09 ONE-PERSON AUTOMATION -->
+<section class="slide" id="s9">
+  <div class="hd">
+    <div class="eb">Automation</div>
+    <div>
+      <div class="tt">개발자 없이 혼자서,<br><span class="bl">에러가 스스로 고쳐지는 구조</span></div>
+      <div class="sb">Sentry가 잡은 에러를 Claude가 분석해 수정 PR까지 올리고,<br>나는 리뷰와 머지만 판단해요</div>
+    </div>
+  </div>
+  <div class="bd" style="padding-left:140px">
+    <div class="card" style="padding:40px 48px">
+      <div style="font-size:18px;font-weight:700;color:var(--blue)">Sentry Auto-Fix Pipeline</div>
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:0;margin-top:28px;position:relative">
+        <div style="position:absolute;left:10%;right:10%;top:27px;border-top:4px dotted var(--b3)"></div>
+        <div style="text-align:center;position:relative"><div style="width:58px;height:58px;border-radius:50%;background:#FEF2F2;color:#EF4444;font-weight:800;font-size:22px;display:flex;align-items:center;justify-content:center;margin:0 auto">!</div><div style="font-size:23px;font-weight:700;margin-top:18px">에러 발생</div><div style="font-size:18px;color:var(--sub);margin-top:8px">Sentry 이슈 + 리플레이</div></div>
+        <div style="text-align:center;position:relative"><div style="width:58px;height:58px;border-radius:50%;background:var(--blue);color:#fff;font-weight:800;font-size:22px;display:flex;align-items:center;justify-content:center;margin:0 auto">1</div><div style="font-size:23px;font-weight:700;margin-top:18px">Webhook 수신</div><div style="font-size:18px;color:var(--sub);margin-top:8px">Cloud Functions</div></div>
+        <div style="text-align:center;position:relative"><div style="width:58px;height:58px;border-radius:50%;background:var(--blue);color:#fff;font-weight:800;font-size:22px;display:flex;align-items:center;justify-content:center;margin:0 auto">2</div><div style="font-size:23px;font-weight:700;margin-top:18px">소스 조회</div><div style="font-size:18px;color:var(--sub);margin-top:8px">GitHub API</div></div>
+        <div style="text-align:center;position:relative"><div style="width:58px;height:58px;border-radius:50%;background:linear-gradient(135deg,#3B82F6,#7C6CF4);color:#fff;font-weight:800;font-size:22px;display:flex;align-items:center;justify-content:center;margin:0 auto">3</div><div style="font-size:23px;font-weight:700;margin-top:18px">수정안 생성</div><div style="font-size:18px;color:var(--sub);margin-top:8px">Claude</div></div>
+        <div style="text-align:center;position:relative"><div style="width:58px;height:58px;border-radius:50%;background:var(--blue);color:#fff;font-weight:800;font-size:22px;display:flex;align-items:center;justify-content:center;margin:0 auto">4</div><div style="font-size:23px;font-weight:700;margin-top:18px">자동 PR</div><div style="font-size:18px;color:var(--sub);margin-top:8px">fix/sentry-{id}</div></div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:28px">
+      <div class="card" style="padding:34px 40px"><div class="num" style="font-size:56px">20<span style="font-size:30px">건</span></div><div class="lbl" style="font-size:20px">출시 전 QA에서 찾은 이슈<br>9단계로 나눠 전부 해결</div></div>
+      <div class="card" style="padding:34px 40px"><div class="num" style="font-size:56px">44<span style="font-size:30px">/44</span></div><div class="lbl" style="font-size:20px">보안 규칙 · AI 프록시 · 탈퇴<br>자동 테스트 전체 통과</div></div>
+      <div class="card" style="padding:34px 40px"><div class="num" style="font-size:56px">0<span style="font-size:30px">명</span></div><div class="lbl" style="font-size:20px">투입된 개발자<br>기획부터 배포까지 1인 + AI</div></div>
+    </div>
+    <div class="sum" style="margin-top:28px"><p>코드는 AI가 쓰고 고치지만,<br><b>무엇을 만들고 언제 내보낼지는 제가 결정해요.</b></p></div>
+  </div>
+</section>
+
+
+<!-- 10 RESULTS -->
+<section class="slide" id="s10">
+  <div class="hd">
+    <div class="eb">Results</div>
+    <div>
+      <div class="tt">출시 전 테스트에서,<br><span class="bl">메모장 대신 기록하기 시작했어요</span></div>
+      <div class="sb">5명 이상의 테스터가 2주간 실제 운동을 기록하며<br>‘맥락을 지키는 기록’이라는 가설을 확인했어요</div>
+    </div>
+  </div>
+  <div class="bd">
+    <div class="tl"><div class="dot">1</div><div class="ln"></div><div class="dot">2</div></div>
+    <div data-r class="card" style="padding:36px 56px;display:grid;grid-template-columns:repeat(4,1fr);gap:0">
+      <div style="padding-right:24px"><div class="num" style="font-size:56px">5<span style="font-size:30px">명+</span></div><div class="lbl" style="font-size:20px">실사용 테스터</div></div>
+      <div style="padding:0 24px;border-left:1px solid var(--line)"><div class="num" style="font-size:56px">98</div><div class="lbl" style="font-size:20px">누적 기록 로그</div></div>
+      <div style="padding:0 24px;border-left:1px solid var(--line)"><div class="num" style="font-size:56px">62<span style="font-size:30px">%</span></div><div class="lbl" style="font-size:20px">특이사항 메모 포함 기록</div></div>
+      <div style="padding-left:24px;border-left:1px solid var(--line)"><div class="num" style="font-size:56px">43</div><div class="lbl" style="font-size:20px">커밋 · 5.5개월</div></div>
+    </div>
+    <div data-r class="card" style="margin-top:24px;padding:36px 56px;display:grid;grid-template-columns:420px 1fr;align-items:center">
+      <div><div class="q">테스터들은<br>어떻게 느꼈나요?</div><div class="src">내부 테스터 5명,<br>2주 사용 후 인터뷰</div></div>
+      <div class="bars">
+        <div class="bar"><div class="f" style="width:640px;background:var(--blue)">메모장처럼 편하게 적을 수 있었어요</div><div class="v">5/5</div></div>
+        <div class="bar"><div class="f" style="width:512px;background:var(--b2)">메모장 대신 이 앱에 기록했어요</div><div class="v">4/5</div></div>
+        <div class="bar"><div class="f" style="width:512px;background:var(--b3)">과부하 비교를 매번 확인했어요</div><div class="v">4/5</div></div>
+      </div>
+    </div>
+    <div class="sum" style="margin-top:24px"><p>기록 10건 중 6건에 보조·기구·컨디션 메모가 함께 남았고,<br><b>맥락을 버리지 않는 기록이 실제로 쓰인다는 걸 확인했어요.</b></p></div>
+  </div>
+</section>
+
+<!-- 11 RETROSPECTIVE -->
+<section class="slide" id="s11">
+  <div class="hd">
+    <div class="eb">Retrospective</div>
+    <div>
+      <div class="tt">더 편한 기록이 아니라,<br><span class="bl">더 정확한 기록을 만드는 일이었어요</span></div>
+      <div class="sb">‘기록이 귀찮다’에서 ‘메모장으로 돌아온다’로 문제를 다시 정의한 순간,<br>무엇을 만들고 무엇을 덜어낼지가 분명해졌어요</div>
+    </div>
+  </div>
+  <div class="bd" style="padding-left:140px">
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:28px">
+      <div class="card" style="padding:48px 44px;height:420px">
+        <div class="chip">Keep</div>
+        <div style="font-size:30px;font-weight:700;margin-top:28px;line-height:1.4">사용자의 습관을<br>바꾸지 않았어요</div>
+        <div style="font-size:20px;color:var(--sub);line-height:1.65;margin-top:22px">새 입력 방식을 가르치는 대신 이미 쓰던 메모 습관 위에 AI를 얹어, 온보딩 없이 바로 기록이 시작됐어요.</div>
+      </div>
+      <div class="card" style="padding:48px 44px;height:420px">
+        <div class="chip" style="background:#FEF2F2;color:#EF4444">Problem</div>
+        <div style="font-size:30px;font-weight:700;margin-top:28px;line-height:1.4">도메인 검증은<br>사람이 해야 했어요</div>
+        <div style="font-size:20px;color:var(--sub);line-height:1.65;margin-top:22px">‘400m’를 400분으로 읽는 실수처럼, 운동 맥락이 필요한 오류는 AI 리뷰만으로 걸러지지 않았어요.</div>
+      </div>
+      <div class="card" style="padding:48px 44px;height:420px">
+        <div class="chip" style="background:#F1EEFF;color:var(--purple)">Try</div>
+        <div style="font-size:30px;font-weight:700;margin-top:28px;line-height:1.4">출시 후 숫자로<br>가설을 검증할게요</div>
+        <div style="font-size:20px;color:var(--sub);line-height:1.65;margin-top:22px">‘맥락을 지키면 메모장으로 돌아가지 않는다’는 가설을 30일 리텐션과 메모 포함 기록 비율로 확인하려 해요.</div>
+      </div>
+    </div>
+    <div class="sum" style="margin-top:32px"><p>기록의 본질은 편리함보다 정확함이라는 믿음으로,<br><b>이제 출시해서 증명해 보려고 해요.</b></p></div>
+  </div>
+</section>
+
+<script>
+const s=new URLSearchParams(location.search).get('s');
+if(s){document.body.classList.add('render');document.body.style.background='#fff';
+  document.querySelectorAll('.slide').forEach(el=>{if(el.id!=='s'+s)el.remove()});}
+function alignTL(){document.querySelectorAll('.tl').forEach(tl=>{const bd=tl.parentElement,b=bd.getBoundingClientRect();
+  const rows=[...bd.querySelectorAll('[data-r]')].map(r=>{const q=r.getBoundingClientRect();return q.top-b.top+q.height/2});
+  const d=tl.querySelectorAll('.dot'),ln=tl.querySelector('.ln');
+  d.forEach((x,i)=>x.style.top=(rows[i]-20)+'px');
+  ln.style.top=(rows[0]+28)+'px';ln.style.height=(rows[1]-rows[0]-56)+'px';});}
+document.fonts.ready.then(alignTL);
+</script>
+</body>
+</html>

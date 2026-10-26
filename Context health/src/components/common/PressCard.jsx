@@ -207,7 +207,7 @@ export default function PressCard({ children, className = '', radius = 16, inset
       {...rest}
     >
       <span aria-hidden="true" className="absolute overflow-hidden pointer-events-none" style={{ ...edge, borderRadius: innerRadius }}>
-        <span ref={overlayRef} className="absolute inset-0 will-change-transform" style={{ background: BAND, opacity: 0, transform: 'scaleX(0)' }} />
+        <span ref={overlayRef} className="absolute inset-0" style={{ background: BAND, opacity: 0, transform: 'scaleX(0)' }} />
       </span>
       <div className="relative" style={pad ? { padding: `${edge.top}px ${edge.right}px ${edge.bottom}px ${edge.left}px` } : undefined}>{children}</div>
     </div>

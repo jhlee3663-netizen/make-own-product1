@@ -48,7 +48,7 @@ const report = {
 const params = new URLSearchParams(location.search);
 
 function Frame({ children }) {
-  return <div style={{ width: 402, height: Number(params.get('h')) || 874, position: 'relative', overflow: 'hidden', background: '#f8f9fa', margin: '0 auto' }}>{children}</div>;
+  return <div style={{ width: Number(params.get('w')) || 402, height: Number(params.get('h')) || 874, position: 'relative', overflow: 'hidden', background: '#f8f9fa', margin: '0 auto' }}>{children}</div>;
 }
 
 function App() {
@@ -86,7 +86,7 @@ if (params.has('memo')) {
   setTimeout(() => document.querySelector('[aria-label="기록 추가"]')?.click(), 300);
 }
 if (params.has('open')) {
-  setTimeout(() => [...document.querySelectorAll('button')].find(b => b.textContent === '자세히 보기')?.click(), 300);
+  setTimeout(() => [...document.querySelectorAll('[aria-expanded]')].find(b => b.textContent === '자세히 보기')?.click(), 600);
 }
 if (params.has('menu')) {
   setTimeout(() => document.querySelector('[aria-label="더보기"]')?.click(), 300);

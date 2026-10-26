@@ -1,0 +1,55 @@
+{
+  "date": "2026-09-08",
+  "environment": {
+    "firebaseProject": "demo-context-health",
+    "authEmulator": "127.0.0.1:9099",
+    "firestoreEmulator": "127.0.0.1:8080",
+    "productionReadOrWrite": false
+  },
+  "accounts": [
+    {
+      "label": "A",
+      "profileWeight": 61,
+      "customFood": "A 전용 음식"
+    },
+    {
+      "label": "B",
+      "profileWeight": 82,
+      "customFood": "B 전용 음식"
+    }
+  ],
+  "initialFinding": {
+    "scenario": "A가 열린 두 번째 탭을 둔 채 첫 번째 탭에서 B로 인증 전환",
+    "result": "두 번째 탭이 5초 뒤에도 A 이름과 체중을 표시했고 새로고침 후 B로 변경",
+    "classification": "QA-02 계정 전환 상태 동기화의 추가 로컬 결함"
+  },
+  "fix": "auth_user storage 변경을 다른 탭에서 감지하면 Firebase Auth와 React 상태를 다시 초기화. 로그아웃은 Firebase signOut 뒤 캐시 신호 제거",
+  "timingObservation": {
+    "scenario": "A 안정 상태에서 B fixture 실행 후 두 번째 탭이 B로 전환",
+    "seedBReadyMs": 540,
+    "secondTabBMs": 770,
+    "note": "한 번의 로컬 Chrome 관찰값이며 성능 보장은 아님"
+  },
+  "regression": [
+    {
+      "scenario": "A에서 B로 전환",
+      "expected": "두 번째 탭에 B 이름과 82kg, A 이름과 61kg 없음",
+      "result": "PASS"
+    },
+    {
+      "scenario": "B에서 A로 역전환",
+      "expected": "두 번째 탭에 A 이름과 61kg, B 이름과 82kg 없음",
+      "result": "PASS"
+    },
+    {
+      "scenario": "A로 열린 두 탭 중 한 탭의 보이는 마이페이지 로그아웃 버튼 클릭",
+      "expected": "두 탭 모두 로그인 화면으로 이동하고 A 이름과 61kg 없음",
+      "result": "PASS"
+    }
+  ],
+  "limits": [
+    "실제 Google, Kakao, Naver 공급자 계정을 사용하지 않음",
+    "운영 Firebase 세션과 데이터를 사용하지 않음",
+    "모바일 브라우저와 PWA의 탭 간 전환은 미검증"
+  ]
+}

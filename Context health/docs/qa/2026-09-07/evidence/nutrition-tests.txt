@@ -1,0 +1,5 @@
+
+> context-health@0.0.0 test:nutrition
+> node scripts/test-nutrition-modifiers.mjs
+
+nutrition modifier tests passed

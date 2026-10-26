@@ -1,24 +1,17 @@
 import React, { useRef, useState } from 'react';
-import DonutChart from './DonutChart';
-import { QuoteIcon } from '../icons/Icons';
-import { getDietSummaryComment } from '../../utils/dietFeedback';
+import { kcalBarGradient, kcalRange, kcalScale, kcalVerdict, kcalVerdictColor } from '../../lib/homeSummary';
 import Pressable from '../common/Pressable';
 import PressCard from '../common/PressCard';
 import useDismiss from '../../lib/useDismiss';
 import Toast from '../common/Toast';
 import { shareText, buildDietShareText } from '../../utils/share';
 
-function getChip(kcal, goal) {
-  if (!goal) return { label: '성공 🔥', color: '#7171FF', bg: 'rgba(0,84,209,0.1)' };
-  const ratio = kcal / goal;
-  if (ratio > 1.1) return { label: '과식했어요 😅', color: '#e05a2b', bg: 'rgba(255,80,80,0.1)' };
-  if (ratio < 1.0) return { label: '더 먹어요 🍚', color: '#008dcf', bg: 'rgba(0,152,178,0.1)' };
-  return { label: '성공 🔥', color: '#7171FF', bg: 'rgba(0,84,209,0.1)' };
-}
+const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
+const comma = value => Math.round(Number(value) || 0).toLocaleString();
 
 const enteredCards = new Set();
 
-export default function DietCard({ data, isDeleting, targetKcal, profile, onDelete, onChangeDate, onCardClick }) {
+export default function DietCard({ data, isDeleting, targetKcal, onDelete, onChangeDate, onCardClick }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
   useDismiss(menuOpen, () => setMenuOpen(false), menuRef);
@@ -41,11 +34,13 @@ export default function DietCard({ data, isDeleting, targetKcal, profile, onDele
     }
   }
   const dt = data.timestamp ? new Date(data.timestamp.seconds * 1000) : null;
-  const ds = dt ? `${String(dt.getFullYear()).slice(2)}. ${dt.getMonth() + 1}. ${dt.getDate()}` : (data.date || "");
-  const gid = "qG_" + (data.docId || Math.random().toString(36).substr(2, 9));
-  const effectiveGoal = targetKcal || data.goal || 0;
-  const chip = getChip(data.kcal || 0, effectiveGoal);
-  const summaryComment = getDietSummaryComment(data, profile, effectiveGoal);
+  const ds = dt ? `${dt.getMonth() + 1}월 ${dt.getDate()}일 ${WEEKDAYS[dt.getDay()]}` : (data.date || '');
+  const kcal = Number(data.kcal || 0);
+  const target = Number(targetKcal || data.goal || 0);
+  const range = kcalRange(target);
+  const scaleMax = kcalScale(target);
+  const verdict = kcalVerdict(kcal, target);
+  const pct = value => `${Math.min(100, (value / scaleMax) * 100)}%`;
 
   return (
     <div onAnimationEnd={() => setEntering(false)} className={`px-4 ${isDeleting ? 'card-exit-wrapper' : entering ? 'card-enter' : ''}`}>
@@ -55,13 +50,16 @@ export default function DietCard({ data, isDeleting, targetKcal, profile, onDele
         radius={20}
         className="bg-white shadow-[0_2px_12px_rgba(3,27,38,0.05)] cursor-pointer"
       >
-        {/* 흰 선 4 + 눌리는 영역 안쪽 여백 12 = 내용은 카드 가장자리에서 16 (운동 카드와 같은 구조) */}
-        <div className="p-3 flex flex-col gap-4">
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2 pb-4 border-b border-[#f1f3f5]">
-            <div className="flex items-center justify-between">
-              <div className="inline-flex px-2 py-1 rounded-[8px] w-fit" style={{ background: chip.bg }}>
-                <span className="text-[13px] font-pretendard tracking-[-0.325px] whitespace-nowrap" style={{ color: chip.color }}>{chip.label}</span>
+        {/* 홈의 섭취 칼로리 카드와 같은 모양 (Figma 1163:10037) — 라벨 자리에 날짜가 온다 */}
+        <div className="px-4 py-[14px] flex flex-col gap-4">
+          <div className="flex flex-col gap-8">
+            <div className="flex items-start justify-between">
+              <div className="flex flex-col gap-1.5">
+                <p className="m-0 font-pretendard font-semibold text-[13px] leading-4 text-[#868e96] tracking-[-0.325px]">{ds}</p>
+                <p className="m-0 flex items-end gap-1.5">
+                  <span className="font-pretendard font-bold text-[26px] leading-[31px] text-[#171a1d] tracking-[-0.65px]">{comma(kcal)}</span>
+                  <span className="font-pretendard text-[14px] leading-[22px] text-[#868e96] tracking-[-0.35px]">{target ? `/ ${comma(target)}kcal` : 'kcal'}</span>
+                </p>
               </div>
               <div className="relative" ref={menuRef}>
                 <Pressable
@@ -101,41 +99,37 @@ export default function DietCard({ data, isDeleting, targetKcal, profile, onDele
                 )}
               </div>
             </div>
-            <div className="flex items-center justify-between">
-              <p className="text-[24px] font-semibold text-[#171a1d] leading-[32px] tracking-[-0.6px] m-0 font-pretendard">
-                {(data.kcal || 0).toLocaleString()} kcal
-              </p>
-              <span className="text-[14px] text-[#646d76] tracking-[-0.35px] font-pretendard m-0">{ds}</span>
-            </div>
-            <p className="text-[14px] text-[#868e96] tracking-[-0.35px] m-0 font-pretendard">목표 {effectiveGoal.toLocaleString()}</p>
-          </div>
-          <div className="flex items-center gap-4">
-            <DonutChart carb={data.carb || 0} protein={data.protein || 0} fat={data.fat || 0} />
-            <div className="flex flex-col gap-2 flex-1">
-              {[
-                { c: "#3385ff", l: "탄수화물", v: data.carb || 0 },
-                { c: "#e05a2b", l: "단백질", v: data.protein || 0 },
-                { c: "#e8a126", l: "지방", v: data.fat || 0 }
-              ].map((item) => (
-                <div key={item.l} className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full shrink-0" style={{ background: item.c }} />
-                  <span className="text-[12px] font-medium text-[#adb5bd] font-pretendard tracking-[-0.3px] flex-1">{item.l}</span>
-                  <span className="text-[12px] font-semibold text-[#171a1d] font-pretendard">{item.v}g</span>
+            <div className="flex flex-col gap-2">
+              <div className="relative h-[14px]">
+                <span className="absolute left-0 right-0 top-[3px] h-2 rounded bg-[#f1f3f5]" />
+                {range && <span className="absolute top-0 h-[14px] rounded bg-[rgba(113,113,255,0.2)]" style={{ left: pct(range.min), width: `calc(${pct(range.max)} - ${pct(range.min)})` }} />}
+                {kcal > 0 && (
+                  <span className="absolute left-0 top-[3px] h-2 overflow-hidden rounded" style={{ width: pct(kcal), minWidth: 8 }}>
+                    <span className="chart-grow-x block w-full h-full rounded" style={{ background: kcalBarGradient(verdict?.tone) }} />
+                  </span>
+                )}
+              </div>
+              {/* 결과 문구는 적정 범위 표시의 가운데 아래에 둔다 */}
+              {verdict && (
+                <div className="relative h-[14px]">
+                  <p
+                    className="m-0 absolute top-0 -translate-x-1/2 whitespace-nowrap font-pretendard font-semibold text-[12px] leading-[14px] tracking-[-0.3px]"
+                    style={{ left: `calc((${pct(range.min)} + ${pct(range.max)}) / 2)`, color: kcalVerdictColor(verdict.tone) }}
+                  >
+                    {verdict.text}
+                  </p>
                 </div>
-              ))}
+              )}
             </div>
           </div>
-        </div>
-        {summaryComment && (
-          <div className="border-t border-[#f1f3f5] pt-4 pb-1 flex gap-2 items-start">
-            <QuoteIcon gid={gid} />
-            <div className="flex-1 mt-0.5 min-w-0">
-              <p className="font-pretendard font-medium text-[14px] text-transparent bg-clip-text bg-gradient-to-r from-[#228bed] to-[#c509d6] tracking-[-0.35px] leading-[20px] m-0 truncate">
-                {summaryComment}
-              </p>
-            </div>
+          <div className="flex gap-4 font-pretendard text-[13px] leading-4 tracking-[-0.325px]">
+            {[['탄수', data.carb], ['단백질', data.protein], ['지방', data.fat]].map(([label, value]) => (
+              <span key={label} className="flex gap-1">
+                <span className="text-[#868e96]">{label}</span>
+                <span className="font-bold text-brand">{comma(value)}g</span>
+              </span>
+            ))}
           </div>
-        )}
         </div>
       </PressCard>
       <Toast show={toast.show} message={toast.message} />
