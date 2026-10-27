@@ -29,9 +29,19 @@ git push https://github.com/jhlee3663-netizen/make-own-product1.git main
 
 ## 2. 무엇이 자동이고 무엇이 수동인가
 
+> **2026-10-27: 자동 배포를 없앴다. 이제 전부 수동이다.**
+> 조직 저장소(`origin`)에 푸시하면 워크플로가 거기서도 도는데, 그쪽에는 시크릿이
+> `VITE_KAKAO_REST_API_KEY`·`VITE_NAVER_CLIENT_ID` 둘뿐이라 `firebaseServiceAccount`가
+> 없어 배포 단계에서 실패했다. 더 나쁜 건 **빌드 단계는 시크릿이 없어도 통과**한다는 점이다.
+> 서비스 계정 키만 넣어 고치면 Firebase 설정이 빈 깨진 빌드가 올라간다.
+> 1인 개발이고 배포 빈도도 낮아 `firebase-hosting-{merge,pull-request}.yml`을 지우고
+> 수동 배포만 쓴다. 다시 켜려면 조직 저장소에 시크릿 9개(VITE_FIREBASE_* 6개,
+> VITE_GEMINI_KEY, VITE_SENTRY_DSN, VITE_RECAPTCHA_SITE_KEY는 공개값이라 워크플로에 직접)와
+> 서비스 계정 비공개 키를 넣어야 한다.
+
 | 대상 | 방법 |
 |---|---|
-| 화면(Hosting) | 개인 저장소 `main`에 푸시하면 자동 배포 |
+| 화면(Hosting) | 수동 (`npm run build && npx firebase-tools deploy --only hosting`) |
 | 서버(Cloud Functions) | 수동. 푸시해도 배포되지 않는다 |
 | Firestore 규칙·인덱스 | 수동 |
 
