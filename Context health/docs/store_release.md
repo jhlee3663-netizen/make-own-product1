@@ -27,10 +27,8 @@
 - ☐ Android Studio (JDK 포함)
 
 ### C. Firebase 콘솔
-- ☐ 프로젝트 설정 → 앱 추가: **Android** `com.contexthealth.app`, **iOS** `com.contexthealth.app`
-  - `google-services.json` → `android/app/`
-  - `GoogleService-Info.plist` → `ios/App/App/` (Xcode에서 App 타깃에 추가)
-  - plist의 `REVERSED_CLIENT_ID` 값을 `ios/App/App/Info.plist`의 `REPLACE_WITH_REVERSED_CLIENT_ID` 자리에 넣기
+- ✅ 프로젝트 설정 → 앱 추가 (2026-10-27): Android·iOS 모두 `com.contexthealth.app`으로 등록, `google-services.json`→`android/app/`, `GoogleService-Info.plist`→`ios/App/App/`, Info.plist의 `REVERSED_CLIENT_ID`까지 채웠다.
+  - ☐ Xcode에서 `GoogleService-Info.plist`를 **App 타깃에 추가**(파일만 폴더에 있으면 번들에 안 들어간다)
 - ☐ Android SHA-1·SHA-256 등록: 디버그 키 + 업로드 키 + **Play 앱 서명 키**(Play Console → 앱 무결성에서 복사). 없으면 Google 로그인이 `10` 오류로 실패.
 - ☐ Authentication → 로그인 방법 → **Apple 사용 설정** (Apple Developer에서 Services ID·Key 생성해 입력)
 - ☐ 웹 Apple 로그인 켜기: `.env`에 `VITE_ENABLE_APPLE_LOGIN=true` (Apple 설정 끝난 뒤)
@@ -54,6 +52,8 @@ npx cap open ios       # Xcode에서 실행
 
 ### F. 스토어 제출 자료
 - ☐ 스크린샷: iPhone 6.9"(1320×2868) / Android 폰 2장 이상 — 찍을 화면과 얹을 문구는 `docs/store_listing.md` 맨 아래
+  - 원본은 **시뮬레이터나 실기기**에서 찍는다(브라우저 창 캡처는 440px이라 늘리면 글자가 뭉개진다). Xcode 시뮬레이터 iPhone 16 Pro Max가 규격이 그대로 맞는다.
+  - 찍은 파일을 `store/raw/`에 `1-home.png`, `2-diet.png` … 식으로 넣고 `python3 scripts/make_store_screenshots.py store/raw` → `store/screenshots/{ios,play}/`에 문구까지 얹혀서 나온다. 문구는 스크립트 맨 위 `CAPTIONS`에서 고친다.
 - ✅ 아이콘·그래픽 (2026-10-26) — `store/` 폴더에 있다: `app-store-icon-1024.png`(iOS, 투명 X), `play-icon-512.png`, `play-feature-1024x500.png`. 앱 안의 런처 아이콘(Android mipmap)·iOS 앱 아이콘·스플래시도 지금 로고(그라데이션)로 다시 만들었다. 다시 만들 일이 있으면 `LOGO/기본 로고.png`(블롭 마스크)와 `#3aa0ff → #f79fff` 그라데이션으로 뽑는다.
 - ☐ 개인정보처리방침 URL: `https://context-health-3eb84.web.app/privacy-policy.html`
 - ☐ 계정 삭제 URL(Play 필수): `https://context-health-3eb84.web.app/account-deletion.html`
@@ -67,7 +67,7 @@ npx cap open ios       # Xcode에서 실행
 - ✅ **건강정보 별도 동의 화면** (2026-10-26) — `src/components/screens/ConsentScreen.jsx`. 로그인 직후 온보딩 앞에서 뜨고, 전체 동의 + 약관·개인정보·건강정보 3개(모두 필수, 각각 전문 보기). 동의 내용은 `users/{uid}.consent`(항목·버전·시각)에 저장하고, 서버에 `consent.health`가 없으면 다시 받는다.
 - ✅ **게시물·댓글 신고 기능** (2026-10-26) — 피드 더보기 → 신고하기, 댓글 길게 누르기 → 신고하기. 사유 7가지(기타는 직접 입력). 서버 `report` 액션이 `reports/{reporterUid}_{key}`에 남기고, 신고한 사람 피드에서는 `users/{uid}/prefs/feedHidden`으로 즉시 가린다. 약관 문구도 앱 내 신고로 수정.
   - ☐ 신고 들어온 것을 보는 방법: 지금은 Firestore 콘솔의 `reports` 컬렉션을 직접 봐야 한다(`status: 'open'`). 알림이 필요하면 나중에.
-- ◐ **App Check** (2026-10-26) — 웹 쪽 코드는 넣었다(`src/lib/firebase.js`). 켜려면: Firebase 콘솔 → App Check → 웹 앱에 **reCAPTCHA Enterprise** 등록 → 사이트 키를 `.env`의 `VITE_RECAPTCHA_SITE_KEY`에 넣고 배포. 콘솔에서 처음에는 '모니터링'으로 두고, 정상 트래픽만 들어오는 것을 확인한 뒤 '강제'로 바꾼다. 앱(웹뷰)은 reCAPTCHA가 맞지 않아 빼 두었다 — 네이티브까지 하려면 Play Integrity·App Attest 플러그인이 따로 필요하다.
+- ◐ **App Check** (2026-10-27 설정 완료) — reCAPTCHA Enterprise API를 켜고 사이트 키 `context-health-web`(도메인 `context-health-3eb84.web.app`)을 만들어 Firebase App Check 웹 앱에 등록했다. 키는 `.env`의 `VITE_RECAPTCHA_SITE_KEY`에 넣어 뒀다. **아직 배포 전**이라 실제로는 켜지지 않았다 — `npm run build && npx firebase-tools deploy --only hosting` 후 콘솔에서 트래픽을 지켜보고 '강제'로 바꾼다. 자동 배포(GitHub Actions)를 쓰면 저장소 secret에도 같은 값을 넣어야 한다. 과금은 월 10,000건까지 무료. 콘솔에서 처음에는 '모니터링'으로 두고, 정상 트래픽만 들어오는 것을 확인한 뒤 '강제'로 바꾼다. 앱(웹뷰)은 reCAPTCHA가 맞지 않아 빼 두었다 — 네이티브까지 하려면 Play Integrity·App Attest 플러그인이 따로 필요하다.
 - ◐ **앱 푸시 알림** (2026-10-26) — `@capacitor-firebase/messaging`으로 코드 완료(`src/lib/push.js`, `src/App.jsx`). 앱에서도 FCM 토큰을 받아 웹과 같은 `users/{uid}/pushTokens`에 저장하므로 서버는 그대로다. 안드로이드 `POST_NOTIFICATIONS` 권한도 넣었다. 남은 것:
   - ☐ `google-services.json` / `GoogleService-Info.plist` 넣기 (없으면 토큰을 못 받는다)
   - ☐ iOS: Apple Developer에서 **APNs 인증 키(.p8)** 만들어 Firebase 콘솔 → 클라우드 메시징에 업로드, Xcode에서 **Push Notifications** + **Background Modes > Remote notifications** 추가

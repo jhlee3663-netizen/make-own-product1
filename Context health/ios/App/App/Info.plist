@@ -52,7 +52,7 @@
 			<array>
 				<string>com.contexthealth.app</string>
 				<!-- Google 로그인: GoogleService-Info.plist의 REVERSED_CLIENT_ID 값으로 바꾼다 -->
-				<string>REPLACE_WITH_REVERSED_CLIENT_ID</string>
+				<string>com.googleusercontent.apps.419860500152-tt5va4m5n53o2221dol2cgjs09jr0515</string>
 			</array>
 		</dict>
 	</array>

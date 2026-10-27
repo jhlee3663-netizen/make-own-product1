@@ -4,6 +4,15 @@
 
 ---
 
+## 2026-10-27 - Firebase 앱 등록 · App Check 키 · 스크린샷 가공 스크립트
+- 결과: 콘솔 설정 완료 + 파일 반영, **배포 전**
+- 변경 파일: 신규 `android/app/google-services.json`, `ios/App/App/GoogleService-Info.plist`, `scripts/make_store_screenshots.py` / 수정 `ios/App/App/Info.plist`, `.env`(git 제외), `docs/store_release.md`
+- Firebase 콘솔(브라우저 제어로 진행): Android·iOS 앱을 `com.contexthealth.app`으로 등록하고 설정 파일 2개를 받아 제자리에 넣었다. plist의 `REVERSED_CLIENT_ID`를 Info.plist의 자리표시자에 채웠다.
+- App Check: reCAPTCHA v3(클래식)은 지원 중단돼서 **Fraud Defense(reCAPTCHA Enterprise)**로 갔다. `recaptchaenterprise.googleapis.com` API를 켜고(처음에 안 켜져 있어 키 생성이 거절됨) 사이트 키 `context-health-web`을 만들어(도메인: web.app, firebaseapp.com) Firebase App Check 웹 앱에 등록했다. 키는 `.env`의 `VITE_RECAPTCHA_SITE_KEY`. 월 10,000건까지 무료.
+- 스크린샷: 브라우저 창 캡처는 440px이라 스토어 규격으로 늘리면 글자가 뭉개진다. 원본은 시뮬레이터·실기기에서 찍고, `scripts/make_store_screenshots.py`로 iOS 1320×2868 / Play 1080×1920에 문구를 얹어 뽑는다.
+- 걸린 것: Xcode를 설치하면 라이선스에 동의하기 전까지 `python3`·`git` 같은 명령줄 도구가 전부 막힌다(`sudo xcodebuild -license accept`). `npx cap sync`도 iOS에서 멈춰서 `sync android`와 `sync ios`를 따로 돌렸다.
+- 남음: 배포(App Check 키 반영), Xcode에서 plist를 App 타깃에 추가, APNs 키(.p8), Android SHA-1 등록, 스크린샷 원본.
+
 ## 2026-10-26 - 스토어 준비: 아이콘·등록 문구·App Check·앱 푸시
 - 결과: 코드 PASS (`npm run build`), 콘솔 설정이 있어야 켜지는 항목은 미완
 - 변경 파일: 신규 `docs/store_listing.md`, `store/{app-store-icon-1024,play-icon-512,play-feature-1024x500}.png` / 수정 `src/lib/{firebase,push}.js`, `src/App.jsx`, `android/app/src/main/AndroidManifest.xml`, `ios/App/App/Info.plist`, android mipmap·drawable, iOS AppIcon·Splash, `package.json`, `docs/store_release.md`

@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "419860500152",
+    "project_id": "context-health-3eb84",
+    "storage_bucket": "context-health-3eb84.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:419860500152:android:e285f15dee8a7361492e4d",
+        "android_client_info": {
+          "package_name": "com.contexthealth.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "419860500152-i096dt67qaqj63je6uuflm0fmtv53dle.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA4aHMP9tvV-jrKakwPJR66fNekHUMpPIs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "419860500152-i096dt67qaqj63je6uuflm0fmtv53dle.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
