@@ -4,6 +4,15 @@
 
 ---
 
+## 2026-10-27 - iOS 시뮬레이터 첫 실행: UIScene 크래시·시작 오류 문구 수정
+- 결과: PASS (iPhone 18 Pro Max 시뮬레이터에서 로그인 화면까지 확인)
+- 변경 파일: 신규 `ios/App/App/SceneDelegate.swift` / 수정 `ios/App/App/Info.plist`, `ios/App/App.xcodeproj/project.pbxproj`, `src/components/screens/LoginScreen.jsx`
+- **앱이 실행 직후 종료되던 문제**: iOS 26부터 UIScene 생명주기 채택이 필수다(`___UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption`에서 EXC_BREAKPOINT). Capacitor 8.3.4에는 아직 SceneDelegate가 없어서 직접 만들었다. Info.plist에 `UIApplicationSceneManifest`를 넣고, `SceneDelegate`가 Main.storyboard를 띄운다. 소셜 로그인 콜백·유니버설 링크는 `scene(_:openURLContexts:)`와 `scene(_:continue:)`에서 `ApplicationDelegateProxy`로 넘긴다(앱이 꺼져 있다가 링크로 열린 경우는 `connectionOptions`에서 받아 웹뷰가 준비된 뒤에 전달). 못 찾았으면 심사에서 바로 떨어졌을 문제다.
+- **시작하자마자 "소셜 로그인에 실패했습니다"**: 앱은 기기 로그인 창을 쓰는데도 마운트 때 `getRedirectResult`를 불러 실패했다. `isNativeApp`이면 건너뛴다.
+- 진단 방법 메모: 시뮬레이터 크래시는 리포트가 안 남아서 `xcrun lldb`로 `process attach --name App --waitfor` → `continue` → `bt`로 잡았다. `simctl launch --console`로는 아무것도 안 나온다.
+- 빌드: `xcodebuild -project ios/App/App.xcodeproj -scheme App -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 18 Pro Max' -derivedDataPath /tmp/ch-dd CODE_SIGNING_ALLOWED=NO build` → `simctl install`/`launch`. 스크린샷은 `simctl io <기기> screenshot`이 1320×2868로 바로 나온다(App Store 6.9" 규격).
+- 미검증: 실제 로그인(계정 필요), 안드로이드 빌드.
+
 ## 2026-10-27 - Firebase 앱 등록 · App Check 키 · 스크린샷 가공 스크립트
 - 결과: 콘솔 설정 완료 + 파일 반영, **배포 전**
 - 변경 파일: 신규 `android/app/google-services.json`, `ios/App/App/GoogleService-Info.plist`, `scripts/make_store_screenshots.py` / 수정 `ios/App/App/Info.plist`, `.env`(git 제외), `docs/store_release.md`

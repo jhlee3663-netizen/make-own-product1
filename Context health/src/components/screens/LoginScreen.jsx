@@ -135,6 +135,9 @@ export default function LoginScreen({ onLogin, authReady = true }) {
 
   /* ── Google/Apple redirect 결과 처리 (standalone PWA / popup-blocked fallback 후 복귀) ── */
   useEffect(() => {
+    // 앱(iOS·Android)은 기기 로그인 창을 쓰므로 리다이렉트 결과가 없다.
+    // 그런데도 getRedirectResult를 부르면 실패해서 시작하자마자 오류 문구가 떴다.
+    if (isNativeApp) return;
     authPersistenceReady
       .then(() => getRedirectResult(auth))
       .then(result => {
