@@ -27,6 +27,8 @@ jobs:
           VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
           VITE_KAKAO_REST_API_KEY: ${{ secrets.VITE_KAKAO_REST_API_KEY }}
           VITE_NAVER_CLIENT_ID: ${{ secrets.VITE_NAVER_CLIENT_ID }}
+          # reCAPTCHA 사이트 키는 공개 값이라(브라우저 코드에 그대로 들어간다) secret으로 두지 않는다.
+          VITE_RECAPTCHA_SITE_KEY: 6LeHzQIuAAAAAG1QQeFjZCnjl9I8cOyGL8KY7Zmn
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
