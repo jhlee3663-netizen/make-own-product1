@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Apple 로그인. 다른 소셜 로그인을 제공하면 심사 지침 4.8에 따라 필수다. -->
+	<key>com.apple.developer.applesignin</key>
+	<array>
+		<string>Default</string>
+	</array>
+	<!-- 푸시 알림(APNs). 배포 시 Xcode가 production으로 바꿔 서명한다. -->
+	<key>aps-environment</key>
+	<string>development</string>
+</dict>
+</plist>

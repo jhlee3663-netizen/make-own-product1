@@ -73,3 +73,24 @@ npx cap open ios       # Xcode에서 실행
   - ☐ iOS: Apple Developer에서 **APNs 인증 키(.p8)** 만들어 Firebase 콘솔 → 클라우드 메시징에 업로드, Xcode에서 **Push Notifications** + **Background Modes > Remote notifications** 추가
   - ☐ 실기기에서 친구 1명 만든 뒤 알림 권한 → 박수/댓글 알림 수신 확인
 - ✅ 마이페이지 "Claude 연결"은 앱에서 숨김 (웹에서만)
+
+## 4. Apple 로그인 (App Store 반려 사유, 2026-10-30 확인)
+
+`VITE_ENABLE_APPLE_LOGIN`이 꺼져 있어 로그인 화면에 **Apple 버튼이 안 나온다**.
+다른 소셜 로그인을 제공하면서 Sign in with Apple을 빼면 심사 지침 4.8로 반려된다.
+코드는 이미 다 있다(`LoginScreen.jsx`의 `handleApple` / `signInNative`). 켜는 순서는 아래.
+
+- ✅ iOS 프로젝트 준비 (2026-10-30) — `ios/App/App/App.entitlements`를 만들고 Debug·Release 양쪽
+  `CODE_SIGN_ENTITLEMENTS`에 걸었다. `com.apple.developer.applesignin`과 `aps-environment`(푸시)가 들어 있다.
+- ☐ Apple Developer → Identifiers → `com.contexthealth.app`에서 **Sign in with Apple**과
+  **Push Notifications** 체크
+- ☐ Apple Developer → Identifiers → **Services ID** 새로 만들기(예: `com.contexthealth.app.web`).
+  Sign in with Apple 설정에서 도메인 `context-health-3eb84.web.app`,
+  Return URL `https://context-health-3eb84.firebaseapp.com/__/auth/handler` 등록. (웹 로그인용)
+- ☐ Apple Developer → Keys → **Sign in with Apple 키(.p8)** 발급. 받을 때 한 번만 내려받을 수 있다.
+- ☐ Firebase 콘솔 → Authentication → 로그인 방법 → **Apple** 사용 설정.
+  Services ID, Apple Team ID, Key ID, .p8 내용을 넣는다.
+- ☐ `.env`에 `VITE_ENABLE_APPLE_LOGIN=true` 추가 후 빌드·배포.
+- ☐ 시뮬레이터·실기기에서 Apple 버튼으로 로그인되는지 확인.
+
+APNs 키(.p8)는 Sign in with Apple 키와 **다른 키**다. Keys에서 각각 따로 만든다.
