@@ -1593,8 +1593,7 @@ JSON 형식으로만 반환해줘:
                       title={item.title}
                       body={item.body}
                       customExercises={customExercises}
-                      customExercises={customExercises}
-                  onTitleChange={(val) => updateItem(sec.id, item.id, "title", val)}
+                      onTitleChange={(val) => updateItem(sec.id, item.id, "title", val)}
                       onBodyChange={(val) => updateItem(sec.id, item.id, "body", val)}
                       onBodyBlur={(val) => handleBodyBlur(sec.id, item.id, val)}
                       isAI={item.isAI}

@@ -2,10 +2,11 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import { initSentry, Sentry } from './lib/sentry.js'
-import { NATIVE_URL_SCHEME } from './lib/native.js'
+import { isNativeApp, NATIVE_URL_SCHEME } from './lib/native.js'
 import './index.css'
 
 initSentry()
+if (isNativeApp) document.documentElement.classList.add('native-app')
 document.getElementById('boot-loader')?.remove()
 
 /* 스토어 앱에서 시작한 카카오/네이버 로그인은 등록된 웹 주소(/oauth/...)로 돌아온다.

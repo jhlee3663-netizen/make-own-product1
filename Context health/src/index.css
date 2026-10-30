@@ -483,3 +483,8 @@ textarea:focus {
   .app-stage { justify-content: flex-start; }
   .app-frame { width: env(viewport-segment-width 0 0, 100%); max-width: none; }
 }
+
+/* 스토어 앱은 기기 화면을 그대로 쓴다.
+   430px 틀을 그대로 두면 더 넓은 기기(iPhone Pro Max 440pt 등)에서
+   양옆에 회색 바탕이 띠처럼 남는다. */
+html.native-app .app-frame { max-width: none; box-shadow: none; }
