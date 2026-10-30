@@ -82,12 +82,15 @@ npx cap open ios       # Xcode에서 실행
 
 - ✅ iOS 프로젝트 준비 (2026-10-30) — `ios/App/App/App.entitlements`를 만들고 Debug·Release 양쪽
   `CODE_SIGN_ENTITLEMENTS`에 걸었다. `com.apple.developer.applesignin`과 `aps-environment`(푸시)가 들어 있다.
-- ☐ Apple Developer → Identifiers → `com.contexthealth.app`에서 **Sign in with Apple**과
-  **Push Notifications** 체크
+- ✅ Apple Developer → Identifiers → `com.contexthealth.app` 등록, **Sign in with Apple**과
+  **Push Notifications** 체크 (2026-10-30). Team ID는 `8C25MTNAA8`.
 - ☐ Apple Developer → Identifiers → **Services ID** 새로 만들기(예: `com.contexthealth.app.web`).
   Sign in with Apple 설정에서 도메인 `context-health-3eb84.web.app`,
   Return URL `https://context-health-3eb84.firebaseapp.com/__/auth/handler` 등록. (웹 로그인용)
-- ☐ Apple Developer → Keys → **Sign in with Apple 키(.p8)** 발급. 받을 때 한 번만 내려받을 수 있다.
+- ✅ Apple Developer → Keys → 키 2개 발급 (2026-10-30). 둘 다 다시 받을 수 없으므로
+  `~/Documents/ContextHealth-secrets/`에 보관한다(레포 밖, 깃에 절대 넣지 않는다).
+  - APNs 키: Key ID `A639BFL2K5` → `AuthKey_A639BFL2K5.p8`
+  - Sign in with Apple 키: Key ID `DR6FV6A5LW` → `AuthKey_DR6FV6A5LW.p8`
 - ☐ Firebase 콘솔 → Authentication → 로그인 방법 → **Apple** 사용 설정.
   Services ID, Apple Team ID, Key ID, .p8 내용을 넣는다.
 - ☐ `.env`에 `VITE_ENABLE_APPLE_LOGIN=true` 추가 후 빌드·배포.
