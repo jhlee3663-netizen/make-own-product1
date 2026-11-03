@@ -97,3 +97,32 @@ npx cap open ios       # Xcode에서 실행
 - ☐ 시뮬레이터·실기기에서 Apple 버튼으로 로그인되는지 확인.
 
 APNs 키(.p8)는 Sign in with Apple 키와 **다른 키**다. Keys에서 각각 따로 만든다.
+
+
+## 5. 안드로이드 업로드 키스토어 (2026-11-03)
+
+Play에 올리는 AAB는 업로드 키로 서명해야 한다. **이 키를 잃어버리면 앱을 영영 업데이트할 수 없다.**
+만든 뒤 외장 디스크·클라우드 등 최소 두 곳에 백업한다.
+
+만드는 명령:
+
+```bash
+export JAVA_HOME="$HOME/.jdks/jdk-21.0.13+9/Contents/Home"
+mkdir -p ~/Documents/ContextHealth-secrets
+"$JAVA_HOME/bin/keytool" -genkeypair -v \
+  -keystore ~/Documents/ContextHealth-secrets/upload-keystore.jks \
+  -alias upload -keyalg RSA -keysize 2048 -validity 10000
+```
+
+그다음 `android/keystore.properties`를 만들어 값을 채운다(`keystore.properties.example` 참고).
+`app/build.gradle`이 이 파일이 있을 때만 release 서명을 붙이므로, 없으면 지금처럼 서명 없이 빌드된다.
+`keystore.properties`와 `*.jks`는 `android/.gitignore`에 넣어 두었다 — 절대 커밋하지 않는다.
+
+릴리스 번들: `JAVA_HOME=... ./gradlew bundleRelease` → `android/app/build/outputs/bundle/release/app-release.aab`
+
+### 개발 환경 메모 (2026-11-03)
+
+- JDK는 **21**이 필요하다. 시스템에 Java 25만 있으면 Gradle 8.14가 `Unsupported class file major version 69`로 멈춘다.
+  Temurin 21을 `~/.jdks/jdk-21.0.13+9`에 풀어 두었고, gradlew를 돌릴 때 `JAVA_HOME`으로 지정한다.
+- Android SDK는 `~/Library/Android/sdk`에 커맨드라인 도구로 설치했다(platform-tools, platforms;android-36, build-tools;36.0.0).
+  경로는 `android/local.properties`(깃에 안 올라감)에 적혀 있다.
