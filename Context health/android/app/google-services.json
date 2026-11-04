@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "419860500152-g36hdh2b2938ht4iveeb0gnrn8i2b9v0.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.contexthealth.app",
+            "certificate_hash": "9cdacfebc65a5df63dae093de3b04284bdd39b76"
+          }
+        },
+        {
           "client_id": "419860500152-i096dt67qaqj63je6uuflm0fmtv53dle.apps.googleusercontent.com",
           "client_type": 3
         }
@@ -29,6 +37,13 @@
             {
               "client_id": "419860500152-i096dt67qaqj63je6uuflm0fmtv53dle.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "419860500152-tt5va4m5n53o2221dol2cgjs09jr0515.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.contexthealth.app"
+              }
             }
           ]
         }
