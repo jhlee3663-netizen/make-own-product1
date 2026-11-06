@@ -68,7 +68,7 @@ function buildBodySegments(body) {
   return segments;
 }
 
-const WorkoutTaskItem = ({ title, body, onTitleChange, onBodyChange, onBodyBlur, isAI = false, prevVolume, prevMaxReps, onAiClick, aiActive = false, isConverting, suppressSupersetBadge = false, customExercises = [] }) => {
+const WorkoutTaskItem = ({ title, body, onTitleChange, onBodyChange, onBodyBlur, isAI = false, prevVolume, prevMaxReps, onAiClick, aiActive = false, isConverting, suppressSupersetBadge = false, customExercises = [], onDelete }) => {
   const currentVolume = useMemo(() => parseVolumeFromBody(body), [body]);
   const delta = prevVolume != null && currentVolume > 0 ? Math.round(currentVolume - prevVolume) : null;
   const currentReps = useMemo(() => parseTotalRepsFromText(body), [body]);
@@ -166,7 +166,8 @@ const WorkoutTaskItem = ({ title, body, onTitleChange, onBodyChange, onBodyBlur,
   );
 
   return (
-    <div className={`group flex flex-col bg-white border-b border-ui-2 transition-all ${isAI ? 'bg-brand/5' : ''}`}>
+    /* 왼쪽 안쪽선 + 들여쓰기로 "이 종목은 위 부위에 속한다"를 눈에 보이게 한다 */
+    <div className={`group relative flex flex-col bg-white border-b border-ui-2 pl-3 before:absolute before:left-4 before:top-0 before:bottom-0 before:w-px before:bg-ui-2 before:content-[''] transition-all ${isAI ? 'bg-brand/5' : ''}`}>
       {/* 종목 입력 영역 */}
       <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-1">
         <div className="flex flex-1 min-w-0 items-center gap-2 flex-wrap">
@@ -212,13 +213,27 @@ const WorkoutTaskItem = ({ title, body, onTitleChange, onBodyChange, onBodyBlur,
             </span>
           )}
         </div>
-        <Pressable
-          pressScale={0.88}
-          onClick={onAiClick}
-          className={`w-6 h-6 flex-none flex items-center justify-center ${isAI ? 'text-brand' : 'text-ui-3 group-hover:text-ui-5'}`}
-        >
-          <IcSpark active={aiActive} />
-        </Pressable>
+        <div className="flex-none flex items-center gap-1">
+          <Pressable
+            pressScale={0.88}
+            onClick={onAiClick}
+            className={`w-6 h-6 flex-none flex items-center justify-center ${isAI ? 'text-brand' : 'text-ui-3 group-hover:text-ui-5'}`}
+          >
+            <IcSpark active={aiActive} />
+          </Pressable>
+          {onDelete && (
+            <Pressable
+              pressScale={0.88}
+              onClick={onDelete}
+              aria-label={title ? `${title} 종목 지우기` : '이 종목 지우기'}
+              className="w-6 h-6 flex-none flex items-center justify-center text-ui-4 active:text-[#e03e52]"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />
+              </svg>
+            </Pressable>
+          )}
+        </div>
       </div>
 
       {/* 종목 자동완성 칩 */}

@@ -36,7 +36,8 @@ export default function DietCard({ data, isDeleting, targetKcal, onDelete, onCha
   const dt = data.timestamp ? new Date(data.timestamp.seconds * 1000) : null;
   const ds = dt ? `${dt.getMonth() + 1}월 ${dt.getDate()}일 ${WEEKDAYS[dt.getDay()]}` : (data.date || '');
   const kcal = Number(data.kcal || 0);
-  const target = Number(targetKcal || data.goal || 0);
+  /* 그 날짜에 쓰던 목표를 쓴다. 지금 프로필 목표를 끼얹으면 과거 달성률이 바뀐다. */
+  const target = Number(data.goal || targetKcal || 0);
   const range = kcalRange(target);
   const scaleMax = kcalScale(target);
   const verdict = kcalVerdict(kcal, target);

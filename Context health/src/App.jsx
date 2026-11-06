@@ -27,6 +27,7 @@ import { MyTab } from './components/social/ProfileScreen';
 import { InvitePreviewPage } from './components/social/InviteParts';
 import { socialCall } from './lib/socialApi';
 import { enablePush, onNativePushOpen, pushPermission, pushSupported, refreshPushToken } from './lib/push';
+import { withTargetKcalHistory } from './lib/calorieGoal';
 
 /* 초대 링크(/i/{code})로 들어오면 코드를 기억해 두고 주소는 앱 첫 화면으로 바꾼다.
    로그인·온보딩이 끝난 뒤 초대 받기 시트를 연다. */
@@ -493,12 +494,16 @@ function App() {
     setUserStorage(user.uid, 'consent_agreed', '1');
     setConsentDone(true);
   }
-  function handleOnboardingComplete(p) {
+  function handleOnboardingComplete(raw) {
     setUserStorage(user?.uid, 'onboarding_completed', '1');
+    // 처음 정한 목표는 과거 날짜에도 그대로 적용한다 (그 전엔 기록이 없다).
+    const p = withTargetKcalHistory(null, raw, '1970-01-01');
     saveProfile(user?.uid, p); setProfile(p); setOnboardingDone(true);
     if (user?.uid) saveUserData(user.uid, { profile: p, onboardingDone: true }).catch(reportSyncFailure);
   }
-  async function handleProfileSave(p) {
+  async function handleProfileSave(nextProfile) {
+    // 목표 칼로리를 바꾸면 "오늘부터" 적용되도록 이력에 한 줄 남긴다. 과거 날짜는 그때 쓰던 목표를 유지한다.
+    const p = withTargetKcalHistory(profile, nextProfile);
     saveProfile(user?.uid, p); setProfile(p);
     if (!user?.uid) return;
     let timeoutId;
@@ -699,6 +704,8 @@ function App() {
     push: pushSocial,
     pop: popSocial,
     refreshMe: refreshSocialMe,
+    /* goTab은 쌓인 사회 화면까지 한 번에 비운다.
+       (nav.pop()과 함께 쓰면 pop의 history.back()이 뒤늦게 도착해 방금 떠난 화면이 되살아났다) */
     goTab: (id) => navigateApp({ tab: id, screen: 'home', coachRoom: null, coachOverlay: null, social: [] }),
     /* 아이디가 없으면 처음 설정을 먼저 하고, 끝나면 하려던 일을 이어서 한다 (IA 4-4) */
     requireProfile: async (fn) => {

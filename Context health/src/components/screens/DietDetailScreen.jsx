@@ -42,6 +42,7 @@ import {
   switchFoodPortionMode,
 } from '../../utils/dietPortions';
 import { calculateMacroCalories, hasManualMacroValues, parseManualMacroText } from '../../utils/manualMacroEntry';
+import { logGoalKcal } from '../../lib/calorieGoal';
 
 const DEFAULT_SECTIONS = [
   { id: 'breakfast',   name: '아침',     placeholder: '아침에 먹은 식단을 적어주세요\n(예: 고구마 하나 우유 한잔)' },
@@ -320,20 +321,20 @@ export default function DietDetailScreen({ onBack, onSave, initialData, initialM
         return found ? { ...def, items: mergeFoodPortionItems([], found.items || []) } : { ...def, items: [] };
       });
       setSections(merged);
-      setGoalKcal(initialData.goal || profile?.targetKcal || 2500);
+      setGoalKcal(logGoalKcal(initialData, profile) || 2500);
       setAiComment(initialData.aiComment || '');
       const restoredInputs = initialData.unparsedInputs || {};
       setAiInputs(restoredInputs);
       const baseline = initialData.imported ? DEFAULT_SECTIONS.map(def => ({ ...def, items: [] })) : merged;
-      originalSectionsRef.current = serializeDietDraft(baseline, restoredInputs, initialData.goal || profile?.targetKcal || 2500);
+      originalSectionsRef.current = serializeDietDraft(baseline, restoredInputs, logGoalKcal(initialData, profile) || 2500);
       if (restoredDraft) {
         setSections((restoredDraft.sections || merged).map(sec => ({ ...sec, items: mergeFoodPortionItems([], sec.items || []) })));
-        setGoalKcal(restoredDraft.goalKcal || initialData.goal || profile?.targetKcal || 2500);
+        setGoalKcal(restoredDraft.goalKcal || logGoalKcal(initialData, profile) || 2500);
         setAiInputs(restoredDraft.aiInputs || restoredInputs);
       }
     } else {
       const defaultMerged = DEFAULT_SECTIONS.map(s => ({ ...s, items: [] }));
-      const defaultGoal = profile?.targetKcal || 2500;
+      const defaultGoal = logGoalKcal(null, profile) || 2500;
       setSections(defaultMerged);
       setGoalKcal(defaultGoal);
       setAiInputs({});
@@ -346,7 +347,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, initialM
       }
     }
     setDraftReady(true);
-  }, [initialData, profile?.targetKcal, restoredDraft]);
+  }, [initialData, profile?.targetKcal, profile?.targetKcalHistory, restoredDraft]);
 
   useEffect(() => {
     if (!draftReady || !uid || !hasUnsavedChanges()) return undefined;
@@ -465,6 +466,24 @@ export default function DietDetailScreen({ onBack, onSave, initialData, initialM
     return custom;
   }
 
+  /* 적어 둔 글 한 덩어리를 AI로 음식 목록으로 바꾼다 (화면 상태는 건드리지 않는다) */
+  async function analyzeTextToItems(text) {
+    const estimatedFoods = await estimateMealNutrition(text, customFoods);
+    return estimatedFoods.map(item => ensureFoodPortion({
+      id:      Math.random().toString(36).slice(2, 11),
+      name:    String(item.name    || ''),
+      kcal:    Number(item.kcal    || 0),
+      carb:    Number(item.carb    || 0),
+      protein: Number(item.protein || 0),
+      fat:     Number(item.fat     || 0),
+      source:  item.source || 'ai',
+      matchedName: item.matchedName || null,
+      adjustmentNote: item.adjustmentNote || null,
+      intakeModifiers: item.intakeModifiers || [],
+      serving: item.serving || '',
+    }));
+  }
+
   /* AI 텍스트 분석 */
   async function handleAIAnalyze(secId) {
     const text = aiInputs[secId]?.trim();
@@ -472,20 +491,7 @@ export default function DietDetailScreen({ onBack, onSave, initialData, initialM
     analyzingIds.current.add(secId);
     setAnalyzingVersion(v => v + 1);
     try {
-      const estimatedFoods = await estimateMealNutrition(text, customFoods);
-      const newItems = estimatedFoods.map(item => ensureFoodPortion({
-        id:      Math.random().toString(36).slice(2, 11),
-        name:    String(item.name    || ''),
-        kcal:    Number(item.kcal    || 0),
-        carb:    Number(item.carb    || 0),
-        protein: Number(item.protein || 0),
-        fat:     Number(item.fat     || 0),
-        source:  item.source || 'ai',
-        matchedName: item.matchedName || null,
-        adjustmentNote: item.adjustmentNote || null,
-        intakeModifiers: item.intakeModifiers || [],
-        serving: item.serving || '',
-      }));
+      const newItems = await analyzeTextToItems(text);
       setSections(prev => prev.map(sec =>
         sec.id === secId ? { ...sec, items: mergeFoodPortionItems(sec.items || [], newItems) } : sec
       ));
@@ -811,19 +817,43 @@ export default function DietDetailScreen({ onBack, onSave, initialData, initialM
     saveInFlightRef.current = true;
     setSaving(true);
     try {
+      /* 적어만 두고 AI 분석(✨)을 누르지 않은 끼니가 있으면 먼저 분석해서 함께 저장한다.
+         전에는 글만 저장돼 홈 끼니 줄이 "아직 기록이 없어요"로 보였다 (사용자 피드백). */
+      let saveSections = sections;
+      const unanalyzed = Object.entries(aiInputs).filter(([, value]) => String(value || '').trim());
+      if (unanalyzed.length > 0) {
+        try {
+          for (const [secId, text] of unanalyzed) {
+            const newItems = await analyzeTextToItems(text.trim());
+            saveSections = saveSections.map(sec =>
+              sec.id === secId ? { ...sec, items: mergeFoodPortionItems(sec.items || [], newItems) } : sec
+            );
+            setRecentFoods(prev => pushRecent(uid, newItems, prev));
+          }
+        } catch (e) {
+          alert('AI 분석 오류: ' + aiErrorMessage(e) + '\n적어 둔 글은 그대로 남겨 뒀어요.');
+          return; // 저장하지 않는다 (finally에서 저장 상태를 되돌린다)
+        }
+        setSections(saveSections);
+        setAiInputs({});
+      }
+      const saveTotals = saveSections.reduce((acc, sec) => (sec.items || []).reduce((inner, item) => ({
+        kcal: inner.kcal + Number(item.kcal || 0),
+        carb: inner.carb + Number(item.carb || 0),
+        protein: inner.protein + Number(item.protein || 0),
+        fat: inner.fat + Number(item.fat || 0),
+      }), acc), { kcal: 0, carb: 0, protein: 0, fat: 0 });
       const isNew      = !initialData?.docId;
-      const totalItems = sections.reduce((acc, sec) => acc + (sec.items || []).length, 0);
+      const totalItems = saveSections.reduce((acc, sec) => acc + (sec.items || []).length, 0);
       let comment      = aiComment;
       if (totalItems > 0) {
-        comment = getDietSummaryComment(totals, profile, goalKcal);
+        comment = getDietSummaryComment(saveTotals, profile, goalKcal);
         setAiComment(comment);
       }
-      const docData = { type: 'diet', goal: goalKcal, kcal: totals.kcal,
-        carb: totals.carb, protein: totals.protein, fat: totals.fat,
-        sections: sanitizeSections(sections),
-        unparsedInputs: Object.fromEntries(
-          Object.entries(aiInputs).filter(([, value]) => String(value || '').trim())
-        ),
+      const docData = { type: 'diet', goal: goalKcal, kcal: saveTotals.kcal,
+        carb: saveTotals.carb, protein: saveTotals.protein, fat: saveTotals.fat,
+        sections: sanitizeSections(saveSections),
+        unparsedInputs: {},
         aiComment: comment || '식단이 기록되었습니다.',
         /* 식단을 넣을 때마다 친구 스토리에 다시 뜨도록 마지막으로 고친 때를 남긴다 */
         updatedAt: serverTimestamp() };

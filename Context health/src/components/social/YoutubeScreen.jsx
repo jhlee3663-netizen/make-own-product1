@@ -339,7 +339,7 @@ export default function YoutubeScreen({ nav, url: initialUrl = '', videoId, leav
         <Failed
           url={url || videoId}
           error={error}
-          onWrite={() => { nav.pop(); nav.openRecord('workout'); }}
+          onWrite={() => nav.openRecord('workout')}
           onRetry={() => { setUrl(''); setPhase('paste'); }}
         />
       )}

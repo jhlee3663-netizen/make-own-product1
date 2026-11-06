@@ -24,6 +24,7 @@ import WorkoutSummary from '../home/WorkoutSummary';
 import { TodayDietCard } from '../home/DietDay';
 import { localDateKey } from '../../lib/bodyLogs';
 import { cardioWeek, dietDay, groupByDate, lastDays, logDateKey, partGrid } from '../../lib/homeSummary';
+import { goalKcalForDate, logGoalKcal } from '../../lib/calorieGoal';
 import { IcSpark } from '../icons/Icons';
 import { KEEP_REMARKS_RULE, preserveUserRemarks } from '../../utils/workoutNotes';
 import Toast from '../common/Toast';
@@ -535,7 +536,7 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
         await addDoc(collection(db, "logs"), {
           type: "diet",
           uid: user.uid,
-          goal: profile?.targetKcal || 2500,
+          goal: goalKcalForDate(profile, localDateKey()) || 2500,
           kcal: totals.kcal,
           carb: totals.carb,
           protein: totals.protein,
@@ -610,6 +611,8 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
   const shownPreviousWorkouts = previousWorkouts.slice(0, shownCount);
   const dayDietLogs = dietByDate.get(dateKey) || [];
   const dayDiet = dietDay(dayDietLogs);
+  // 보고 있는 날짜에 쓰던 목표 (지금 프로필 목표가 아니라)
+  const dayGoalKcal = Number(dayDietLogs.find(log => Number(log.goal) > 0)?.goal) || goalKcalForDate(profile, dateKey);
   // 새 식단 기록은 오늘 날짜로 저장되므로, 지난 날짜는 이미 있는 기록만 고칠 수 있다
   const dietEditable = isToday || dayDietLogs.length > 0;
   // 끼니 줄을 누르면 그 끼니로 바로 연다
@@ -788,7 +791,7 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
               intake={{
                 totals: dayDiet.totals,
                 isToday,
-                target: Number(profile?.targetKcal || 0),
+                target: Number(dayGoalKcal || 0),
                 week: recentDays.map(day => ({ ...day, kcal: (dietByDate.get(day.key) || []).reduce((sum, log) => sum + Number(log.kcal || 0), 0) })),
                 onClick: dietEditable ? openDayDiet : undefined,
                 onLongPress: dayDietLogs[0] ? () => handleDeleteRequest(dayDietLogs[0]) : undefined,
@@ -799,7 +802,7 @@ function HomeScreen({ user, profile, aiGoals, onRemoveGoal, onNavigateToMemo, on
             {goalCards}
             {previousDiets.length > 0 && <ListLabel>최근 기록</ListLabel>}
             {previousDiets.slice(0, shownCount).map((d) => (
-                <DietCard key={d.docId} data={d} onCardClick={onDietCardClick} isDeleting={d.docId === deletingId} targetKcal={profile?.targetKcal} profile={profile} onDelete={handleDeleteRequest} onChangeDate={handleDateChangeRequest} />
+                <DietCard key={d.docId} data={d} onCardClick={onDietCardClick} isDeleting={d.docId === deletingId} targetKcal={logGoalKcal(d, profile)} profile={profile} onDelete={handleDeleteRequest} onChangeDate={handleDateChangeRequest} />
             ))}
           </>
         )}

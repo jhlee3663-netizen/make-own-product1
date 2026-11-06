@@ -233,7 +233,7 @@ export function SavedScreen({ nav, leaving }) {
       </div>
       <div className="flex-1 overflow-y-auto px-4 pt-4 pb-8 flex flex-col gap-3">
         {items === null ? <div className="py-16 flex justify-center"><Spinner /></div>
-          : list.length === 0 ? <EmptyState className="pt-24" title="저장한 것이 없어요" sub="피드에서 북마크를 누르면 여기에 모여요" action={<Btn size="S" full={false} className="px-5" onClick={() => { nav.pop(); nav.goTab('feed'); }}>피드 둘러보기</Btn>} />
+          : list.length === 0 ? <EmptyState className="pt-24" title="저장한 것이 없어요" sub="피드에서 북마크를 누르면 여기에 모여요" action={<Btn size="S" full={false} className="px-5" onClick={() => nav.goTab('feed')}>피드 둘러보기</Btn>} />
           : (
             <>
               {list.map((it) => (

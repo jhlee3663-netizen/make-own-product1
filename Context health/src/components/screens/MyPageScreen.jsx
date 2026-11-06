@@ -8,6 +8,7 @@ import ConfirmModal from '../common/ConfirmModal';
 import WeightHistorySection from '../dashboard/WeightHistorySection';
 import { disconnectMcp, getMcpStatus } from '../../lib/mcpConnection';
 import { apiUrl, isNativeApp } from '../../lib/native';
+import useBackClose from '../../lib/useBackClose';
 
 const GOALS = ['체중 감량', '근육 증량', '체형 유지', '건강 증진'];
 const ACTIVITY_LEVELS = [
@@ -130,6 +131,8 @@ export const PRIVACY_CONTENT = `Context Health(이하 "서비스")는 이용자�
 시행일: 2026년 11월 1일`;
 
 export function LegalModal({ title, content, onClose }) {
+  // 기기 뒤로가기로도 닫힌다 (안 그러면 안드로이드에서 앱이 꺼졌다)
+  useBackClose(true, onClose);
   return (
     <div className="absolute inset-0 z-[100] flex flex-col bg-white">
       <div className="flex items-center gap-3 px-5 pt-12 pb-4 border-b border-ui-2 flex-none">

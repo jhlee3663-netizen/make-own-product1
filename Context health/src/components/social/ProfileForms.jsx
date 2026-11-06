@@ -3,6 +3,7 @@ import { socialCall, socialErrorMessage } from '../../lib/socialApi';
 import ConfirmModal from '../common/ConfirmModal';
 import { Avatar, Btn, FadeLine, Screen, Spinner, TopBar, Toggle } from './ui';
 import { IcCheck, IcPlusSmall } from './SocialIcons';
+import { pushPermission, pushSupported } from '../../lib/push';
 
 /* 처음 설정(17 아이디·사진 → 31 공개 범위) · 프로필 편집(25) · 공개 범위(18) · 알림 설정 */
 
@@ -265,7 +266,33 @@ const PUSH_ITEMS = [
 
 export function NotificationSettingsScreen({ nav, leaving }) {
   const [push, setPush] = useState(nav.me?.profile?.push || {});
-  const [permission, setPermission] = useState(typeof Notification !== 'undefined' ? Notification.permission : 'unsupported');
+  /* 앱에서는 웹의 Notification.permission이 실제 폰 권한과 다르다. push.pushPermission()으로만 본다.
+     권한 다이얼로그를 그냥 닫으면 권한은 그대로 'default'이므로 켜기 버튼이 계속 보여야 한다.
+     폰 설정에 다녀오는 경우가 있으니 화면으로 돌아올 때마다 다시 확인한다. */
+  const [permission, setPermission] = useState('loading');
+  useEffect(() => {
+    let cancelled = false;
+    const check = async () => {
+      if (!pushSupported()) { if (!cancelled) setPermission('unsupported'); return; }
+      try {
+        const value = await pushPermission();
+        if (!cancelled) setPermission(value);
+      } catch { if (!cancelled) setPermission('unsupported'); }
+    };
+    check();
+    const onVisible = () => { if (document.visibilityState === 'visible') check(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
+  }, []);
+  async function turnOn() {
+    await nav.enablePush();
+    try { setPermission(await pushPermission()); } catch { /* 다음 확인에서 */ }
+  }
   async function change(key, on) {
     const next = { ...push, [key]: on };
     setPush(next);
@@ -275,13 +302,14 @@ export function NotificationSettingsScreen({ nav, leaving }) {
     <Screen leaving={leaving} bg="bg-ui-1">
       <div className="bg-white"><TopBar onBack={() => nav.pop()} title="알림 설정" /></div>
       <div className="flex-1 overflow-y-auto px-4 pt-4 pb-8 flex flex-col gap-6">
-        {permission !== 'granted' && permission !== 'unsupported' && (
+        {permission !== 'granted' && permission !== 'unsupported' && permission !== 'loading' && (
           <div className="rounded-[20px] bg-white px-5 py-4 flex items-center gap-3">
             <span className="flex-1 flex flex-col gap-1">
               <span className="font-pretendard font-semibold text-[14px] text-typo-strong">폰 알림이 꺼져 있어요</span>
-              <span className="font-pretendard text-[12px] text-typo-alternative">{permission === 'denied' ? '폰 설정에서 알림을 켜 주세요' : '켜면 아래 항목을 폰으로 알려드려요'}</span>
+              <span className="font-pretendard text-[12px] text-typo-alternative">{permission === 'denied' ? '폰 설정 > 알림에서 켤 수 있어요' : '켜면 아래 항목을 폰으로 알려드려요'}</span>
             </span>
-            {permission === 'default' && <Btn size="XS" full={false} onClick={async () => { await nav.enablePush(); setPermission(Notification.permission); }}>켜기</Btn>}
+            {/* 한 번 거부하면 앱에서 다시 물을 수 없다. 폰 설정으로 보내는 말만 남긴다. */}
+            {permission !== 'denied' && <Btn size="XS" full={false} onClick={turnOn}>켜기</Btn>}
           </div>
         )}
         <div className="flex flex-col gap-2">

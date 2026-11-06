@@ -85,6 +85,15 @@ function groupBySupersets(items) {
   return groups;
 }
 
+/* 받침 있는 이름이면 '을', 없으면 '를' */
+function objectParticle(name) {
+  const last = String(name || '').trim().slice(-1);
+  if (!last) return '를';
+  const code = last.charCodeAt(0);
+  if (code < 0xac00 || code > 0xd7a3) return '를';
+  return (code - 0xac00) % 28 === 0 ? '를' : '을';
+}
+
 const createEmptyWorkoutSections = () => [
   { id: 1, part: "", items: [] }
 ];
@@ -358,6 +367,7 @@ export default function WorkoutMemoScreen({ onBack, onSave, initialData, uid, pr
 
   // 운동 부위 자동완성
   const [partSuggestions, setPartSuggestions] = useState({ secId: null, items: [] });
+  const [removeTarget, setRemoveTarget] = useState(null); // 지우기 확인 대상
 
   // 최근 기록 바텀시트
   const [recentSheet, setRecentSheet] = useState({ open: false, secId: null, itemId: null, mode: 'section', records: [], currentIdx: 0, loading: false });
@@ -1003,6 +1013,28 @@ JSON 형식으로만 반환해줘:
     setSections(prev => [...prev, { id, part: "", items: [{ id: id + 1, title: "", body: "" }] }]);
   }
 
+  /* 지우기 — 적은 내용이 있으면 한 번 묻는다. (전에는 지울 방법이 없어 뒤로 나가는 수밖에 없었다) */
+  function removeItem(secId, itemId) {
+    setSections(prev => prev.map(s =>
+      s.id !== secId ? s : { ...s, items: s.items.filter(it => it.id !== itemId) }
+    ));
+  }
+  function removeSection(secId) {
+    setSections(prev => (prev.length <= 1
+      ? createEmptyWorkoutSections()
+      : prev.filter(s => s.id !== secId)));
+  }
+  function requestRemoveItem(sec, item) {
+    const filled = Boolean(item.title?.trim() || item.body?.trim());
+    if (!filled) { removeItem(sec.id, item.id); return; }
+    setRemoveTarget({ kind: 'item', secId: sec.id, itemId: item.id, name: item.title?.trim() || '이 종목' });
+  }
+  function requestRemoveSection(sec) {
+    const filled = Boolean(sec.part?.trim() || (sec.items || []).some(it => it.title?.trim() || it.body?.trim()));
+    if (!filled) { removeSection(sec.id); return; }
+    setRemoveTarget({ kind: 'section', secId: sec.id, name: sec.part?.trim() || '이 부위', count: (sec.items || []).length });
+  }
+
   async function buildWorkoutFallbackSummary(docId, fallbackSections, fallbackTitle, capturedMode) {
     const usableSections = (fallbackSections || [])
       .map(s => ({
@@ -1287,6 +1319,22 @@ JSON 형식으로만 반환해줘:
         onConfirm={discardAndLeave}
         onCancel={() => setShowExitModal(false)}
       />
+      <ConfirmModal
+        isOpen={Boolean(removeTarget)}
+        title={`'${removeTarget?.name || ''}'${objectParticle(removeTarget?.name)} 지울까요?`}
+        subtitle={removeTarget?.kind === 'section'
+          ? `이 부위에 적은 종목 ${removeTarget?.count || 0}개가 함께 사라져요.`
+          : '적어 둔 세트 기록도 함께 사라져요.'}
+        confirmText="지우기"
+        cancelText="그대로 두기"
+        confirmVariant="danger"
+        onConfirm={() => {
+          if (removeTarget?.kind === 'section') removeSection(removeTarget.secId);
+          else if (removeTarget) removeItem(removeTarget.secId, removeTarget.itemId);
+          setRemoveTarget(null);
+        }}
+        onCancel={() => setRemoveTarget(null)}
+      />
       {/* 상단 네비게이션 */}
       <header className="flex-none bg-white/90 backdrop-blur-[32px] border-b border-ui-3/50">
         <div className="flex items-center justify-between px-4 h-14">
@@ -1519,9 +1567,10 @@ JSON 형식으로만 반환해줘:
         {sections.map(sec => (
           <div key={sec.id}>
 
-            {/* 운동 부위 헤더 */}
-            <div className="bg-white px-4 pt-8 border-b border-ui-2 mt-2 first:mt-0">
-              <div className="flex items-center gap-2 pb-2">
+            {/* 운동 부위 헤더 — 종목보다 한 단 위라는 걸 라벨과 색으로 구분한다 */}
+            <div className="bg-[#f8f9fa] px-4 pt-6 border-y border-ui-2 mt-3 first:mt-0">
+              <span className="inline-flex items-center h-5 px-2 rounded-full bg-brand/10 font-pretendard font-bold text-[11px] tracking-[-0.275px] text-brand">운동 부위</span>
+              <div className="flex items-center gap-2 pt-1 pb-2">
                 <input
                   value={sec.part}
                   onChange={e => {
@@ -1546,6 +1595,16 @@ JSON 형식으로만 반환해줘:
                     <IcSpark active={sectionPopover === sec.id && sectionPopoverSource === 'section'} />
                   </Pressable>
                 )}
+                <Pressable
+                  pressScale={0.9}
+                  onClick={() => requestRemoveSection(sec)}
+                  aria-label={`${sec.part?.trim() || '이'} 부위 지우기`}
+                  className="flex-none w-6 h-6 flex items-center justify-center text-ui-4 active:text-[#e03e52]"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />
+                  </svg>
+                </Pressable>
               </div>
               {partSuggestions.secId === sec.id && partSuggestions.items.length > 0 && (
                 <div className="flex overflow-x-auto gap-2 pb-3 scrollbar-hide">
@@ -1603,6 +1662,7 @@ JSON 형식으로만 반환해줘:
                       aiActive={sectionPopover === sec.id && sectionPopoverSource === 'item' && sectionPopoverItemId === item.id}
                       isConverting={convertingItems.current.has(`${sec.id}_${item.id}`)}
                       suppressSupersetBadge={itemIdx < group.items.length - 1}
+                      onDelete={() => requestRemoveItem(sec, item)}
                     />
                   ))}
                 </React.Fragment>
@@ -1620,19 +1680,22 @@ JSON 형식으로만 반환해줘:
                   onAiClick={(e) => openSectionPopover(sec.id, e, 'item', item.id)}
                   aiActive={sectionPopover === sec.id && sectionPopoverSource === 'item' && sectionPopoverItemId === item.id}
                   isConverting={convertingItems.current.has(`${sec.id}_${item.id}`)}
+                  onDelete={() => requestRemoveItem(sec, item)}
                 />
               ))
             )}
 
-            {/* [+] 항목 추가 */}
-            <div className="p-2">
+            {/* [+] 종목 추가 (어느 단을 더하는지 글로 밝힌다) */}
+            <div className="p-2 pl-5">
               <Button
                 variant="secondary"
                 size="l"
                 fullWidth
                 onClick={() => addItem(sec.id)}
+                className="gap-1.5"
               >
-                <IcPlus color="#868e96" />
+                <IcPlus color="#868e96" size={16} />
+                운동 종목 추가
               </Button>
             </div>
 

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import Pressable from '../common/Pressable';
+import useBackClose from '../../lib/useBackClose';
 
 const GOALS = ['체중 감량', '근육 증량', '체형 유지', '건강 증진'];
 const STEPS = ['목표', '체형 정보', '활동 수준'];
@@ -15,6 +16,10 @@ export default function OnboardingScreen({ user, onComplete }) {
     goalWeight: '',
     activityLevel: 'moderate',
   });
+
+  /* 기기 뒤로가기는 앞 단계로. (안 받으면 입력 중에 앱이 꺼진다)
+     step이 바뀔 때마다 기록 칸을 다시 맞춘다. */
+  useBackClose(step, () => setStep((s) => Math.max(0, s - 1)));
 
   function next() {
     if (step < STEPS.length - 1) setStep((s) => s + 1);
@@ -181,24 +186,24 @@ export default function OnboardingScreen({ user, onComplete }) {
         <div className="h-8" />
       </div>
 
-      {/* 하단 버튼 */}
-      <div className="flex-none px-5 pb-10 pt-4">
-        <Pressable
-          pressScale={0.97}
-          onClick={next}
-          disabled={!canNext}
-          className="w-full h-[56px] bg-[#7171FF] rounded-[16px] font-pretendard font-bold text-[16px] text-white tracking-[-0.4px] disabled:opacity-40"
-        >
-          {step === STEPS.length - 1 ? '시작하기 🚀' : '다음'}
-        </Pressable>
+      {/* 하단 버튼 — 이전/다음을 한 줄에 둬서 입력 영역을 더 보여준다 (고정 영역 164px → 96px) */}
+      <div className="flex-none px-5 pb-[calc(20px+env(safe-area-inset-bottom))] pt-3 flex gap-2">
         {step > 0 && (
           <button
             onClick={() => setStep((s) => s - 1)}
-            className="w-full py-3 mt-2 font-pretendard text-[14px] text-[#adb5bd] tracking-[-0.35px] transition-all duration-100 active:opacity-40"
+            className="flex-none w-[84px] h-[56px] rounded-[16px] bg-[#f1f3f5] font-pretendard font-semibold text-[15px] text-[#495057] tracking-[-0.375px] transition-all duration-100 active:opacity-40"
           >
             이전
           </button>
         )}
+        <Pressable
+          pressScale={0.97}
+          onClick={next}
+          disabled={!canNext}
+          className="flex-1 h-[56px] bg-[#7171FF] rounded-[16px] font-pretendard font-bold text-[16px] text-white tracking-[-0.4px] disabled:opacity-40"
+        >
+          {step === STEPS.length - 1 ? '시작하기 🚀' : '다음'}
+        </Pressable>
       </div>
     </div>
   );
