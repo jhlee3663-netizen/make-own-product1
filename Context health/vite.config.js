@@ -41,10 +41,14 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      // 등록 스크립트를 자동으로 끼워넣지 않는다. 스토어 앱(https://localhost)에서는
+      // sw.js를 못 가져와 등록이 실패하고, 처리되지 않은 Promise로 남아 Sentry에 쌓인다.
+      // 대신 main.jsx에서 웹일 때만 직접 등록한다.
+      injectRegister: false,
       includeAssets: ['logo.png', 'logo-gradient-fill.jpg', 'favicon.png', 'apple-touch-icon.png', 'memo-workout.png', 'memo-diet.png', 'logo-badge.svg'],
       manifest: {
-        name: 'Context Health',
-        short_name: 'Context Health',
+        name: '툭핏',
+        short_name: '툭핏',
         description: 'AI 기반 운동·식단 관리',
         theme_color: '#ffffff',
         // 폰이 앱을 띄우는 순간 보여주는 화면의 배경. 시작 화면 그라데이션의 중간색으로 맞춘다.
