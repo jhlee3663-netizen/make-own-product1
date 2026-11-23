@@ -1,0 +1,34 @@
+{
+  "deployedAt": "2026-11-21T07:57:00Z",
+  "project": "context-health-3eb84",
+  "function": "aiGenerate",
+  "revision": "aigenerate-00006-xiz",
+  "moduleContentsMatchWorkspace": true,
+  "otherFunctionCodePreserved": true,
+  "productionUserDataUsed": false,
+  "checks": [
+    {
+      "name": "deployment",
+      "passed": true
+    },
+    {
+      "name": "unauthenticated-request",
+      "status": 401,
+      "passed": true
+    },
+    {
+      "name": "updated-app-check-cors-header",
+      "passed": true
+    },
+    {
+      "name": "authenticated-production-smoke",
+      "status": "not-completed",
+      "reason": "Custom-token signing denied; email sign-up disabled. No auth settings or IAM permissions changed."
+    },
+    {
+      "name": "isolated-live-firestore-test",
+      "status": "not-completed",
+      "reason": "Local CLI credentials denied direct Firestore access. Distributed quota covered by mocked transaction tests."
+    }
+  ]
+}

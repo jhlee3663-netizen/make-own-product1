@@ -1,4 +1,4 @@
-import { auth } from './firebase';
+import { auth, getAiAppCheckToken } from './firebase';
 import { apiUrl } from './native';
 
 /* QA-01: 브라우저에 Gemini 키를 두지 않는다.
@@ -22,6 +22,9 @@ function classify(status, payload) {
   if (status === 401) return 'unauthenticated';
   if (status === 429) return 'rate-limited';
   if (status === 413) return 'too-large';
+  if (status === 422 && payload?.error === 'policy-blocked') return 'policy-blocked';
+  if (status === 400 && payload?.error === 'unsupported-task') return 'unsupported-task';
+  if (status === 403 && payload?.error === 'app-check-required') return 'app-check-required';
   if (status === 504) return 'timeout';
   if (status === 400 && payload?.error === 'model-not-allowed') return 'model-not-allowed';
   if (status >= 500) return 'upstream';
@@ -51,6 +54,14 @@ export async function generateContent({
       throw new AiRequestError('unauthenticated', { status: 401 });
     }
     headers.Authorization = `Bearer ${token}`;
+    // App Check is monitored until native attestation is ready. A blocked
+    // reCAPTCHA must not stall the existing AI request indefinitely.
+    let appCheckTimer;
+    const appCheckToken = await Promise.race([
+      getAiAppCheckToken(),
+      new Promise(resolve => { appCheckTimer = setTimeout(() => resolve(null), 1500); }),
+    ]).finally(() => clearTimeout(appCheckTimer));
+    if (appCheckToken) headers['X-Firebase-AppCheck'] = appCheckToken;
   }
 
   const payload = { model, contents };
@@ -108,6 +119,9 @@ const AI_ERROR_MESSAGES = {
   'rate-limited': '요청이 많아요. 잠시 후 다시 시도해 주세요.',
   'too-large': '내용이 너무 길어요. 줄여서 다시 시도해 주세요.',
   timeout: '응답이 늦어지고 있어요. 잠시 후 다시 시도해 주세요.',
+  'policy-blocked': '운동·식단 관련 기록이나 안전한 요청인지 확인해 주세요.',
+  'unsupported-task': '지원하는 AI 기능의 요청인지 확인해 주세요. 앱을 최신 버전으로 업데이트해 주세요.',
+  'app-check-required': '앱 인증을 확인하지 못했어요. 앱을 다시 열고 시도해 주세요.',
   network: '네트워크 연결을 확인한 뒤 다시 시도해 주세요.',
   parse: 'AI 응답을 읽지 못했어요. 다시 시도해 주세요.',
 };

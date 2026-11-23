@@ -26,7 +26,7 @@ function setCors(req, res) {
     res.set('Access-Control-Allow-Origin', origin);
     res.set('Vary', 'Origin');
   }
-  res.set('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+  res.set('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Firebase-AppCheck');
   res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
 }
 
@@ -92,150 +92,25 @@ async function verifySocialToken(provider, accessToken) {
   throw error;
 }
 
-/* ── AI 프록시 (QA-01) ──
-   Gemini 키는 서버 secret으로만 보관하고, 인증된 사용자만 사용자별 한도 안에서 호출한다. */
+/* AI 기능별 정책·응답 검증·분산 사용량 제한. 다른 함수의 경로는 변경하지 않는다. */
+const { createAiHandler } = require('./ai/proxy');
+const { createQuotaStore } = require('./ai/quota');
+let aiHandler;
 
-const AI_ALLOWED_MODELS = new Set(['gemini-3.6-flash']);
-const AI_MAX_BODY_BYTES = 100 * 1024;
-const AI_MAX_PROMPT_CHARS = 60000;
-const AI_WINDOW_MS = 10 * 60 * 1000;
-const AI_WINDOW_LIMIT = 30;
-const AI_DAY_MS = 24 * 60 * 60 * 1000;
-const AI_DAY_LIMIT = 200;
-const AI_UPSTREAM_TIMEOUT_MS = 30000;
-
-function aiUpstreamBase() {
-  return process.env.GEMINI_API_BASE || 'https://generativelanguage.googleapis.com/v1beta';
-}
-
-function countPromptChars(payload) {
-  let total = 0;
-  const walkParts = (parts) => {
-    if (!Array.isArray(parts)) return;
-    parts.forEach((part) => {
-      if (typeof part?.text === 'string') total += part.text.length;
+exports.aiGenerate = onRequest(
+  { region: 'us-central1', timeoutSeconds: 60, secrets: ['GEMINI_KEY'] },
+  (req, res) => {
+    // Keep SDK initialization out of function discovery and unrelated endpoints.
+    aiHandler ||= createAiHandler({
+      auth: getAuth(),
+      quota: createQuotaStore(getFirestore()),
+      verifyAppCheck: token => require('firebase-admin/app-check').getAppCheck().verifyToken(token),
+      setCors,
+      allowedOrigins: ALLOWED_ORIGINS,
     });
-  };
-  if (Array.isArray(payload?.contents)) {
-    payload.contents.forEach((entry) => walkParts(entry?.parts));
-  }
-  walkParts(payload?.systemInstruction?.parts);
-  return total;
-}
-
-/* 고정 창 방식. 창이 지나면 카운터를 재설정하고, 한도를 넘으면 남은 대기 시간을 함께 돌려준다. */
-async function consumeAiQuota(uid, now = Date.now()) {
-  const ref = getFirestore().doc(`aiUsage/${uid}`);
-  return getFirestore().runTransaction(async (tx) => {
-    const snap = await tx.get(ref);
-    const prev = snap.exists ? snap.data() : {};
-
-    const windowStartedAt = now - Number(prev.windowStartedAt || 0) < AI_WINDOW_MS
-      ? Number(prev.windowStartedAt)
-      : now;
-    const dayStartedAt = now - Number(prev.dayStartedAt || 0) < AI_DAY_MS
-      ? Number(prev.dayStartedAt)
-      : now;
-    const windowCount = windowStartedAt === prev.windowStartedAt ? Number(prev.windowCount || 0) : 0;
-    const dayCount = dayStartedAt === prev.dayStartedAt ? Number(prev.dayCount || 0) : 0;
-
-    if (windowCount >= AI_WINDOW_LIMIT) {
-      return { allowed: false, scope: 'window', retryAfterSeconds: Math.ceil((windowStartedAt + AI_WINDOW_MS - now) / 1000) };
-    }
-    if (dayCount >= AI_DAY_LIMIT) {
-      return { allowed: false, scope: 'day', retryAfterSeconds: Math.ceil((dayStartedAt + AI_DAY_MS - now) / 1000) };
-    }
-
-    tx.set(ref, {
-      windowStartedAt,
-      windowCount: windowCount + 1,
-      dayStartedAt,
-      dayCount: dayCount + 1,
-      updatedAt: now,
-    }, { merge: true });
-    return { allowed: true, windowCount: windowCount + 1, dayCount: dayCount + 1 };
-  });
-}
-
-exports.aiGenerate = onRequest({ region: 'us-central1', timeoutSeconds: 60, secrets: ['GEMINI_KEY'] }, async (req, res) => {
-  setCors(req, res);
-  if (req.method === 'OPTIONS') return res.status(204).send('');
-  if (req.method !== 'POST') return res.status(405).json({ error: 'method-not-allowed' });
-
-  const origin = req.get('origin');
-  if (origin && !ALLOWED_ORIGINS.has(origin)) {
-    return res.status(403).json({ error: 'origin-not-allowed' });
-  }
-
-  const authorization = req.get('authorization') || '';
-  if (!authorization.startsWith('Bearer ')) return res.status(401).json({ error: 'unauthorized' });
-
-  let uid;
-  try {
-    uid = (await getAuth().verifyIdToken(authorization.slice(7))).uid;
-  } catch {
-    return res.status(401).json({ error: 'unauthorized' });
-  }
-
-  const body = req.body || {};
-  const model = typeof body.model === 'string' ? body.model : 'gemini-3.6-flash';
-  if (!AI_ALLOWED_MODELS.has(model)) return res.status(400).json({ error: 'model-not-allowed' });
-  if (!Array.isArray(body.contents) || body.contents.length === 0) {
-    return res.status(400).json({ error: 'invalid-request' });
-  }
-  if (Buffer.byteLength(JSON.stringify(body), 'utf8') > AI_MAX_BODY_BYTES) {
-    return res.status(413).json({ error: 'payload-too-large' });
-  }
-  if (countPromptChars(body) > AI_MAX_PROMPT_CHARS) {
-    return res.status(413).json({ error: 'prompt-too-large' });
-  }
-
-  let quota;
-  try {
-    quota = await consumeAiQuota(uid);
-  } catch (error) {
-    console.error('AI quota check failed', { code: error.code });
-    return res.status(503).json({ error: 'quota-unavailable' });
-  }
-  if (!quota.allowed) {
-    res.set('Retry-After', String(quota.retryAfterSeconds));
-    return res.status(429).json({ error: 'rate-limited', scope: quota.scope, retryAfterSeconds: quota.retryAfterSeconds });
-  }
-
-  const upstreamPayload = { contents: body.contents };
-  if (body.systemInstruction) upstreamPayload.systemInstruction = body.systemInstruction;
-  if (body.generationConfig) upstreamPayload.generationConfig = body.generationConfig;
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), AI_UPSTREAM_TIMEOUT_MS);
-  try {
-    const upstream = await fetch(
-      `${aiUpstreamBase()}/models/${model}:generateContent?key=${process.env.GEMINI_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(upstreamPayload),
-        signal: controller.signal,
-      },
-    );
-    const data = await upstream.json().catch(() => null);
-    if (!upstream.ok) {
-      console.error('AI upstream error', { uid, status: upstream.status });
-      return res.status(upstream.status === 429 ? 429 : 502).json({
-        error: upstream.status === 429 ? 'upstream-rate-limited' : 'upstream-error',
-        status: upstream.status,
-      });
-    }
-    if (!data) return res.status(502).json({ error: 'upstream-invalid-json' });
-    return res.status(200).json(data);
-  } catch (error) {
-    const aborted = error.name === 'AbortError';
-    console.error('AI proxy failed', { uid, aborted, code: error.code });
-    return res.status(aborted ? 504 : 502).json({ error: aborted ? 'upstream-timeout' : 'upstream-error' });
-  } finally {
-    clearTimeout(timer);
-  }
-});
+    return aiHandler(req, res);
+  },
+);
 
 async function migrateAnonymousData(req, targetUid) {
   const authorization = req.get('authorization') || '';

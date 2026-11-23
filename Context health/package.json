@@ -16,6 +16,7 @@
     "predeploy": "npm run build",
     "deploy": "npx firebase-tools deploy --only hosting",
     "test:ai-proxy": "node scripts/test-ai-proxy.mjs",
+    "test:ai-security": "node --test scripts/test-ai-security.mjs",
     "test:delete-account": "node scripts/test-delete-account.mjs",
     "test:pagination": "node scripts/test-pagination.mjs",
     "test:firestore-rules": "node scripts/test-firestore-rules.mjs",

@@ -1,0 +1,23 @@
+{
+  "verifiedAt": "2026-11-23T23:17:14.217810+00:00",
+  "project": "context-health-3eb84",
+  "function": "aiGenerate",
+  "revision": "aigenerate-00007-rul",
+  "deploymentSucceeded": true,
+  "unauthenticatedStatus": 401,
+  "appCheckCorsHeader": true,
+  "hostingDeployed": false,
+  "hostingExcludedReason": "User limited scope to AI security; current frontend build also includes unrelated uncommitted UI changes.",
+  "branch": "codex/ai-security",
+  "tests": {
+    "aiSecurityMock": 27,
+    "relatedRegressions": "passed",
+    "productionBuild": "passed",
+    "liveModel": "not rerun; see 2026-11-21 evidence"
+  },
+  "limitations": [
+    "Authenticated production end-to-end test remains incomplete.",
+    "Live Firestore contention test remains incomplete.",
+    "App Check enforcement remains monitor mode."
+  ]
+}

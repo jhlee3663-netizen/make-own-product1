@@ -38,7 +38,7 @@ const server = http.createServer(async (req, res) => {
 
   res.writeHead(200, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({
-    candidates: [{ content: { parts: [{ text: 'QA_UPSTREAM_OK' }] } }],
+    candidates: [{ content: { parts: [{ text: body.systemInstruction?.parts?.[0]?.text?.includes('범위·안전 검사기') ? JSON.stringify({ allowed: true, reason: 'ok' }) : 'QA_UPSTREAM_OK' }] } }],
   }));
 });
 

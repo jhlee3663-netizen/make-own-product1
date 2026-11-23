@@ -34,18 +34,30 @@ export const auth = isNativeApp
    앱(웹뷰)은 reCAPTCHA가 제대로 뜨지 않아 켜지 않는다 — 네이티브는 Play Integrity/App Attest 플러그인이 필요하다.
    서버에서 강제(enforce)하기 전에는 켜도 영향이 없으므로, 콘솔에서 '모니터링'으로 먼저 지켜본 뒤 강제한다. */
 const APP_CHECK_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
+let aiAppCheckReady = Promise.resolve(null);
 if (APP_CHECK_KEY && !isNativeApp && typeof window !== 'undefined') {
   if (import.meta.env.DEV && import.meta.env.VITE_APP_CHECK_DEBUG_TOKEN) {
     globalThis.FIREBASE_APPCHECK_DEBUG_TOKEN = import.meta.env.VITE_APP_CHECK_DEBUG_TOKEN;
   }
-  import('firebase/app-check')
+  aiAppCheckReady = import('firebase/app-check')
     .then(({ initializeAppCheck, ReCaptchaEnterpriseProvider }) => {
-      initializeAppCheck(app, {
+      return initializeAppCheck(app, {
         provider: new ReCaptchaEnterpriseProvider(APP_CHECK_KEY),
         isTokenAutoRefreshEnabled: true,
       });
     })
-    .catch(() => { /* App Check가 막혀도 앱은 그대로 쓴다 */ });
+    .catch(() => null); // 모니터링 단계에서는 기존 웹·네이티브 앱을 차단하지 않는다.
+}
+
+export async function getAiAppCheckToken() {
+  const appCheck = await aiAppCheckReady;
+  if (!appCheck) return null;
+  try {
+    const { getToken } = await import('firebase/app-check');
+    return (await getToken(appCheck, false)).token;
+  } catch {
+    return null;
+  }
 }
 
 if (import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true' && !globalThis.__contextHealthFirebaseEmulatorsConnected) {

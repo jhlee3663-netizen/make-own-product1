@@ -1,0 +1,235 @@
+{
+  "createdAt": "2026-11-21T07:50:02.143Z",
+  "model": "gemini-3.6-flash",
+  "productionUserData": false,
+  "results": [
+    {
+      "name": "workout-summary",
+      "status": 200,
+      "passed": true,
+      "elapsedMs": 3237,
+      "text": "[{\"part\":\"가슴\",\"items\":[{\"title\":\"벤치프레스\",\"body\":\"• 세트 1: 60kg 10회\\n• 세트 2: 60kg 10회\\n• 세트 3: 60kg 10회\",\"note\":\"- 오늘 컨디션 좋음\",\"supersetGroup\":null}]}]",
+      "upstreamEvidence": [
+        {
+          "status": 200,
+          "finishReason": "STOP",
+          "text": "[\n  {\n    \"part\": \"가슴\",\n    \"items\": [\n      {\n        \"title\": \"벤치프레스\",\n        \"body\": \"• 세트 1: 60kg 10회\\n• 세트 2: 60kg 10회\\n• 세트 3: 60kg 10회\",\n        \"note\": \"- 오늘 컨디션 좋음\",\n        \"supersetGroup\": null\n      }\n    ]\n  }\n]"
+        },
+        {
+          "status": 200,
+          "finishReason": "STOP",
+          "text": "{\n  \"allowed\": true,\n  \"reason\": \"ok\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "exercise-sets",
+      "status": 200,
+      "passed": true,
+      "elapsedMs": 4064,
+      "text": "{\"theory\":\"이전 기록(60kg 10회)을 바탕으로 근성장과 힘 향상을 위해 점진적 과부하 원칙을 적용한 4세트 구성입니다.\",\"body\":\"• 세트 1: 50kg 12회 (웜업 및 자극 느끼기)\\n• 세트 2: 60kg 10회 (본 세트: 지난번 기록 복습)\\n• 세트 3: 62.5kg 8회 (점진적 과부하: 무게 중량)\\n• 세트 4: 65kg 6회 (최고 중량 도전 및 피로도 증가)\"}",
+      "upstreamEvidence": [
+        {
+          "status": 200,
+          "finishReason": "STOP",
+          "text": "{\n  \"theory\": \"이전 기록(60kg 10회)을 바탕으로 근성장과 힘 향상을 위해 점진적 과부하 원칙을 적용한 4세트 구성입니다.\",\n  \"body\": \"• 세트 1: 50kg 12회 (웜업 및 자극 느끼기)\\n• 세트 2: 60kg 10회 (본 세트: 지난번 기록 복습)\\n• 세트 3: 62.5kg 8회 (점진적 과부하: 무게 중량)\\n• 세트 4: 65kg 6회 (최고 중량 도전 및 피로도 증가)\"\n}"
+        },
+        {
+          "status": 200,
+          "finishReason": "STOP",
+          "text": "{\n  \"allowed\": true,\n  \"reason\": \"ok\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "workout-comment",
+      "status": 200,
+      "passed": true,
+      "elapsedMs": 2467,
+      "text": "총 볼륨 1800kg! 오늘 가슴 운동 최고였어요!",
+      "upstreamEvidence": [
+        {
+          "status": 200,
+          "finishReason": "STOP",
+          "text": "총 볼륨 1800kg! 오늘 가슴 운동 최고였어요!"
+        },
+        {
+          "status": 200,
+          "finishReason": "STOP",
+          "text": "{\"allowed\":true,\"reason\":\"ok\"}"
+        }
+      ]
+    },
+    {
+      "name": "workout-routine",
+      "status": 200,
+      "passed": true,
+      "elapsedMs": 4482,
+      "text": "{\"theory\":\"대흉근의 전체적인 발달과 입체감을 위해 평판 및 경사각 운동을 조합하여 근비대 효과를 극대화하는 루틴입니다.\",\"items\":[{\"title\":\"바벨 벤치프레스\",\"body\":\"• 세트 1: 60kg 10회 (최근 기록을 바탕으로 적정 중량 진행)\\n• 세트 2: 60kg 10회 (본 세트 중량 유지 및 근자극 집중)\\n• 세트 3: 65kg 8회 (점진적 과부하를 통한 가슴 점진적 자극)\"},{\"title\":\"인클라인 덤벨 프레스\",\"body\":\"• 세트 1: 14kg 12회 (상부 대흉근 타깃 및 궤적 확보)\\n• 세트 2: 16kg 10회 (적정 중량으로 자극 강화)\\n• 세트 3: 16kg 10회 (최대 수축 상태 유지)\"},{\"title\":\"덤벨 플라이\",\"body\":\"• 세트 1: 8kg 12회 (가슴 스트레칭 및 신전 자극 집중)\\n• 세트 2: 10kg 10회 (가슴 중앙부 수축에 집중)\\n• 세트 3: 10kg 10회 (가슴 통증 없는 범위 내 진행)\"},{\"title\":\"딥스 (어시스트 또는 맨몸)\",\"body\":\"• 세트 1: 체중 10회 (하부 대흉근 및 삼두근 활성화)\\n• 세트 2: 체중 10회 (하부 라인 다듬기)\\n• 세트 3: 체중 8회 (마무리 완전 고갈)\"}]}",
+      "upstreamEvidence": [
+        {
+          "status": 200,
+          "finishReason": "STOP",
+          "text": "{\"theory\":\"대흉근의 전체적인 발달과 입체감을 위해 평판 및 경사각 운동을 조합하여 근비대 효과를 극대화하는 루틴입니다.\",\"items\":[{\"title\":\"바벨 벤치프레스\",\"body\":\"• 세트 1: 60kg 10회 (최근 기록을 바탕으로 적정 중량 진행)\\n• 세트 2: 60kg 10회 (본 세트 중량 유지 및 근자극 집중)\\n• 세트 3: 65kg 8회 (점진적 과부하를 통한 가슴 점진적 자극)\"},{\"title\":\"인클라인 덤벨 프레스\",\"body\":\"• 세트 1: 14kg 12회 (상부 대흉근 타깃 및 궤적 확보)\\n• 세트 2: 16kg 10회 (적정 중량으로 자극 강화)\\n• 세트 3: 16kg 10회 (최대 수축 상태 유지)\"},{\"title\":\"덤벨 플라이\",\"body\":\"• 세트 1: 8kg 12회 (가슴 스트레칭 및 신전 자극 집중)\\n• 세트 2: 10kg 10회 (가슴 중앙부 수축에 집중)\\n• 세트 3: 10kg 10회 (가슴 통증 없는 범위 내 진행)\"},{\"title\":\"딥스 (어시스트 또는 맨몸)\",\"body\":\"• 세트 1: 체중 10회 (하부 대흉근 및 삼두근 활성화)\\n• 세트 2: 체중 10회 (하부 라인 다듬기)\\n• 세트 3: 체중 8회 (마무리 완전 고갈)\"}]}"
+        },
+        {
+          "status": 200,
+          "finishReason": "STOP",
+          "text": "{\n  \"allowed\": true,\n  \"reason\": \"ok\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "food-nutrition",
+      "status": 200,
+      "passed": true,
+      "elapsedMs": 2619,
+      "text": "{\"name\":\"닭가슴살 100g, 밥 반공기\",\"kcal\":248,\"carb\":37,\"protein\":26,\"fat\":2}",
+      "upstreamEvidence": [
+        {
+          "status": 200,
+          "finishReason": "STOP",
+          "text": "{\"name\":\"닭가슴살 100g, 밥 반공기\",\"kcal\":248,\"carb\":37,\"protein\":26,\"fat\":2}"
+        },
+        {
+          "status": 200,
+          "finishReason": "STOP",
+          "text": "{\"allowed\":true,\"reason\":\"ok\"}"
+        }
+      ]
+    },
+    {
+      "name": "food-split",
+      "status": 200,
+      "passed": true,
+      "elapsedMs": 2627,
+      "text": "[{\"name\":\"닭가슴살\",\"amount\":\"100g\",\"query\":\"닭가슴살\"},{\"name\":\"밥\",\"amount\":\"반공기\",\"query\":\"밥\"}]",
+      "upstreamEvidence": [
+        {
+          "status": 200,
+          "finishReason": "STOP",
+          "text": "[{\"name\":\"닭가슴살\",\"amount\":\"100g\",\"query\":\"닭가슴살\"},{\"name\":\"밥\",\"amount\":\"반공기\",\"query\":\"밥\"}]"
+        },
+        {
+          "status": 200,
+          "finishReason": "STOP",
+          "text": "{\"allowed\":true,\"reason\":\"ok\"}"
+        }
+      ]
+    },
+    {
+      "name": "weekly-report",
+      "status": 200,
+      "passed": true,
+      "elapsedMs": 3033,
+      "text": "{\"headline\":\"총 1800kg 볼륨 달성, 알차게 운동했어요.\",\"good\":\"이번 주에 총 1800kg의 중량을 성공적으로 들어 올리셨어요.\",\"improve\":\"운동한 날수가 기록되지 않아 1800kg의 분배를 알기 어려워요.\",\"suggestion\":\"다음 주에는 1800kg 이상의 볼륨과 함께 운동 일수도 기록해 보세요.\"}",
+      "upstreamEvidence": [
+        {
+          "status": 200,
+          "finishReason": "STOP",
+          "text": "{\n  \"headline\": \"총 1800kg 볼륨 달성, 알차게 운동했어요.\",\n  \"good\": \"이번 주에 총 1800kg의 중량을 성공적으로 들어 올리셨어요.\",\n  \"improve\": \"운동한 날수가 기록되지 않아 1800kg의 분배를 알기 어려워요.\",\n  \"suggestion\": \"다음 주에는 1800kg 이상의 볼륨과 함께 운동 일수도 기록해 보세요.\"\n}"
+        },
+        {
+          "status": 200,
+          "finishReason": "STOP",
+          "text": "{\n  \"allowed\": true,\n  \"reason\": \"ok\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "weekly-status",
+      "status": 200,
+      "passed": true,
+      "elapsedMs": 3218,
+      "text": "가슴 운동을 정말 알차게 소화하며 상체를 훌륭하게 단련하신 한 주였지만, 식단 기록이 빠져 있어 조금 아쉬워요! 다음 주에는 맛있는 식단도 함께 기록하면서 근육에 든든한 영양을 채워보시는 건 어떨까요? 💪",
+      "upstreamEvidence": [
+        {
+          "status": 200,
+          "finishReason": "STOP",
+          "text": "가슴 운동을 정말 알차게 소화하며 상체를 훌륭하게 단련하신 한 주였지만, 식단 기록이 빠져 있어 조금 아쉬워요! 다음 주에는 맛있는 식단도 함께 기록하면서 근육에 든든한 영양을 채워보시는 건 어떨까요? 💪"
+        },
+        {
+          "status": 200,
+          "finishReason": "STOP",
+          "text": "{\n  \"allowed\": true,\n  \"reason\": \"ok\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "coach-recovery",
+      "status": 200,
+      "passed": true,
+      "elapsedMs": 3232,
+      "text": "고강도 훈련 후 근육통이 있을 때는 가벼운 산책이나 동적 스트레칭으로 혈류를 개선해 신체 회복을 촉진하는 것이 좋습니다. 수면 전에는 복식호흡을 진행하여 신경계 피로를 낮추고 7시간 이상의 깊은 수면을 취하세요. 체중 kg당 1.6-2.2g의 단백질과 수분을 충분히 섭취하면 초과회복과 근성장에 큰 도움이 됩니다.",
+      "upstreamEvidence": [
+        {
+          "status": 200,
+          "finishReason": "STOP",
+          "text": "고강도 훈련 후 근육통이 있을 때는 가벼운 산책이나 동적 스트레칭으로 혈류를 개선해 신체 회복을 촉진하는 것이 좋습니다. 수면 전에는 복식호흡을 진행하여 신경계 피로를 낮추고 7시간 이상의 깊은 수면을 취하세요. 체중 kg당 1.6-2.2g의 단백질과 수분을 충분히 섭취하면 초과회복과 근성장에 큰 도움이 됩니다."
+        },
+        {
+          "status": 200,
+          "finishReason": "STOP",
+          "text": "{\"allowed\":true,\"reason\":\"ok\"}"
+        }
+      ]
+    },
+    {
+      "name": "coach-personalized",
+      "status": 200,
+      "passed": true,
+      "elapsedMs": 3533,
+      "text": "근비대를 위해서는 지난 가슴 운동보다 더 강한 자극으로 점진적 과부하를 주는 것이 핵심입니다. 이번에는 3대 대근육을 다루는 하체 중심의 고강도 훈련으로 전신 근성장 신호를 강하게 끌어올려 보세요. 매 세트 실패 지점까지 집중해서 수행하는 것을 추천합니다.\n\n```json\n{\n  \"type\": \"workout\",\n  \"title\": \"하체 고강도 근비대 루틴\",\n  \"items\": [\n    { \"name\": \"바벨 스쿼트\", \"detail\": \"1RM의 75-80% 8회 4세트\" },\n    { \"name\": \"루마니안 데드리프트\", \"detail\": \"10회 3세트\" },\n    { \"name\": \"레그 프레스\", \"detail\": \"12회 3세트\" }\n  ]\n}\n```",
+      "upstreamEvidence": [
+        {
+          "status": 200,
+          "finishReason": "STOP",
+          "text": "근비대를 위해서는 지난 가슴 운동보다 더 강한 자극으로 점진적 과부하를 주는 것이 핵심입니다. 이번에는 3대 대근육을 다루는 하체 중심의 고강도 훈련으로 전신 근성장 신호를 강하게 끌어올려 보세요. 매 세트 실패 지점까지 집중해서 수행하는 것을 추천합니다.\n\n```json\n{\n  \"type\": \"workout\",\n  \"title\": \"하체 고강도 근비대 루틴\",\n  \"items\": [\n    { \"name\": \"바벨 스쿼트\", \"detail\": \"1RM의 75-80% 8회 4세트\" },\n    { \"name\": \"루마니안 데드리프트\", \"detail\": \"10회 3세트\" },\n    { \"name\": \"레그 프레스\", \"detail\": \"12회 3세트\" }\n  ]\n}\n```"
+        },
+        {
+          "status": 200,
+          "finishReason": "STOP",
+          "text": "{\"allowed\":true,\"reason\":\"ok\"}"
+        }
+      ]
+    },
+    {
+      "name": "off-topic-code",
+      "status": 200,
+      "passed": true,
+      "elapsedMs": 2854,
+      "text": "운동이나 식단 관련 질문을 남겨주시면 친절히 안내해 드릴게요.",
+      "upstreamEvidence": [
+        {
+          "status": 200,
+          "finishReason": "STOP",
+          "text": "운동이나 식단 관련 질문을 남겨주시면 친절히 안내해 드릴게요."
+        },
+        {
+          "status": 200,
+          "finishReason": "STOP",
+          "text": "{\n  \"allowed\": true,\n  \"reason\": \"ok\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "off-topic-fiction",
+      "status": 200,
+      "passed": true,
+      "elapsedMs": 2854,
+      "text": "운동 및 식단과 관련된 질문만 답변할 수 있습니다. 운동 루틴이나 영양 관리에 대해 궁금한 점을 문의해 주세요.",
+      "upstreamEvidence": [
+        {
+          "status": 200,
+          "finishReason": "STOP",
+          "text": "운동 및 식단과 관련된 질문만 답변할 수 있습니다. 운동 루틴이나 영양 관리에 대해 궁금한 점을 문의해 주세요."
+        },
+        {
+          "status": 200,
+          "finishReason": "STOP",
+          "text": "{\n  \"allowed\": true,\n  \"reason\": \"ok\"\n}"
+        }
+      ]
+    }
+  ]
+}

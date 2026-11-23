@@ -34,7 +34,7 @@ async function call({ token, body }) {
   return { status: res.status, json, retryAfter: res.headers.get('retry-after') };
 }
 
-const simplePrompt = (text = 'QA prompt') => ({ contents: [{ parts: [{ text }] }] });
+const simplePrompt = (text = '가슴') => ({ contents: [{ parts: [{ text: `다음은 이번 주 사용자의 헬스 데이터야.\n운동 부위: ${text}\n볼륨: 이번주 1800kg\n식단: 식단 기록 없음\n\n이 데이터를 바탕으로 이번 주 몸 상태를 평가해줘.` }] }] });
 
 const userA = await signUp('user-a');
 const userB = await signUp('user-b');
